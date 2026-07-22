@@ -50,5 +50,12 @@ export type {
     AgentConfigurationRequest,
     AgentServiceStatus,
     ApplicationEvent,
+    MessageDto,
+    RunSnapshot,
+    SkillDetail,
+    SkillSnapshot,
+    ThreadDto,
+    ThreadSkillState,
+    ThreadSnapshot,
     ToolApprovalDecision,
 };

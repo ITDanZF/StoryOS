@@ -1,3 +1,6 @@
+import AgentWorkspace from './agent/AgentWorkspace';
+import './agent/previewAgentApi';
+
 export default function App() {
-    return <div>你好 StoryOS</div>;
+    return <AgentWorkspace />;
 }

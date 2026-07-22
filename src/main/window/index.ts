@@ -32,8 +32,8 @@ export default class AppWindowManager {
         this.defaultOptions = {
             width: 1440,
             height: 900,
-            minWidth: 1100,
-            minHeight: 700,
+            minWidth: 480,
+            minHeight: 560,
             show: false, // ready-to-show 再显示，防白屏
             autoHideMenuBar: true, // Windows/Linux 隐藏菜单栏
             webPreferences: {
