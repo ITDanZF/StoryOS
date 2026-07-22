@@ -2,6 +2,8 @@ import type {
   AgentDesktopApi,
   ApplicationEvent,
   MessageDto,
+  ProjectDto,
+  ProjectSnapshot,
   ThreadDto,
   ThreadSnapshot,
 } from "../../shared/agent/contracts.ts";
@@ -12,6 +14,8 @@ if (previewEnabled && !window.storyOSAgent) {
   const handlers = new Set<(event: ApplicationEvent) => void>();
   const now = new Date().toISOString();
   let activeThreadId = "welcome";
+  let activeProjectPath: string | null = null;
+  let projects: ProjectDto[] = [];
   let threads: ThreadDto[] = [
     { id: "welcome", title: "欢迎使用 StoryOS", createdAt: now, updatedAt: now, metadata: {} },
     { id: "second", title: "新的对话", createdAt: now, updatedAt: now, metadata: {} },
@@ -20,9 +24,17 @@ if (previewEnabled && !window.storyOSAgent) {
     { id: "hello", threadId: "welcome", role: "assistant", content: "你好，我是 StoryOS AI。有什么想聊的，直接告诉我就好。", createdAt: now },
   ]]]);
 
-  const snapshot = (): ThreadSnapshot => {
-    const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? threads[0];
-    return { activeThreadId: activeThread.id, activeThread, threads };
+  const snapshot = (projectPath: string | null = activeProjectPath): ThreadSnapshot => {
+    const visibleThreads = threads.filter((thread) => {
+      const threadProjectPath = thread.metadata.projectPath ?? "";
+      return projectPath ? threadProjectPath === projectPath : !threadProjectPath;
+    });
+    const activeThread = visibleThreads.find((thread) => thread.id === activeThreadId) ?? visibleThreads[0] ?? threads[0];
+    return { activeThreadId: activeThread.id, activeThread, threads: visibleThreads.length ? visibleThreads : [activeThread] };
+  };
+  const projectSnapshot = (): ProjectSnapshot => {
+    const activeProject = projects.find((project) => project.path === activeProjectPath) ?? null;
+    return { activeProjectPath, activeProject, projects };
   };
   const emit = (event: ApplicationEvent) => handlers.forEach((handler) => handler(event));
 
@@ -35,15 +47,15 @@ if (previewEnabled && !window.storyOSAgent) {
       baseUrl: "https://api.deepseek.com",
     }),
     configure: async () => ({ configured: true, initialized: true }),
-    getThreadSnapshot: async () => snapshot(),
+    getThreadSnapshot: async (projectPath) => snapshot(projectPath ?? activeProjectPath),
     listMessages: async (threadId = activeThreadId) => messages.get(threadId) ?? [],
-    createThread: async (title) => {
+    createThread: async (title, projectPath) => {
       const thread: ThreadDto = {
         id: crypto.randomUUID(),
         title,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        metadata: {},
+        metadata: projectPath ? { projectPath } : {},
       };
       threads = [thread, ...threads];
       activeThreadId = thread.id;
@@ -59,6 +71,42 @@ if (previewEnabled && !window.storyOSAgent) {
       if (threads.length === 0) await api.createThread("新对话");
       activeThreadId = threads[0].id;
       return snapshot();
+    },
+    getProjectSnapshot: async () => projectSnapshot(),
+    createProject: async ({ name, createAgentsFile: _createAgentsFile }) => {
+      const now = new Date().toISOString();
+      const project: ProjectDto = {
+        path: `/preview/${name.trim().replace(/\s+/g, "-")}`,
+        name,
+        trusted: true,
+        createdAt: now,
+        updatedAt: now,
+        lastOpenedAt: now,
+      };
+      projects = [project, ...projects];
+      activeProjectPath = project.path;
+      await api.createThread("新对话", project.path);
+      return project;
+    },
+    openProject: async (projectPath) => {
+      const now = new Date().toISOString();
+      const name = projectPath.split(/[\\/]+/).filter(Boolean).pop() ?? projectPath;
+      const project: ProjectDto = { path: projectPath, name, trusted: true, createdAt: now, updatedAt: now, lastOpenedAt: now };
+      projects = [project, ...projects.filter((item) => item.path !== projectPath)];
+      activeProjectPath = project.path;
+      await api.createThread("新对话", project.path);
+      return project;
+    },
+    switchProject: async (projectPath) => {
+      activeProjectPath = projectPath;
+      const nextSnapshot = snapshot(projectPath);
+      activeThreadId = nextSnapshot.activeThreadId;
+      return projectSnapshot();
+    },
+    removeProject: async (projectPath) => {
+      projects = projects.filter((project) => project.path !== projectPath);
+      if (activeProjectPath === projectPath) activeProjectPath = projects[0]?.path ?? null;
+      return projectSnapshot();
     },
     listRuns: async () => [],
     sendMessage: async ({ threadId, content }) => {

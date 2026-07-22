@@ -3,7 +3,9 @@ import type {
   AgentConfigurationRequest,
   AgentServiceStatus,
   ApplicationEvent,
+  CreateProjectRequest,
   MessageDto,
+  ProjectSnapshot,
   RunSnapshot,
   ThreadSnapshot,
 } from "../../shared/agent/contracts.ts";
@@ -22,12 +24,14 @@ function upsertRun(runs: readonly RunSnapshot[], run: RunSnapshot): readonly Run
 export function useAgentWorkspace() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<AgentServiceStatus | null>(null);
+  const [projects, setProjects] = useState<ProjectSnapshot | null>(null);
   const [threads, setThreads] = useState<ThreadSnapshot | null>(null);
   const [messages, setMessages] = useState<readonly MessageView[]>([]);
   const [runs, setRuns] = useState<readonly RunSnapshot[]>([]);
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const activeThreadIdRef = useRef("");
+  const activeProjectPathRef = useRef<string | null>(null);
   const runThreadIdsRef = useRef(new Map<string, string>());
 
   const loadMessages = useCallback(async (threadId: string) => {
@@ -36,11 +40,14 @@ export function useAgentWorkspace() {
   }, []);
 
   const loadChat = useCallback(async () => {
-    const [threadSnapshot, runSnapshots] = await Promise.all([
-      window.storyOSAgent.getThreadSnapshot(),
+    const [projectSnapshot, runSnapshots] = await Promise.all([
+      window.storyOSAgent.getProjectSnapshot(),
       window.storyOSAgent.listRuns(),
     ]);
+    const threadSnapshot = await window.storyOSAgent.getThreadSnapshot(projectSnapshot.activeProjectPath);
+    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
     activeThreadIdRef.current = threadSnapshot.activeThreadId;
+    setProjects(projectSnapshot);
     setThreads(threadSnapshot);
     setRuns(runSnapshots);
     runSnapshots.forEach((run) => runThreadIdsRef.current.set(run.runId, run.threadId));
@@ -152,16 +159,68 @@ export function useAgentWorkspace() {
 
   const createThread = useCallback(async () => {
     setError(null);
-    const thread = await window.storyOSAgent.createThread("新对话");
-    const snapshot = await window.storyOSAgent.getThreadSnapshot();
+    const projectPath = activeProjectPathRef.current;
+    const thread = await window.storyOSAgent.createThread("新对话", projectPath);
+    const snapshot = await window.storyOSAgent.getThreadSnapshot(projectPath);
     activeThreadIdRef.current = thread.id;
     setThreads(snapshot);
     setMessages([]);
   }, []);
 
+  const createProject = useCallback(async (request: CreateProjectRequest) => {
+    setError(null);
+    const project = await window.storyOSAgent.createProject(request);
+    const [projectSnapshot, threadSnapshot] = await Promise.all([
+      window.storyOSAgent.getProjectSnapshot(),
+      window.storyOSAgent.getThreadSnapshot(project.path),
+    ]);
+    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
+    activeThreadIdRef.current = threadSnapshot.activeThreadId;
+    setProjects(projectSnapshot);
+    setThreads(threadSnapshot);
+    await loadMessages(threadSnapshot.activeThreadId);
+  }, [loadMessages]);
+
+  const openProject = useCallback(async (projectPath: string) => {
+    setError(null);
+    const project = await window.storyOSAgent.openProject(projectPath);
+    const [projectSnapshot, threadSnapshot] = await Promise.all([
+      window.storyOSAgent.getProjectSnapshot(),
+      window.storyOSAgent.getThreadSnapshot(project.path),
+    ]);
+    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
+    activeThreadIdRef.current = threadSnapshot.activeThreadId;
+    setProjects(projectSnapshot);
+    setThreads(threadSnapshot);
+    await loadMessages(threadSnapshot.activeThreadId);
+  }, [loadMessages]);
+
+  const switchProject = useCallback(async (projectPath: string | null) => {
+    setError(null);
+    const projectSnapshot = await window.storyOSAgent.switchProject(projectPath);
+    const threadSnapshot = await window.storyOSAgent.getThreadSnapshot(projectSnapshot.activeProjectPath);
+    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
+    activeThreadIdRef.current = threadSnapshot.activeThreadId;
+    setProjects(projectSnapshot);
+    setThreads(threadSnapshot);
+    await loadMessages(threadSnapshot.activeThreadId);
+  }, [loadMessages]);
+
+  const removeProject = useCallback(async (projectPath: string) => {
+    setError(null);
+    const projectSnapshot = await window.storyOSAgent.removeProject(projectPath);
+    const threadSnapshot = await window.storyOSAgent.getThreadSnapshot(projectSnapshot.activeProjectPath);
+    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
+    activeThreadIdRef.current = threadSnapshot.activeThreadId;
+    setProjects(projectSnapshot);
+    setThreads(threadSnapshot);
+    await loadMessages(threadSnapshot.activeThreadId);
+  }, [loadMessages]);
+
   const switchThread = useCallback(async (threadId: string) => {
     setError(null);
-    const snapshot = await window.storyOSAgent.switchThread(threadId);
+    await window.storyOSAgent.switchThread(threadId);
+    const snapshot = await window.storyOSAgent.getThreadSnapshot(activeProjectPathRef.current);
     activeThreadIdRef.current = threadId;
     setThreads(snapshot);
     await loadMessages(threadId);
@@ -169,7 +228,8 @@ export function useAgentWorkspace() {
 
   const deleteThread = useCallback(async (threadId: string) => {
     setError(null);
-    const snapshot = await window.storyOSAgent.deleteThread(threadId);
+    await window.storyOSAgent.deleteThread(threadId);
+    const snapshot = await window.storyOSAgent.getThreadSnapshot(activeProjectPathRef.current);
     activeThreadIdRef.current = snapshot.activeThreadId;
     setThreads(snapshot);
     await loadMessages(snapshot.activeThreadId);
@@ -221,6 +281,7 @@ export function useAgentWorkspace() {
   const state: ChatWorkspaceState = {
     loading,
     status,
+    projects,
     threads,
     messages: visibleMessages,
     runs,
@@ -231,6 +292,10 @@ export function useAgentWorkspace() {
     state,
     activeRun,
     configure,
+    createProject,
+    openProject,
+    switchProject,
+    removeProject,
     createThread,
     switchThread,
     deleteThread,

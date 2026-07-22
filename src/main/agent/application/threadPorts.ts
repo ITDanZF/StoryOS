@@ -4,6 +4,7 @@ export type ThreadSkillState = {
 };
 
 export type ThreadMetadata = {
+  readonly projectPath?: string;
   readonly activeSkillIds?: readonly string[];
   readonly disabledSkillIds?: readonly string[];
 };
@@ -28,7 +29,7 @@ export type MessageRecord = {
 
 export interface ThreadStore {
   ensureInitialThread(): ThreadRecord;
-  createThread(title: string, id?: string): ThreadRecord;
+  createThread(title: string, id?: string, metadata?: ThreadMetadata): ThreadRecord;
   getThread(threadId: string): ThreadRecord | null;
   listThreads(): ThreadRecord[];
   touchThread(threadId: string): void;

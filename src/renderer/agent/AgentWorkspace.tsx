@@ -8,7 +8,7 @@ import { useAgentWorkspace } from "./useAgentWorkspace.ts";
 import "./agentWorkspace.css";
 
 export default function AgentWorkspace() {
-  const { state, activeRun, configure, createThread, switchThread, deleteThread, sendMessage, cancelRun, clearError } = useAgentWorkspace();
+  const { state, activeRun, configure, createProject, openProject, switchProject, removeProject, createThread, switchThread, deleteThread, sendMessage, cancelRun, clearError } = useAgentWorkspace();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -29,13 +29,19 @@ export default function AgentWorkspace() {
   }, [createThread]);
 
   const activeThread = state.threads?.activeThread;
+  const activeProject = state.projects?.activeProject;
   return (
     <main className="flex h-dvh w-full min-w-0 overflow-hidden bg-neutral-100">
       <WorkspaceSidebar
         open={sidebarOpen}
         status={state.status}
+        projects={state.projects}
         threads={state.threads}
         onClose={() => setSidebarOpen(false)}
+        onCreateProject={createProject}
+        onOpenProject={openProject}
+        onSwitchProject={switchProject}
+        onRemoveProject={removeProject}
         onCreateThread={createThread}
         onSwitchThread={switchThread}
         onDeleteThread={deleteThread}
@@ -47,7 +53,7 @@ export default function AgentWorkspace() {
           <div className="flex min-w-0 items-center gap-1">
             <button className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100 lg:hidden" type="button" aria-label="打开侧栏" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button>
             <button className="flex min-w-0 max-w-[52vw] items-center gap-1.5 rounded-lg border-0 bg-transparent px-1.5 py-1.5 text-xs font-semibold sm:text-[13px] lg:max-w-lg" type="button">
-              <span className="truncate">{activeThread?.title ?? "新对话"}</span><ChevronDown className="shrink-0 text-neutral-400" size={15} />
+              <span className="truncate">{activeProject ? `${activeProject.name} / ` : ""}{activeThread?.title ?? "新对话"}</span><ChevronDown className="shrink-0 text-neutral-400" size={15} />
             </button>
           </div>
           <div className="flex items-center gap-1.5">

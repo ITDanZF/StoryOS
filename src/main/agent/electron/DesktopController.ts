@@ -1,4 +1,6 @@
 import type AgentApplication from "../application/AgentApplication.ts";
+import type ProjectApplication from "../application/ProjectApplication.ts";
+import type { CreateProjectRequest } from "../application/projectContracts.ts";
 import type ThreadApplication from "../application/ThreadApplication.ts";
 import type { ApplicationEventHandler } from "../application/contracts.ts";
 import type { ToolApprovalDecision } from "../security/ToolPolicy.ts";
@@ -6,6 +8,7 @@ import type SkillApplication from "../skills/SkillApplication.ts";
 
 export type DesktopControllerDependencies = {
     readonly agent: AgentApplication;
+    readonly projects: ProjectApplication;
     readonly threads: ThreadApplication;
     readonly skills: SkillApplication;
 };
@@ -50,16 +53,16 @@ export default class DesktopController {
         return this.dependencies.agent.resolveApproval(approvalId, decision);
     }
 
-    getThreadSnapshot() {
-        return this.dependencies.threads.getSnapshot();
+    getThreadSnapshot(projectPath?: string | null) {
+        return this.dependencies.threads.getSnapshot(projectPath);
     }
 
     listMessages(threadId?: string) {
         return this.dependencies.threads.listMessages(threadId);
     }
 
-    createThread(title: string) {
-        return this.dependencies.threads.createThread({ title });
+    createThread(title: string, projectPath?: string | null) {
+        return this.dependencies.threads.createThread({ title, projectPath: projectPath ?? undefined });
     }
 
     switchThread(threadId: string) {
@@ -68,6 +71,34 @@ export default class DesktopController {
 
     deleteThread(threadId: string) {
         return this.dependencies.threads.deleteThread(threadId);
+    }
+
+    getProjectSnapshot() {
+        return this.dependencies.projects.getSnapshot();
+    }
+
+    createProject(request: CreateProjectRequest) {
+        const project = this.dependencies.projects.createProject(request);
+        this.dependencies.threads.getSnapshot(project.path);
+        return project;
+    }
+
+    openProject(projectPath: string) {
+        const project = this.dependencies.projects.openProject(projectPath);
+        this.dependencies.threads.getSnapshot(project.path);
+        return project;
+    }
+
+    switchProject(projectPath: string | null) {
+        const snapshot = this.dependencies.projects.switchProject(projectPath);
+        this.dependencies.threads.getSnapshot(snapshot.activeProjectPath);
+        return snapshot;
+    }
+
+    removeProject(projectPath: string) {
+        const snapshot = this.dependencies.projects.removeProject(projectPath);
+        this.dependencies.threads.getSnapshot(snapshot.activeProjectPath);
+        return snapshot;
     }
 
     getSkillSnapshot() {

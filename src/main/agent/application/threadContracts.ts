@@ -22,7 +22,11 @@ export type ThreadSnapshot = {
   readonly threads: readonly ThreadDto[];
 };
 
-export type CreateThreadRequest = { readonly title: string; readonly id?: string };
+export type CreateThreadRequest = {
+  readonly title: string;
+  readonly id?: string;
+  readonly projectPath?: string;
+};
 export type AppendMessageRequest = {
   readonly role: MessageRole;
   readonly content: string;

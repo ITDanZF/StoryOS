@@ -1,4 +1,5 @@
 import type { ApplicationEvent, RunSnapshot } from "../../main/agent/application/contracts.ts";
+import type { CreateProjectRequest, ProjectDto, ProjectSnapshot } from "../../main/agent/application/projectContracts.ts";
 import type { MessageDto, ThreadDto, ThreadSnapshot } from "../../main/agent/application/threadContracts.ts";
 import type { ThreadSkillState } from "../../main/agent/application/threadPorts.ts";
 import type { ToolApprovalDecision } from "../../main/agent/security/ToolPolicy.ts";
@@ -18,6 +19,11 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     createThread: "agent:create-thread",
     switchThread: "agent:switch-thread",
     deleteThread: "agent:delete-thread",
+    projectSnapshot: "agent:project-snapshot",
+    createProject: "agent:create-project",
+    openProject: "agent:open-project",
+    switchProject: "agent:switch-project",
+    removeProject: "agent:remove-project",
     skillSnapshot: "agent:skill-snapshot",
     getSkill: "agent:get-skill",
     useSkill: "agent:use-skill",
@@ -33,11 +39,16 @@ export type AgentDesktopApi = {
     cancelRun(runId: string): Promise<boolean>;
     listRuns(): Promise<readonly RunSnapshot[]>;
     resolveApproval(approvalId: string, decision: ToolApprovalDecision): Promise<boolean>;
-    getThreadSnapshot(): Promise<ThreadSnapshot>;
+    getThreadSnapshot(projectPath?: string | null): Promise<ThreadSnapshot>;
     listMessages(threadId?: string): Promise<readonly MessageDto[]>;
-    createThread(title: string): Promise<ThreadDto>;
+    createThread(title: string, projectPath?: string | null): Promise<ThreadDto>;
     switchThread(threadId: string): Promise<ThreadSnapshot>;
     deleteThread(threadId: string): Promise<ThreadSnapshot>;
+    getProjectSnapshot(): Promise<ProjectSnapshot>;
+    createProject(request: CreateProjectRequest): Promise<ProjectDto>;
+    openProject(projectPath: string): Promise<ProjectDto>;
+    switchProject(projectPath: string | null): Promise<ProjectSnapshot>;
+    removeProject(projectPath: string): Promise<ProjectSnapshot>;
     getSkillSnapshot(): Promise<SkillSnapshot>;
     getSkill(skillId: string): Promise<SkillDetail | null>;
     useSkill(skillId: string, threadId?: string): Promise<ThreadSkillState>;
@@ -51,6 +62,9 @@ export type {
     AgentServiceStatus,
     ApplicationEvent,
     MessageDto,
+    CreateProjectRequest,
+    ProjectDto,
+    ProjectSnapshot,
     RunSnapshot,
     SkillDetail,
     SkillSnapshot,

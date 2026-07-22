@@ -66,7 +66,7 @@ export default class JsonStore implements ThreadStore, MessageStore {
     return this.createThread("Default Thread");
   }
 
-  createThread(title: string, id: string = crypto.randomUUID()): ThreadInfo {
+  createThread(title: string, id: string = crypto.randomUUID(), metadata?: ThreadMetadata): ThreadInfo {
     const index = this.readIndex();
 
     if (index.threads.some((thread) => thread.id === id)) {
@@ -79,6 +79,7 @@ export default class JsonStore implements ThreadStore, MessageStore {
       title,
       createdAt: now,
       updatedAt: now,
+      metadata: this.normalizeThreadMetadata(metadata),
     };
 
     index.threads.push(thread);
@@ -262,8 +263,12 @@ export default class JsonStore implements ThreadStore, MessageStore {
   private normalizeThreadMetadata(metadata: ThreadMetadata | undefined): ThreadMetadata {
     const activeSkillIds = this.normalizeSkillIds(metadata?.activeSkillIds);
     const disabledSkillIds = this.normalizeSkillIds(metadata?.disabledSkillIds);
+    const projectPath = typeof metadata?.projectPath === "string"
+      ? metadata.projectPath.trim()
+      : "";
 
     return Object.freeze({
+      ...(projectPath ? { projectPath } : {}),
       activeSkillIds,
       disabledSkillIds,
     });

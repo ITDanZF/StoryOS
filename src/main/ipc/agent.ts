@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from "electron";
 import StoryAgentService from "../agent/StoryAgentService.ts";
 import { AGENT_IPC_CHANNELS } from "../../shared/agent/contracts.ts";
+import type { CreateProjectRequest } from "../agent/application/projectContracts.ts";
 import type { AgentConfigurationRequest } from "../agent/StoryAgentService.ts";
 import type { ToolApprovalDecision } from "../agent/security/ToolPolicy.ts";
 
@@ -27,11 +28,16 @@ export function registerAgentIpc(service: StoryAgentService): () => void {
     handle(AGENT_IPC_CHANNELS.cancelRun, (runId: string) => service.requireController().cancelRun(runId));
     handle(AGENT_IPC_CHANNELS.listRuns, () => service.requireController().listRuns());
     handle(AGENT_IPC_CHANNELS.resolveApproval, (approvalId: string, decision: ToolApprovalDecision) => service.requireController().resolveApproval(approvalId, requireApprovalDecision(decision)));
-    handle(AGENT_IPC_CHANNELS.threadSnapshot, () => service.requireController().getThreadSnapshot());
+    handle(AGENT_IPC_CHANNELS.threadSnapshot, (projectPath?: string | null) => service.requireController().getThreadSnapshot(projectPath));
     handle(AGENT_IPC_CHANNELS.listMessages, (threadId?: string) => service.requireController().listMessages(threadId));
-    handle(AGENT_IPC_CHANNELS.createThread, (title: string) => service.requireController().createThread(title));
+    handle(AGENT_IPC_CHANNELS.createThread, (title: string, projectPath?: string | null) => service.requireController().createThread(title, projectPath));
     handle(AGENT_IPC_CHANNELS.switchThread, (threadId: string) => service.requireController().switchThread(threadId));
     handle(AGENT_IPC_CHANNELS.deleteThread, (threadId: string) => service.requireController().deleteThread(threadId));
+    handle(AGENT_IPC_CHANNELS.projectSnapshot, () => service.requireController().getProjectSnapshot());
+    handle(AGENT_IPC_CHANNELS.createProject, (request: CreateProjectRequest) => service.requireController().createProject(request));
+    handle(AGENT_IPC_CHANNELS.openProject, (projectPath: string) => service.requireController().openProject(projectPath));
+    handle(AGENT_IPC_CHANNELS.switchProject, (projectPath: string | null) => service.requireController().switchProject(projectPath));
+    handle(AGENT_IPC_CHANNELS.removeProject, (projectPath: string) => service.requireController().removeProject(projectPath));
     handle(AGENT_IPC_CHANNELS.skillSnapshot, () => service.requireController().getSkillSnapshot());
     handle(AGENT_IPC_CHANNELS.getSkill, (skillId: string) => service.requireController().getSkill(skillId));
     handle(AGENT_IPC_CHANNELS.useSkill, (skillId: string, threadId?: string) => service.requireController().useSkill(skillId, threadId));

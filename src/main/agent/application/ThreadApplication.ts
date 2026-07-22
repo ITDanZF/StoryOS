@@ -8,6 +8,7 @@ import type {
 import type {
   MessageRecord,
   ThreadPersistence,
+  ThreadMetadata,
   ThreadRecord,
   ThreadSkillState,
 } from "./threadPorts.ts";
@@ -28,12 +29,14 @@ function normalizeSkillState(thread: ThreadRecord): ThreadSkillState {
 }
 
 function toThreadDto(thread: ThreadRecord): ThreadDto {
+  const projectPath = thread.metadata?.projectPath?.trim();
   return Object.freeze({
     id: thread.id,
     title: thread.title,
     createdAt: thread.createdAt.toISOString(),
     updatedAt: thread.updatedAt.toISOString(),
     metadata: Object.freeze({
+      ...(projectPath ? { projectPath } : {}),
       activeSkillIds: normalizeSkillState(thread).activeSkillIds,
       disabledSkillIds: normalizeSkillState(thread).disabledSkillIds,
     }),
@@ -61,12 +64,24 @@ export default class ThreadApplication {
     return this.activeThreadId;
   }
 
-  getSnapshot(): ThreadSnapshot {
+  getSnapshot(projectPath?: string | null): ThreadSnapshot {
+    const threads = this.listThreadsForProject(projectPath);
+    if (!threads.some((thread) => thread.id === this.activeThreadId)) {
+      const [firstThread] = threads;
+      if (firstThread) {
+        this.activeThreadId = firstThread.id;
+      } else {
+        const thread = this.store.createThread("新对话", undefined, this.threadMetadataForProject(projectPath));
+        this.activeThreadId = thread.id;
+        threads.unshift(thread);
+      }
+    }
+
     const activeThread = this.requireThread(this.activeThreadId);
     return Object.freeze({
       activeThreadId: this.activeThreadId,
       activeThread: toThreadDto(activeThread),
-      threads: Object.freeze(this.store.listThreads().map(toThreadDto)),
+      threads: Object.freeze(threads.map(toThreadDto)),
     });
   }
 
@@ -76,7 +91,7 @@ export default class ThreadApplication {
       throw new Error("Thread title is required.");
     }
 
-    const thread = this.store.createThread(title, request.id);
+    const thread = this.store.createThread(title, request.id, this.threadMetadataForProject(request.projectPath));
     this.activeThreadId = thread.id;
     return toThreadDto(thread);
   }
@@ -188,5 +203,21 @@ export default class ThreadApplication {
       throw new Error("Skill id is required.");
     }
     return normalizedSkillId;
+  }
+
+  private listThreadsForProject(projectPath?: string | null): ThreadRecord[] {
+    if (projectPath === undefined) return this.store.listThreads();
+    const normalizedProjectPath = projectPath?.trim() ?? "";
+    return this.store.listThreads().filter((thread) => {
+      const threadProjectPath = thread.metadata?.projectPath?.trim() ?? "";
+      return normalizedProjectPath
+        ? threadProjectPath === normalizedProjectPath
+        : !threadProjectPath;
+    });
+  }
+
+  private threadMetadataForProject(projectPath?: string | null): ThreadMetadata | undefined {
+    const normalizedProjectPath = projectPath?.trim() ?? "";
+    return normalizedProjectPath ? { projectPath: normalizedProjectPath } : undefined;
   }
 }

@@ -1,13 +1,18 @@
-import { MessageSquareText, Plus, Settings2, Trash2, X } from "lucide-react";
-import type { AgentServiceStatus, ThreadSnapshot } from "../../../shared/agent/contracts.ts";
+import { Folder, FolderOpen, FolderPlus, MessageSquareText, Plus, Settings2, Trash2, X } from "lucide-react";
+import type { AgentServiceStatus, CreateProjectRequest, ProjectSnapshot, ThreadSnapshot } from "../../../shared/agent/contracts.ts";
 import { cn } from "../../../lib/utils.ts";
 import StoryLogo from "./StoryLogo.tsx";
 
 type WorkspaceSidebarProps = {
   readonly open: boolean;
   readonly status: AgentServiceStatus | null;
+  readonly projects: ProjectSnapshot | null;
   readonly threads: ThreadSnapshot | null;
   readonly onClose: () => void;
+  readonly onCreateProject: (request: CreateProjectRequest) => Promise<void>;
+  readonly onOpenProject: (projectPath: string) => Promise<void>;
+  readonly onSwitchProject: (projectPath: string | null) => Promise<void>;
+  readonly onRemoveProject: (projectPath: string) => Promise<void>;
   readonly onCreateThread: () => Promise<void>;
   readonly onSwitchThread: (threadId: string) => Promise<void>;
   readonly onDeleteThread: (threadId: string) => Promise<void>;
@@ -21,24 +26,58 @@ function shortDate(value: string): string {
     : new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(date);
 }
 
+function shortPath(value: string): string {
+  const parts = value.split(/[\\/]+/).filter(Boolean);
+  return parts.length <= 2 ? value : `…/${parts.slice(-2).join("/")}`;
+}
+
 export default function WorkspaceSidebar({
   open,
   status,
+  projects,
   threads,
   onClose,
+  onCreateProject,
+  onOpenProject,
+  onSwitchProject,
+  onRemoveProject,
   onCreateThread,
   onSwitchThread,
   onDeleteThread,
   onOpenSettings,
 }: WorkspaceSidebarProps) {
+  const createProject = async () => {
+    const name = window.prompt("项目名称", "Untitled Project")?.trim();
+    if (!name) return;
+    const createAgentsFile = window.confirm("是否创建 AGENTS.md 项目说明文件？");
+    await onCreateProject({ name, createAgentsFile });
+    onClose();
+  };
+
+  const openProject = async () => {
+    const projectPath = window.prompt("输入已有项目目录的绝对路径")?.trim();
+    if (!projectPath) return;
+    await onOpenProject(projectPath);
+    onClose();
+  };
+
+  const switchProject = async (projectPath: string | null) => {
+    await onSwitchProject(projectPath);
+    onClose();
+  };
+
   const createThread = async () => {
     await onCreateThread();
     onClose();
   };
+
   const switchThread = async (threadId: string) => {
     await onSwitchThread(threadId);
     onClose();
   };
+
+  const activeProjectPath = projects?.activeProjectPath ?? null;
+  const projectLabel = projects?.activeProject?.name ?? "无项目";
 
   return (
     <>
@@ -67,16 +106,60 @@ export default function WorkspaceSidebar({
           </button>
         </div>
 
-        <button className="my-3 flex h-10 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void createThread()}>
-          <Plus size={17} />
-          <span className="flex-1">新建对话</span>
-          <kbd className="rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-[10px] font-normal text-neutral-400">Ctrl K</kbd>
-        </button>
+        <div className="my-3 grid gap-1">
+          <button className="flex h-9 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void openProject()}>
+            <FolderOpen size={17} />
+            <span className="flex-1">打开项目</span>
+          </button>
+          <button className="flex h-9 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void createProject()}>
+            <FolderPlus size={17} />
+            <span className="flex-1">新建项目</span>
+          </button>
+          <button className="flex h-9 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void createThread()}>
+            <Plus size={17} />
+            <span className="flex-1">新建对话</span>
+            <kbd className="rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-[10px] font-normal text-neutral-400">Ctrl K</kbd>
+          </button>
+        </div>
 
         <div className="flex items-center gap-1.5 px-2 py-2 text-[11px] text-muted-foreground">
-          <MessageSquareText size={14} />最近对话
+          <Folder size={14} />项目
         </div>
-        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto" aria-label="最近对话">
+        <nav className="grid max-h-42 gap-0.5 overflow-y-auto pb-2" aria-label="项目">
+          <button className={cn("grid min-h-9 rounded-lg border-0 bg-transparent px-2 py-1 text-left hover:bg-neutral-200/70", activeProjectPath === null && "bg-neutral-200")} type="button" onClick={() => void switchProject(null)}>
+            <span className="truncate text-xs text-neutral-700">无项目</span>
+            <span className="text-[10px] text-neutral-400">未归属对话</span>
+          </button>
+          {projects?.projects.map((project) => {
+            const active = project.path === activeProjectPath;
+            return (
+              <div className={cn("flex min-h-10 items-center rounded-lg py-1 pl-2 pr-1", active ? "bg-neutral-200" : "hover:bg-neutral-200/70")} key={project.path}>
+                <button className="grid min-w-0 flex-1 gap-0.5 border-0 bg-transparent p-0 text-left" type="button" title={project.path} onClick={() => void switchProject(project.path)}>
+                  <span className="truncate text-xs text-neutral-700">{project.name}</span>
+                  <span className="truncate text-[10px] text-neutral-400">{shortPath(project.path)}</span>
+                </button>
+                {active && (
+                  <button
+                    className="grid size-7 place-items-center rounded-md border-0 bg-transparent text-neutral-400 hover:bg-white hover:text-red-700"
+                    type="button"
+                    title="从列表移除项目"
+                    aria-label={`移除项目：${project.name}`}
+                    onClick={() => {
+                      if (window.confirm("只从 StoryOS 项目列表移除，不删除磁盘目录。确定继续吗？")) void onRemoveProject(project.path);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-1.5 px-2 py-2 text-[11px] text-muted-foreground">
+          <MessageSquareText size={14} />{projectLabel} 对话
+        </div>
+        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto" aria-label="当前项目对话">
           {threads?.threads.map((thread) => {
             const active = thread.id === threads.activeThreadId;
             return (

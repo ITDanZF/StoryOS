@@ -1,10 +1,12 @@
 import { createAgentOrchestrator } from "./Agent/orchestration/index.ts";
 import AgentApplication from "./application/AgentApplication.ts";
 import type { ApplicationEventHandler } from "./application/contracts.ts";
+import ProjectApplication from "./application/ProjectApplication.ts";
 import ThreadApplication from "./application/ThreadApplication.ts";
 import Configuration from "./config/index.ts";
 import DesktopController from "./electron/DesktopController.ts";
 import JsonStore from "./Memory/JsonStore.ts";
+import ProjectJsonStore from "./Memory/ProjectJsonStore.ts";
 import Model from "./model/Model.ts";
 import SkillApplication from "./skills/SkillApplication.ts";
 import SkillContextProviderService from "./skills/SkillContextProvider.ts";
@@ -121,6 +123,7 @@ export default class StoryAgentService {
 
     private async initializeRuntime(): Promise<void> {
         await this.workspace.createAgentWorkSpace();
+        const projects = new ProjectApplication(new ProjectJsonStore());
         const threads = new ThreadApplication(new JsonStore());
         const model = new Model();
         const skills = await SkillApplication.create({ draft: new SkillDraftService(model) });
@@ -135,7 +138,7 @@ export default class StoryAgentService {
             skillDefinitionsProvider: () => skills.listSkillDefinitions(),
             skillInstaller,
         }));
-        const controller = new DesktopController({ agent, threads, skills });
+        const controller = new DesktopController({ agent, projects, threads, skills });
         for (const subscriber of this.subscribers) {
             this.controllerUnsubscribers.set(subscriber, controller.subscribe(subscriber));
         }
