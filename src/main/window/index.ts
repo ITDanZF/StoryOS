@@ -15,6 +15,7 @@ interface WindowManagerOptions {
     autoHideMenuBar?: boolean;
     minWidth?: number;
     minHeight?: number;
+    icon?: string;
     webPreferences?: any;
     contextIsolation?: boolean;
     nodeIntegration?: boolean;
@@ -34,6 +35,7 @@ export default class AppWindowManager {
             height: 900,
             minWidth: 480,
             minHeight: 560,
+            icon: path.join(__dirname, '../../assets/icons/storyos.png'),
             show: false, // ready-to-show 再显示，防白屏
             autoHideMenuBar: true, // Windows/Linux 隐藏菜单栏
             webPreferences: {

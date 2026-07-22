@@ -9,11 +9,11 @@
     "baseColor": "neutral",
     "cssVariables": true
   },
-  "aliases": {
-    "components": "@/components",
-    "utils": "@/lib/utils",
-    "ui": "@/components/ui",
+ "aliases": {
+    "ui": "@/renderer/components/ui",
+    "components": "@/renderer/components",
+    "hooks": "@/renderer/hooks",
     "lib": "@/lib",
-    "hooks": "@/hooks"
+    "utils": "@/lib/utils"
   }
 }

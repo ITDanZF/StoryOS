@@ -1,6 +1,7 @@
-import { MessageSquareText, Plus, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { MessageSquareText, Plus, Settings2, Trash2, X } from "lucide-react";
 import type { AgentServiceStatus, ThreadSnapshot } from "../../../shared/agent/contracts.ts";
 import { cn } from "../../../lib/utils.ts";
+import StoryLogo from "./StoryLogo.tsx";
 
 type WorkspaceSidebarProps = {
   readonly open: boolean;
@@ -56,9 +57,7 @@ export default function WorkspaceSidebar({
         open ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="flex h-11 items-center gap-2.5 px-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-neutral-900 to-stone-600 text-white shadow-md">
-            <Sparkles size={17} />
-          </span>
+          <StoryLogo className="size-8 rounded-[10px] shadow-md" />
           <span className="grid min-w-0 flex-1 gap-0.5">
             <strong className="text-sm tracking-tight">StoryOS</strong>
             <span className="text-[9px] uppercase tracking-[0.08em] text-muted-foreground">AI Workspace</span>
@@ -105,7 +104,7 @@ export default function WorkspaceSidebar({
         </nav>
 
         <button className="grid min-h-13 w-full grid-cols-[31px_minmax(0,1fr)_18px] items-center gap-2 border-0 border-t border-neutral-200 bg-transparent px-2 pt-2 text-left hover:bg-neutral-200/60" type="button" onClick={onOpenSettings}>
-          <span className="grid size-[30px] place-items-center rounded-full bg-gradient-to-br from-violet-500 to-teal-700 text-xs text-white">S</span>
+          <StoryLogo className="size-[30px] rounded-full" />
           <span className="grid min-w-0 gap-0.5">
             <strong className="truncate text-[11px]">{status?.modelName ?? "配置 AI 模型"}</strong>
             <span className={cn("text-[10px]", status?.initialized ? "text-emerald-700" : "text-amber-700")}>
