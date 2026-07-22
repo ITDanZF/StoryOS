@@ -49,7 +49,7 @@ export default function AgentWorkspace() {
       />
 
       <section className="m-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 border-border bg-white sm:m-1.5 sm:rounded-xl sm:border lg:ml-2 2xl:mr-3">
-        <header className="flex min-h-13 items-center justify-between gap-3 border-b border-neutral-100 bg-white/95 px-2 sm:min-h-14 sm:px-3 lg:px-5 2xl:min-h-16 2xl:px-7">
+        <header className="app-drag flex min-h-13 items-center justify-between gap-3 border-b border-neutral-100 bg-white/95 px-2 sm:min-h-14 sm:px-3 lg:px-5 2xl:min-h-16 2xl:px-7">
           <div className="flex min-w-0 items-center gap-1">
             <button className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100 lg:hidden" type="button" aria-label="打开侧栏" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button>
             <button className="flex min-w-0 max-w-[52vw] items-center gap-1.5 rounded-lg border-0 bg-transparent px-1.5 py-1.5 text-xs font-semibold sm:text-[13px] lg:max-w-lg" type="button">

@@ -1,4 +1,5 @@
-import { Folder, FolderOpen, FolderPlus, MessageSquareText, Plus, Settings2, Trash2, X } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen, FolderPlus, MessageSquareText, Plus, Settings2, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { AgentServiceStatus, CreateProjectRequest, ProjectSnapshot, ThreadSnapshot } from "../../../shared/agent/contracts.ts";
 import { cn } from "../../../lib/utils.ts";
 import StoryLogo from "./StoryLogo.tsx";
@@ -46,15 +47,29 @@ export default function WorkspaceSidebar({
   onDeleteThread,
   onOpenSettings,
 }: WorkspaceSidebarProps) {
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const projectMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!projectMenuOpen) return;
+    const closeProjectMenu = (event: PointerEvent) => {
+      if (projectMenuRef.current?.contains(event.target as Node)) return;
+      setProjectMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeProjectMenu);
+    return () => document.removeEventListener("pointerdown", closeProjectMenu);
+  }, [projectMenuOpen]);
+
   const createProject = async () => {
+    setProjectMenuOpen(false);
     const name = window.prompt("项目名称", "Untitled Project")?.trim();
     if (!name) return;
-    const createAgentsFile = window.confirm("是否创建 AGENTS.md 项目说明文件？");
-    await onCreateProject({ name, createAgentsFile });
+    await onCreateProject({ name, createAgentsFile: false });
     onClose();
   };
 
   const openProject = async () => {
+    setProjectMenuOpen(false);
     const projectPath = window.prompt("输入已有项目目录的绝对路径")?.trim();
     if (!projectPath) return;
     await onOpenProject(projectPath);
@@ -62,6 +77,7 @@ export default function WorkspaceSidebar({
   };
 
   const switchProject = async (projectPath: string | null) => {
+    setProjectMenuOpen(false);
     await onSwitchProject(projectPath);
     onClose();
   };
@@ -91,11 +107,12 @@ export default function WorkspaceSidebar({
         onClick={onClose}
       />
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 flex w-[min(280px,84vw)] min-w-0 flex-col border-r border-border bg-[#f3f3f2] px-2.5 pb-3 pt-4 shadow-2xl transition-transform duration-200",
+        "fixed inset-y-0 left-0 z-40 flex w-[min(280px,84vw)] min-w-0 flex-col border-r border-border bg-[#f3f3f2] px-2.5 pb-3 pt-12 shadow-2xl transition-transform duration-200",
         "lg:static lg:z-auto lg:w-60 lg:min-w-60 lg:translate-x-0 lg:shadow-none 2xl:w-64 2xl:min-w-64",
         open ? "translate-x-0" : "-translate-x-full",
       )}>
-        <div className="flex h-11 items-center gap-2.5 px-2">
+        <div className="app-drag absolute inset-x-0 top-0 h-10" />
+        <div className="app-drag flex h-11 items-center gap-2.5 px-2">
           <StoryLogo className="size-8 rounded-[10px] shadow-md" />
           <span className="grid min-w-0 flex-1 gap-0.5">
             <strong className="text-sm tracking-tight">StoryOS</strong>
@@ -107,14 +124,6 @@ export default function WorkspaceSidebar({
         </div>
 
         <div className="my-3 grid gap-1">
-          <button className="flex h-9 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void openProject()}>
-            <FolderOpen size={17} />
-            <span className="flex-1">打开项目</span>
-          </button>
-          <button className="flex h-9 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void createProject()}>
-            <FolderPlus size={17} />
-            <span className="flex-1">新建项目</span>
-          </button>
           <button className="flex h-9 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void createThread()}>
             <Plus size={17} />
             <span className="flex-1">新建对话</span>
@@ -122,8 +131,39 @@ export default function WorkspaceSidebar({
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2 py-2 text-[11px] text-muted-foreground">
-          <Folder size={14} />项目
+        <div className="relative" ref={projectMenuRef}>
+          <div className="flex items-center justify-between gap-2 px-2 py-2 text-[11px] text-muted-foreground">
+            <button className="flex items-center gap-1.5 border-0 bg-transparent p-0 text-[11px] text-muted-foreground hover:text-neutral-700" type="button" onClick={() => setProjectMenuOpen((value) => !value)}>
+              <Folder size={14} />
+              <span>项目</span>
+              <ChevronDown className={cn("transition-transform", projectMenuOpen && "rotate-180")} size={13} />
+            </button>
+            <button
+              className={cn(
+                "grid size-8 place-items-center rounded-xl border bg-transparent text-neutral-500 transition hover:bg-white hover:text-neutral-800",
+                projectMenuOpen ? "border-amber-500 bg-white text-neutral-800 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]" : "border-transparent",
+              )}
+              type="button"
+              title="项目操作"
+              aria-label="项目操作"
+              aria-expanded={projectMenuOpen}
+              onClick={() => setProjectMenuOpen((value) => !value)}
+            >
+              <FolderPlus size={17} />
+            </button>
+          </div>
+          {projectMenuOpen && (
+            <div className="absolute left-2 right-2 top-11 z-50 rounded-[20px] border border-neutral-100 bg-white p-2 text-neutral-800 shadow-[0_18px_45px_rgba(0,0,0,0.14)] sm:left-auto sm:right-0 sm:w-[232px] lg:left-[calc(100%-2rem)] lg:right-auto">
+              <button className="flex h-11 w-full items-center gap-3 rounded-[14px] border-0 bg-transparent px-3 text-left text-sm hover:bg-neutral-100" type="button" onClick={() => void createProject()}>
+                <Plus size={20} className="text-neutral-500" />
+                <span className="whitespace-nowrap">新建空白项目</span>
+              </button>
+              <button className="flex h-11 w-full items-center gap-3 rounded-[14px] border-0 bg-transparent px-3 text-left text-sm hover:bg-neutral-100" type="button" onClick={() => void openProject()}>
+                <FolderOpen size={20} className="text-neutral-500" />
+                <span className="whitespace-nowrap">使用现有文件夹</span>
+              </button>
+            </div>
+          )}
         </div>
         <nav className="grid max-h-42 gap-0.5 overflow-y-auto pb-2" aria-label="项目">
           <button className={cn("grid min-h-9 rounded-lg border-0 bg-transparent px-2 py-1 text-left hover:bg-neutral-200/70", activeProjectPath === null && "bg-neutral-200")} type="button" onClick={() => void switchProject(null)}>

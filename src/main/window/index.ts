@@ -1,33 +1,17 @@
 import { BrowserWindow } from 'electron';
+import type { BrowserWindowConstructorOptions } from 'electron';
 import path from 'node:path';
-import fs from 'node:fs';
-import os from 'node:os';
 
-interface WindowManagerOptions {
+interface WindowManagerOptions extends BrowserWindowConstructorOptions {
     id?: string;
-    width?: number;
-    height?: number;
     route?: string; // 如 #/settings，用于 SPA 路由
-    alwaysOnTop?: boolean;
-    resizable?: boolean;
-    frame?: boolean;
-    show?: boolean;
-    autoHideMenuBar?: boolean;
-    minWidth?: number;
-    minHeight?: number;
-    icon?: string;
-    webPreferences?: any;
-    contextIsolation?: boolean;
-    nodeIntegration?: boolean;
-    spellcheck?: boolean;
     isOpenDev?: boolean;
 }
 
 export default class AppWindowManager {
-    private MainId: string = 'mainApp';
+    private MainId = 'mainApp';
     private windowsMap = new Map<string, BrowserWindow>();
     private defaultOptions: WindowManagerOptions = { id: this.MainId };
-    private preloadPath: string = '';
 
     constructor(options?: WindowManagerOptions) {
         this.defaultOptions = {
@@ -38,6 +22,9 @@ export default class AppWindowManager {
             icon: path.join(__dirname, '../../assets/icons/storyos.png'),
             show: false, // ready-to-show 再显示，防白屏
             autoHideMenuBar: true, // Windows/Linux 隐藏菜单栏
+            titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+            trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 18 } : undefined,
+            backgroundColor: '#f7f7f5',
             webPreferences: {
                 preload: path.join(__dirname, 'preload.js'),
                 contextIsolation: true,
@@ -57,8 +44,8 @@ export default class AppWindowManager {
     }
 
     get MainWindow() {
-        if (this.windowsMap.has(this.MainId)) {
-            const exist = this.windowsMap.get(this.MainId)!;
+        const exist = this.windowsMap.get(this.MainId);
+        if (exist) {
             if (exist.isMinimized()) exist.restore();
             exist.focus();
             return exist;
@@ -78,8 +65,8 @@ export default class AppWindowManager {
             return null;
         }
 
-        if (this.windowsMap.has(id)) {
-            const exist = this.windowsMap.get(id)!;
+        const exist = this.windowsMap.get(id);
+        if (exist) {
             return exist;
         }
 
