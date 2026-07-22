@@ -73,7 +73,7 @@ if (previewEnabled && !window.storyOSAgent) {
       return snapshot();
     },
     getProjectSnapshot: async () => projectSnapshot(),
-    createProject: async ({ name, createAgentsFile: _createAgentsFile }) => {
+    createProject: async ({ name }) => {
       const now = new Date().toISOString();
       const project: ProjectDto = {
         path: `/preview/${name.trim().replace(/\s+/g, "-")}`,
