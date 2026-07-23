@@ -4,6 +4,7 @@ import started from 'electron-squirrel-startup';
 import AppWindowManager from './window/index';
 import StoryAgentService from './agent/StoryAgentService';
 import { registerAgentIpc } from './ipc/agent';
+import { registerWindowIpc } from './ipc/window';
 import { getAgentHome } from './agent/workspace/path';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -20,6 +21,7 @@ app.whenReady().then(async () => {
     });
     await agentService.initialize();
     registerAgentIpc(agentService);
+    registerWindowIpc();
     MainAppWin.createMainWindow();
 }).catch((error) => {
     console.error('StoryOS startup failed.', error);

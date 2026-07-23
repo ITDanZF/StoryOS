@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
 import path from 'node:path';
+import { notifyWindowState } from '../ipc/window';
 
 interface WindowManagerOptions extends BrowserWindowConstructorOptions {
     id?: string;
@@ -22,8 +23,8 @@ export default class AppWindowManager {
             icon: path.join(__dirname, '../../assets/icons/storyos.png'),
             show: false, // ready-to-show 再显示，防白屏
             autoHideMenuBar: true, // Windows/Linux 隐藏菜单栏
-            titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-            trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 18 } : undefined,
+            frame: false,
+            hasShadow: true,
             backgroundColor: '#f7f7f5',
             webPreferences: {
                 preload: path.join(__dirname, 'preload.js'),
@@ -82,6 +83,12 @@ export default class AppWindowManager {
         win.once('ready-to-show', () => {
             win.show();
         });
+
+        const notifyState = () => notifyWindowState(win);
+        win.on('maximize', notifyState);
+        win.on('unmaximize', notifyState);
+        win.on('enter-full-screen', notifyState);
+        win.on('leave-full-screen', notifyState);
 
         this.loadContent(win, route);
 

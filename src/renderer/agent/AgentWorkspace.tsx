@@ -7,6 +7,8 @@ import WorkspaceSidebar from "./components/WorkspaceSidebar.tsx";
 import { useAgentWorkspace } from "./useAgentWorkspace.ts";
 import "./agentWorkspace.css";
 
+import WindowTitleBar from '../components/WindowTitleBar.tsx';
+
 export default function AgentWorkspace() {
   const { state, activeRun, configure, createProject, openProject, switchProject, removeProject, createThread, switchThread, deleteThread, sendMessage, cancelRun, clearError } = useAgentWorkspace();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -32,6 +34,7 @@ export default function AgentWorkspace() {
   const activeProject = state.projects?.activeProject;
   return (
     <main className="flex h-dvh w-full min-w-0 overflow-hidden bg-neutral-100">
+      <WindowTitleBar />
       <WorkspaceSidebar
         open={sidebarOpen}
         status={state.status}
