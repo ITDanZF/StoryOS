@@ -161,4 +161,43 @@ describe("AgentApplication behavior", () => {
     });
     expect(events.some((event) => event.type === "run_timed_out")).toBe(true);
   });
+
+  it("publishes subagent lineage fields for run log reconstruction", async () => {
+    const runner: AgentRunner = {
+      run: async (_input, options) => {
+        await options.onAgentEvent({
+          type: "run_started",
+          runId: "subagent-run",
+          agentType: "text-analyzer",
+          threadId: "thread-lineage/agents/text-analyzer/subagent-run",
+          parentRunId: options.runId,
+          depth: 1,
+        });
+        return "done";
+      },
+      cancelRun: () => false,
+    };
+    const application = new AgentApplication(runner);
+    const events: ApplicationEvent[] = [];
+    application.subscribe((event) => {
+      events.push(event);
+    });
+
+    const runId = application.startRun({
+      threadId: "thread-lineage",
+      input: "delegate",
+    });
+
+    await expect(application.waitForRun(runId)).resolves.toBe("done");
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "agent_status",
+      runId,
+      agentRunId: "subagent-run",
+      agentType: "text-analyzer",
+      status: "started",
+      threadId: "thread-lineage/agents/text-analyzer/subagent-run",
+      parentRunId: runId,
+      depth: 1,
+    }));
+  });
 });

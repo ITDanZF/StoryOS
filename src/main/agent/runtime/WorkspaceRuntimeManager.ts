@@ -27,6 +27,13 @@ export type ActiveWorkspaceRuntime = {
   readonly model: Model;
   readonly modelSessions: Memory;
   readonly unsubscribe: () => void;
+  readonly close: () => void;
+};
+
+type RuntimeResourceScope = {
+  modelSessions: Memory | null;
+  unsubscribe: (() => void) | null;
+  closed: boolean;
 };
 
 function samePath(first: string, second: string): boolean {
@@ -66,61 +73,81 @@ export default class WorkspaceRuntimeManager {
   async activate(projectPath: string | null): Promise<void> {
     if (this.current && this.matchesCurrent(projectPath)) return;
     this.assertCanLeaveCurrent();
-    this.closeCurrent();
 
-    const snapshot = this.projects.getSnapshot();
-    const project = projectPath === null
-      ? null
-      : snapshot.projects.find((item) => samePath(item.path, projectPath));
-    if (projectPath !== null && !project) throw new Error(`Project not found: ${projectPath}`);
-    const layout = project
-      ? getWorkspaceLayout(project.path)
-      : getWorkspaceLayout(snapshot.systemWorkspace.path, true);
+    const next = await this.createRuntime(projectPath);
+    const previous = this.current;
+    this.current = next;
+    this.closeRuntime(previous);
+  }
 
-    const threads = new ThreadApplication(new JsonStore(layout.conversationsRoot));
-    const modelSessions = new Memory({
-      checkpointBackend: "sqlite",
-      checkpointPath: layout.checkpointPath,
-    });
-    const model = new Model({
-      configuration: this.modelConfiguration,
-      sessions: modelSessions,
-    });
-    const skills = await SkillApplication.create({
-      loader: new SkillLoader({ projectSkillRoot: layout.skillsRoot }),
-      scaffold: new SkillScaffoldService({ userSkillRoot: layout.skillsRoot }),
-      draft: new SkillDraftService(model),
-    });
-    const skillInstaller = new SkillInstallService(skills);
-    const skillContextProvider = new SkillContextProviderService(skills, {
-      threadSkillStateProvider: threads,
-    });
-    const workspaceContext = new WorkspaceToolContext(layout.filesRoot);
-    const agent = new AgentApplication(createAgentOrchestrator({
-      model,
-      skillContextProvider,
-      skillDefinitions: skills.listSkillDefinitions(),
-      skillDefinitionsProvider: () => skills.listSkillDefinitions(),
-      skillInstaller,
-      workspaceContext,
-    }), {
-      checkpointPath: layout.checkpointPath,
-      eventRecorder: new RunLogStore(layout.runsRoot),
-    });
-    const unsubscribe = agent.subscribe((event) =>
-      Promise.allSettled([...this.subscribers].map((subscriber) => subscriber(event))).then(() => {
-        // Subscriber failures are isolated from the active agent run.
-      }));
-    this.current = Object.freeze({
-      projectPath: project?.path ?? null,
-      layout,
-      threads,
-      agent,
-      skills,
-      model,
-      modelSessions,
-      unsubscribe,
-    });
+  private async createRuntime(projectPath: string | null): Promise<ActiveWorkspaceRuntime> {
+    const resources: RuntimeResourceScope = {
+      modelSessions: null,
+      unsubscribe: null,
+      closed: false,
+    };
+
+    try {
+      const snapshot = this.projects.getSnapshot();
+      const project = projectPath === null
+        ? null
+        : snapshot.projects.find((item) => samePath(item.path, projectPath));
+      if (projectPath !== null && !project) throw new Error(`Project not found: ${projectPath}`);
+      const layout = project
+        ? getWorkspaceLayout(project.path)
+        : getWorkspaceLayout(snapshot.systemWorkspace.path, true);
+
+      const threads = new ThreadApplication(new JsonStore(layout.conversationsRoot));
+      const modelSessions = new Memory({
+        checkpointBackend: "sqlite",
+        checkpointPath: layout.checkpointPath,
+      });
+      resources.modelSessions = modelSessions;
+      const model = new Model({
+        configuration: this.modelConfiguration,
+        sessions: modelSessions,
+      });
+      const skills = await SkillApplication.create({
+        loader: new SkillLoader({ projectSkillRoot: layout.skillsRoot }),
+        scaffold: new SkillScaffoldService({ userSkillRoot: layout.skillsRoot }),
+        draft: new SkillDraftService(model),
+      });
+      const skillInstaller = new SkillInstallService(skills);
+      const skillContextProvider = new SkillContextProviderService(skills, {
+        threadSkillStateProvider: threads,
+      });
+      const workspaceContext = new WorkspaceToolContext(layout.filesRoot);
+      const agent = new AgentApplication(createAgentOrchestrator({
+        model,
+        skillContextProvider,
+        skillDefinitions: skills.listSkillDefinitions(),
+        skillDefinitionsProvider: () => skills.listSkillDefinitions(),
+        skillInstaller,
+        workspaceContext,
+      }), {
+        checkpointPath: layout.checkpointPath,
+        eventRecorder: new RunLogStore(layout.runsRoot),
+      });
+      const unsubscribe = agent.subscribe((event) =>
+        Promise.allSettled([...this.subscribers].map((subscriber) => subscriber(event))).then(() => {
+          // Subscriber failures are isolated from the active agent run.
+        }));
+      resources.unsubscribe = unsubscribe;
+      return Object.freeze({
+        projectPath: project?.path ?? null,
+        layout,
+        threads,
+        agent,
+        skills,
+        model,
+        modelSessions,
+        unsubscribe,
+        close: () => this.closeResourceScope(resources),
+      });
+    } catch (error) {
+      this.closeResourceScope(resources);
+      throw error;
+    }
   }
 
   closeForProjectMutation(projectPath: string): void {
@@ -158,9 +185,22 @@ export default class WorkspaceRuntimeManager {
   }
 
   private closeCurrent(): void {
-    if (!this.current) return;
-    this.current.unsubscribe();
-    this.current.modelSessions.close();
+    this.closeRuntime(this.current);
     this.current = null;
+  }
+
+  private closeRuntime(runtime: ActiveWorkspaceRuntime | null): void {
+    if (!runtime) return;
+    runtime.close();
+  }
+
+  private closeResourceScope(resources: RuntimeResourceScope): void {
+    if (resources.closed) return;
+    resources.closed = true;
+    try {
+      resources.unsubscribe?.();
+    } finally {
+      resources.modelSessions?.close();
+    }
   }
 }

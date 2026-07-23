@@ -97,6 +97,7 @@ export default class AgentRuntime {
       modelReference: definition.model,
       visibility: "internal",
       mode: "text",
+      budget,
       onEvent: input.onEvent,
     });
     const source = {

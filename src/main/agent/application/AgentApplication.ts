@@ -323,6 +323,11 @@ export default class AgentApplication {
             | "aborted"
             | "timed_out"
             | "failed",
+          ...(event.type === "run_started" ? {
+            threadId: event.threadId,
+            ...(event.parentRunId ? { parentRunId: event.parentRunId } : {}),
+            depth: event.depth,
+          } : {}),
           ...(event.type === "run_failed" ? { error: event.error } : {}),
           timestamp: new Date().toISOString(),
         });

@@ -59,6 +59,7 @@ export default class ResultReviewer implements ResultReviewProvider {
       : request.dependencyResults.map((result) =>
           `<dependency id="${result.taskId}">\n${result.content}\n</dependency>`
         ).join("\n\n");
+    request.budget?.consumeModelTurn(`reviewer model run for ${request.task.id}`);
     const output = await this.model.invokeText({
       prompt: [
         `Task objective:\n${request.task.objective}`,

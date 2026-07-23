@@ -17,6 +17,7 @@ export type PlanningRequest = {
   readonly threadId: string;
   readonly goal: string;
   readonly signal?: AbortSignal;
+  readonly budget?: RunBudget;
 };
 
 export interface PlanProvider {
@@ -52,6 +53,7 @@ export type ReviewRequest = {
   readonly result: TaskResult;
   readonly dependencyResults: readonly ApprovedTaskResult[];
   readonly signal?: AbortSignal;
+  readonly budget?: RunBudget;
 };
 
 export interface ResultReviewProvider {
@@ -65,6 +67,7 @@ export type SynthesisRequest = {
   readonly plan: PlannedExecutionPlan;
   readonly results: readonly ApprovedTaskResult[];
   readonly signal?: AbortSignal;
+  readonly budget?: RunBudget;
 };
 
 export interface AnswerSynthesisProvider {

@@ -144,4 +144,40 @@ describe("AgentExecutor behavior", () => {
       "run_timed_out",
     ]);
   });
+
+  it("does not emit text deltas produced after cancellation", async () => {
+    const controller = new AbortController();
+    const model: AgentModelRunner = {
+      stream: async function* () {
+        yield "before";
+        controller.abort(new Error("stop streaming"));
+        yield "after";
+      },
+    };
+    const executor = new AgentExecutor(model);
+    const events: AgentEvent[] = [];
+
+    await expect(
+      executor.execute(createInput(events, {
+        context: createRootExecutionContext({
+          runId: "run-cancel-delta",
+          threadId: "thread-cancel-delta",
+          signal: controller.signal,
+        }),
+      })),
+    ).resolves.toEqual({
+      status: "aborted",
+      partialContent: "before",
+      cause: expect.any(Error),
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      "run_started",
+      "text_delta",
+      "run_aborted",
+    ]);
+    expect(events).not.toContainEqual(expect.objectContaining({
+      type: "text_delta",
+      content: "after",
+    }));
+  });
 });

@@ -3,6 +3,7 @@ export type RunLimits = {
   readonly maxToolCalls: number;
   readonly timeoutMs: number;
   readonly maxDelegationDepth: number;
+  readonly maxSubtasks?: number;
 };
 
 function readTimeoutMsFromEnv(): number {
@@ -20,6 +21,7 @@ export const DEFAULT_RUN_LIMITS: RunLimits = Object.freeze({
   maxToolCalls: 20,
   timeoutMs: readTimeoutMsFromEnv(),
   maxDelegationDepth: 1,
+  maxSubtasks: 6,
 });
 
 export class RunBudgetExceededError extends Error {
@@ -38,6 +40,8 @@ export class RunTimedOutError extends Error {
 
 export default class RunBudget {
   private toolCalls = 0;
+  private modelTurns = 0;
+  private subtasks = 0;
 
   constructor(readonly limits: RunLimits = DEFAULT_RUN_LIMITS) {
     if (!Number.isInteger(limits.maxTurns) || limits.maxTurns <= 0) {
@@ -55,6 +59,22 @@ export default class RunBudget {
     ) {
       throw new Error("maxDelegationDepth must be a non-negative integer.");
     }
+    if (
+      limits.maxSubtasks !== undefined &&
+      (!Number.isInteger(limits.maxSubtasks) || limits.maxSubtasks < 0)
+    ) {
+      throw new Error("maxSubtasks must be a non-negative integer.");
+    }
+  }
+
+  consumeModelTurn(label: string): void {
+    if (this.modelTurns >= this.limits.maxTurns) {
+      throw new RunBudgetExceededError(
+        `Model turn budget exceeded before ${label}. Maximum: ${this.limits.maxTurns}.`,
+      );
+    }
+
+    this.modelTurns += 1;
   }
 
   consumeToolCall(toolName: string): void {
@@ -67,8 +87,27 @@ export default class RunBudget {
     this.toolCalls += 1;
   }
 
+  consumeSubtask(taskId: string): void {
+    const maxSubtasks = this.limits.maxSubtasks ?? DEFAULT_RUN_LIMITS.maxSubtasks ?? 0;
+    if (this.subtasks >= maxSubtasks) {
+      throw new RunBudgetExceededError(
+        `Subtask budget exceeded before ${taskId}. Maximum: ${maxSubtasks}.`,
+      );
+    }
+
+    this.subtasks += 1;
+  }
+
   getToolCallCount(): number {
     return this.toolCalls;
+  }
+
+  getModelTurnCount(): number {
+    return this.modelTurns;
+  }
+
+  getSubtaskCount(): number {
+    return this.subtasks;
   }
 }
 

@@ -32,6 +32,7 @@ export type AgentGeneratorRunOptions = {
   readonly runId?: string;
   readonly threadId: string;
   readonly signal?: AbortSignal;
+  readonly budget?: RunBudget;
   readonly approval?: ToolApprovalHandler;
   readonly onChunk?: (chunk: string) => void | Promise<void>;
   readonly onAgentEvent?: AgentEventHandler;
@@ -110,7 +111,7 @@ export default class AgentGenerator {
       this.limits.timeoutMs,
       options.signal,
     );
-    const budget = new RunBudget(this.limits);
+    const budget = options.budget ?? new RunBudget(this.limits);
     const context = createRootExecutionContext({
       runId: options.runId,
       threadId: options.threadId,
@@ -179,6 +180,7 @@ export default class AgentGenerator {
           timedOut: abortScope.timedOut,
           timeoutMs: this.limits.timeoutMs,
         },
+        budget,
         onChunk: options.onChunk,
         onEvent: options.onAgentEvent,
       });

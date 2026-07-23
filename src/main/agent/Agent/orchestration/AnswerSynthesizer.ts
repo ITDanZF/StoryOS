@@ -21,6 +21,7 @@ export default class AnswerSynthesizer implements AnswerSynthesisProvider {
       "</approved-result>",
     ].join("\n")).join("\n\n");
 
+    request.budget?.consumeModelTurn("synthesis model run");
     return this.model.invokeText({
       prompt: [
         `Original goal:\n${request.goal}`,

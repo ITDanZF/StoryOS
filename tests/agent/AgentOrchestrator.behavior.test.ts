@@ -1,15 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import AgentOrchestrator, {
   type DirectAgentRunner,
   type PlanScheduler,
 } from "../../src/main/agent/Agent/orchestration/AgentOrchestrator.ts";
+import { createAgentOrchestrator } from "../../src/main/agent/Agent/orchestration/createAgentOrchestrator.ts";
 import type {
   DirectExecutionPlan,
   OrchestrationEvent,
   PlannedExecutionPlan,
 } from "../../src/main/agent/Agent/orchestration/contracts.ts";
 import type { PlanProvider } from "../../src/main/agent/Agent/orchestration/ports.ts";
+import type { AgentModelRunner } from "../../src/main/agent/Agent/AgentRuntime.ts";
 import type { RunLimits } from "../../src/main/agent/Agent/RunLimits.ts";
+import type Model from "../../src/main/agent/model/Model.ts";
+import WorkspaceToolContext from "../../src/main/agent/tools/WorkspaceToolContext.ts";
 
 const limits: RunLimits = {
   maxTurns: 8,
@@ -17,6 +24,23 @@ const limits: RunLimits = {
   timeoutMs: 0,
   maxDelegationDepth: 1,
 };
+
+const roots: string[] = [];
+
+function asModel(model: AgentModelRunner): Model {
+  return model as unknown as Model;
+}
+
+function createWorkspaceRoot(): string {
+  const root = mkdtempSync(path.join(tmpdir(), "storyos-orchestrator-"));
+  roots.push(root);
+  mkdirSync(root, { recursive: true });
+  return root;
+}
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
 const directPlan: DirectExecutionPlan = {
   version: 1,
@@ -169,5 +193,83 @@ describe("AgentOrchestrator behavior", () => {
     expect(orchestrator.cancelRun("run-1", reason)).toBe(true);
     await expect(run).rejects.toThrow("stop now");
     expect(directRunner.cancelRun).toHaveBeenCalledWith("run-1", reason);
+  });
+
+  it("runs planner, task agent, reviewer, and synthesizer with a fake model", async () => {
+    const calls: string[] = [];
+    const model: AgentModelRunner = {
+      stream: async function* () {
+        yield "unexpected";
+      },
+      invokeText: vi.fn(async (input) => {
+        if (input.threadId.includes("/orchestration/planner/")) {
+          calls.push("planner");
+          return JSON.stringify({
+            version: 1,
+            mode: "planned",
+            goal: "analyze text",
+            tasks: [{
+              id: "analyze",
+              title: "Analyze",
+              objective: "Analyze the supplied text",
+              agentType: "text-analyzer",
+              dependsOn: [],
+              required: true,
+              expectedOutput: "Analysis",
+              acceptanceCriteria: ["Complete"],
+              sideEffect: "none",
+              timeoutMs: 1_000,
+              maxAttempts: 1,
+            }],
+            finalAcceptanceCriteria: ["Return final answer"],
+          });
+        }
+        if (input.threadId.includes("/agents/text-analyzer/")) {
+          calls.push("task");
+          return "analysis result";
+        }
+        if (input.threadId.includes("/orchestration/reviewer/")) {
+          calls.push("reviewer");
+          return JSON.stringify({
+            decision: "pass",
+            score: 1,
+            findings: [{
+              criterion: "Complete",
+              passed: true,
+              severity: "info",
+              message: "Complete",
+            }],
+          });
+        }
+        if (input.threadId.includes("/orchestration/synthesis/")) {
+          calls.push("synthesizer");
+          expect(input.prompt).toContain("analysis result");
+          return "final answer";
+        }
+        throw new Error(`Unexpected thread id: ${input.threadId}`);
+      }),
+    };
+    const orchestrator = createAgentOrchestrator({
+      model: asModel(model),
+      workspaceContext: new WorkspaceToolContext(createWorkspaceRoot()),
+      limits,
+    });
+    const events: OrchestrationEvent[] = [];
+    const chunks: string[] = [];
+
+    await expect(orchestrator.run(
+      "analyze text",
+      createOptions(events, chunks),
+    )).resolves.toBe("final answer");
+    expect(calls).toEqual(["planner", "task", "reviewer", "synthesizer"]);
+    expect(chunks).toEqual(["final answer"]);
+    expect(events.map((event) => event.type)).toEqual([
+      "plan_created",
+      "task_started",
+      "task_reviewed",
+      "task_completed",
+      "synthesis_started",
+      "synthesis_completed",
+    ]);
   });
 });

@@ -7,6 +7,7 @@ import {
   type AgentEventHandler,
 } from "./AgentEvent.ts";
 import type { ExecutionContext } from "./ExecutionContext.ts";
+import type RunBudget from "./RunLimits.ts";
 
 export type AgentModelRunner = ModelGateway;
 
@@ -47,6 +48,7 @@ export type AgentExecutorInput = {
     readonly timedOut: () => boolean;
     readonly timeoutMs: number;
   };
+  readonly budget?: RunBudget;
   readonly onChunk?: (chunk: string) => void | Promise<void>;
   readonly onEvent?: AgentEventHandler;
 };
@@ -96,6 +98,7 @@ export default class AgentExecutor {
         ...(input.visibility ? { visibility: input.visibility } : {}),
       };
       const model = this.modelRouter.resolve(input.modelReference);
+      input.budget?.consumeModelTurn(`${context.agentType} model run`);
 
       if (input.mode === "text" && model.invokeText) {
         await this.appendChunk(
@@ -169,6 +172,9 @@ export default class AgentExecutor {
     input: AgentExecutorInput,
     chunks: string[],
   ): Promise<void> {
+    if (input.context.signal?.aborted) {
+      throw input.context.signal.reason ?? new Error("Agent run aborted.");
+    }
     chunks.push(chunk);
     await emitAgentEvent(
       input.onEvent,

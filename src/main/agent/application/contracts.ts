@@ -64,6 +64,9 @@ export type ApplicationEvent =
       readonly runId: string;
       readonly agentRunId: string;
       readonly agentType: string;
+      readonly threadId?: string;
+      readonly parentRunId?: string;
+      readonly depth?: number;
       readonly status: "started" | "completed" | "aborted" | "timed_out" | "failed";
       readonly error?: string;
       readonly timestamp: string;

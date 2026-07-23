@@ -61,6 +61,7 @@ export default class TaskPlanner implements PlanProvider {
             `Previous response:\n${previousOutput}`,
             "Return a corrected JSON object.",
           ].join("\n\n");
+      request.budget?.consumeModelTurn("planner model run");
       previousOutput = await this.model.invokeText({
         prompt: [basePrompt, correction].filter(Boolean).join("\n\n"),
         threadId: `${request.threadId}/orchestration/planner/${request.runId}`,

@@ -207,4 +207,158 @@ describe("TaskScheduler behavior", () => {
     );
     expect(events.some((event) => event.type === "task_retrying")).toBe(true);
   });
+
+  it("stops without review events when cancellation happens during review", async () => {
+    const controller = new AbortController();
+    const runner: PlannedTaskRunner = {
+      runTask: vi.fn(async (request: TaskExecutionRequest) =>
+        completedResult(
+          request.task.id,
+          request.task.agentType,
+          request.attempt,
+        )),
+    };
+    const reviewer: ResultReviewProvider = {
+      review: vi.fn(async () => {
+        controller.abort(new Error("stop during review"));
+        throw new Error("review aborted");
+      }),
+    };
+    const synthesizer: AnswerSynthesisProvider = {
+      synthesize: vi.fn(async () => "unexpected"),
+    };
+    const scheduler = new TaskScheduler(runner, reviewer, synthesizer);
+    const events: OrchestrationEvent[] = [];
+
+    await expect(scheduler.run({
+      ...createScheduleRequest(events),
+      signal: controller.signal,
+    })).rejects.toThrow("stop during review");
+    expect(events.map((event) => event.type)).toEqual(["task_started"]);
+    expect(synthesizer.synthesize).not.toHaveBeenCalled();
+  });
+
+  it("enforces the root subtask budget across planned tasks", async () => {
+    const runner: PlannedTaskRunner = {
+      runTask: vi.fn(async (request: TaskExecutionRequest) =>
+        completedResult(
+          request.task.id,
+          request.task.agentType,
+          request.attempt,
+        )),
+    };
+    const reviewer: ResultReviewProvider = {
+      review: vi.fn(async () => passReview),
+    };
+    const synthesizer: AnswerSynthesisProvider = {
+      synthesize: vi.fn(async () => "unexpected"),
+    };
+    const scheduler = new TaskScheduler(runner, reviewer, synthesizer);
+    const events: OrchestrationEvent[] = [];
+
+    await expect(scheduler.run({
+      ...createScheduleRequest(events),
+      budget: new RunBudget({
+        ...limits,
+        maxSubtasks: 1,
+      }),
+    })).rejects.toThrow("Subtask budget exceeded");
+    expect(runner.runTask).toHaveBeenCalledOnce();
+    expect(synthesizer.synthesize).not.toHaveBeenCalled();
+  });
+
+  it("skips dependent tasks after an optional dependency fails review", async () => {
+    const dependencyPlan: PlannedExecutionPlan = {
+      ...plan,
+      tasks: [
+        { ...plan.tasks[0], id: "optional_analysis", required: false },
+        { ...plan.tasks[1], dependsOn: ["optional_analysis"], required: true },
+      ],
+    };
+    const runner: PlannedTaskRunner = {
+      runTask: vi.fn(async (request: TaskExecutionRequest) =>
+        completedResult(
+          request.task.id,
+          request.task.agentType,
+          request.attempt,
+        )),
+    };
+    const reviewer: ResultReviewProvider = {
+      review: vi.fn(async (): Promise<ReviewResult> => ({
+        decision: "fail",
+        score: 0,
+        findings: [{
+          criterion: "complete",
+          passed: false,
+          severity: "error",
+          message: "Not acceptable",
+        }],
+      })),
+    };
+    const synthesizer: AnswerSynthesisProvider = {
+      synthesize: vi.fn(async () => "unexpected"),
+    };
+    const scheduler = new TaskScheduler(runner, reviewer, synthesizer);
+    const events: OrchestrationEvent[] = [];
+
+    await expect(scheduler.run({
+      ...createScheduleRequest(events),
+      plan: dependencyPlan,
+    })).rejects.toThrow("Required task was skipped: review");
+    expect(events.map((event) => event.type)).toEqual([
+      "task_started",
+      "task_reviewed",
+      "task_failed",
+      "task_skipped",
+    ]);
+    expect(synthesizer.synthesize).not.toHaveBeenCalled();
+  });
+
+  it("fails a task after retry attempts are exhausted", async () => {
+    const retryPlan: PlannedExecutionPlan = {
+      ...plan,
+      tasks: [{ ...plan.tasks[0], maxAttempts: 2 }],
+    };
+    const runner: PlannedTaskRunner = {
+      runTask: vi.fn(async (request: TaskExecutionRequest) =>
+        completedResult(
+          request.task.id,
+          request.task.agentType,
+          request.attempt,
+        )),
+    };
+    const reviewer: ResultReviewProvider = {
+      review: vi.fn(async (): Promise<ReviewResult> => ({
+        decision: "retry",
+        score: 0.25,
+        findings: [{
+          criterion: "complete",
+          passed: false,
+          severity: "warning",
+          message: "Still incomplete",
+        }],
+        retryInstruction: "Try again.",
+      })),
+    };
+    const synthesizer: AnswerSynthesisProvider = {
+      synthesize: vi.fn(async () => "unexpected"),
+    };
+    const scheduler = new TaskScheduler(runner, reviewer, synthesizer);
+    const events: OrchestrationEvent[] = [];
+
+    await expect(scheduler.run({
+      ...createScheduleRequest(events),
+      plan: retryPlan,
+    })).rejects.toThrow("Required task failed review: analyze");
+    expect(runner.runTask).toHaveBeenCalledTimes(2);
+    expect(events.map((event) => event.type)).toEqual([
+      "task_started",
+      "task_reviewed",
+      "task_retrying",
+      "task_started",
+      "task_reviewed",
+      "task_failed",
+    ]);
+    expect(synthesizer.synthesize).not.toHaveBeenCalled();
+  });
 });

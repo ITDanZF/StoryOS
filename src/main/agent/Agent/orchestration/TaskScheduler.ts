@@ -78,6 +78,7 @@ export default class TaskScheduler {
 
         pending.delete(task.id);
         progressed = true;
+        request.budget.consumeSubtask(task.id);
         const result = await this.executeTask(request, task, approved);
         if (result) {
           approved.set(task.id, result);
@@ -94,6 +95,7 @@ export default class TaskScheduler {
       }
     }
 
+    this.throwIfAborted(request.signal);
     await emit(request.onEvent, {
       type: "synthesis_started",
       runId: request.runId,
@@ -107,7 +109,9 @@ export default class TaskScheduler {
       plan: request.plan,
       results: [...approved.values()],
       signal: request.signal,
+      budget: request.budget,
     });
+    this.throwIfAborted(request.signal);
     if (!content.trim()) {
       throw new Error("Answer synthesis returned empty content.");
     }
@@ -212,6 +216,7 @@ export default class TaskScheduler {
 
       this.throwIfAborted(request.signal);
       const review = await this.safeReview(request, task, result, dependencyResults);
+      this.throwIfAborted(request.signal);
       const reviewedResult = Object.freeze({ ...result, review });
       await emit(request.onEvent, {
         type: "task_reviewed",
@@ -276,6 +281,7 @@ export default class TaskScheduler {
         result,
         dependencyResults,
         signal: request.signal,
+        budget: request.budget,
       });
     } catch (error) {
       return Object.freeze({

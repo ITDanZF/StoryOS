@@ -95,6 +95,7 @@ export function createDelegateTaskTool(
 
       try {
         registry.get(subagent_type);
+        context.budget.consumeSubtask(description);
 
         const result = await runtime.run({
           agentType: subagent_type,

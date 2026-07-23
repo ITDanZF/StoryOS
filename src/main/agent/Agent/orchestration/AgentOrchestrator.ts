@@ -24,6 +24,7 @@ export type AgentOrchestratorRunOptions = {
   readonly runId: string;
   readonly threadId: string;
   readonly signal?: AbortSignal;
+  readonly budget?: RunBudget;
   readonly approval: ToolApprovalHandler;
   readonly onChunk: (chunk: string) => void | Promise<void>;
   readonly onAgentEvent: AgentEventHandler;
@@ -49,6 +50,7 @@ export default class AgentOrchestrator {
     }
 
     const scope = createRunAbortScope(this.limits.timeoutMs, options.signal);
+    const budget = options.budget ?? new RunBudget(this.limits);
     this.activeRuns.set(options.runId, scope);
 
     try {
@@ -57,6 +59,7 @@ export default class AgentOrchestrator {
         threadId: options.threadId,
         goal: input,
         signal: scope.signal,
+        budget,
       });
       await options.onOrchestrationEvent?.({
         type: "plan_created",
@@ -70,6 +73,7 @@ export default class AgentOrchestrator {
           runId: options.runId,
           threadId: options.threadId,
           signal: scope.signal,
+          budget,
           approval: options.approval,
           onChunk: options.onChunk,
           onAgentEvent: options.onAgentEvent,
@@ -82,7 +86,7 @@ export default class AgentOrchestrator {
         goal: input,
         plan,
         signal: scope.signal,
-        budget: new RunBudget(this.limits),
+        budget,
         approval: options.approval,
         onAgentEvent: options.onAgentEvent,
         onEvent: options.onOrchestrationEvent,
