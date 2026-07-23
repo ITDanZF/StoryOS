@@ -109,9 +109,10 @@ export default function WorkspaceSidebar({
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          {projectsExpanded && projects && (
+          {projects && (
             <ProjectConversationTree
               projects={projects}
+              projectsExpanded={projectsExpanded}
               threads={threads}
               onSwitchProject={async (projectPath) => { await onSwitchProject(projectPath); onClose(); }}
               onCreateThread={async () => { await onCreateThread(); onClose(); }}

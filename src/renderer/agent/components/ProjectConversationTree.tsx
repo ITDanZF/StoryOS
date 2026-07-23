@@ -6,6 +6,7 @@ import ProjectActionMenu from "./ProjectActionMenu.tsx";
 
 type ProjectConversationTreeProps = {
   readonly projects: ProjectSnapshot;
+  readonly projectsExpanded: boolean;
   readonly threads: ThreadSnapshot | null;
   readonly onSwitchProject: (projectPath: string | null) => Promise<void>;
   readonly onCreateThread: () => Promise<void>;
@@ -23,6 +24,7 @@ function shortDate(value: string): string {
 
 export default function ProjectConversationTree({
   projects,
+  projectsExpanded,
   threads,
   onSwitchProject,
   onCreateThread,
@@ -33,27 +35,36 @@ export default function ProjectConversationTree({
   onDeleteProject,
 }: ProjectConversationTreeProps) {
   const [activeMenuPath, setActiveMenuPath] = useState<string | null>(null);
+  const [conversationsExpanded, setConversationsExpanded] = useState(projects.activeProjectPath === null);
   const activeProjectPath = projects.activeProjectPath;
+
+  const createThreadFor = async (projectPath: string | null) => {
+    if (activeProjectPath !== projectPath) {
+      await onSwitchProject(projectPath);
+    }
+    await onCreateThread();
+  };
 
   const renderThreads = () => (
     <div className="ml-5 grid gap-0.5 border-l border-neutral-200 pl-2">
-      <button
-        className="flex h-8 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[11px] text-neutral-500 transition hover:bg-neutral-200 hover:text-neutral-800"
-        type="button"
-        onClick={() => void onCreateThread()}
-      >
-        <Plus size={13} />新建对话
-      </button>
       {threads?.threads.map((thread) => {
         const active = thread.id === threads.activeThreadId;
         return (
-          <div className={cn("group/thread flex min-h-10 items-center rounded-lg py-1 pl-2 pr-1", active ? "bg-neutral-200" : "hover:bg-neutral-200/70")} key={thread.id}>
-            <button className="grid min-w-0 flex-1 gap-0.5 border-0 bg-transparent p-0 text-left" type="button" onClick={() => void onSwitchThread(thread.id)}>
+          <div className={cn("group/thread flex min-h-10 items-center rounded-lg py-1 pl-2 pr-1 transition", active ? "bg-neutral-200" : "hover:bg-neutral-200/70")} key={thread.id}>
+            <button
+              className="grid min-w-0 flex-1 gap-0.5 border-0 bg-transparent p-0 text-left"
+              type="button"
+              aria-current={active ? "true" : undefined}
+              onClick={() => void onSwitchThread(thread.id)}
+            >
               <span className="truncate text-xs text-neutral-700">{thread.title}</span>
               <span className="text-[10px] text-neutral-400">{shortDate(thread.updatedAt)}</span>
             </button>
             <button
-              className={cn("grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-red-700", active ? "opacity-100" : "opacity-0 group-hover/thread:opacity-100")}
+              className={cn(
+                "grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-red-700 focus:opacity-100 group-hover/thread:opacity-100",
+                active ? "opacity-100" : "opacity-0",
+              )}
               type="button"
               title="删除对话"
               aria-label={`删除对话：${thread.title}`}
@@ -69,25 +80,44 @@ export default function ProjectConversationTree({
 
   return (
     <nav className="grid min-h-0 content-start gap-1 overflow-y-auto pb-2" aria-label="项目和对话">
-      {projects.projects.length ? projects.projects.map((project) => {
+      {projectsExpanded && (projects.projects.length ? projects.projects.map((project) => {
         const active = project.path === activeProjectPath;
         return (
           <section className="grid gap-0.5" key={project.id}>
-            <div className={cn("group flex h-9 min-w-0 items-center rounded-xl transition", active ? "bg-neutral-200" : "hover:bg-neutral-200/70")}>
+            <div className="group flex h-9 min-w-0 items-center rounded-xl transition hover:bg-neutral-200/70">
               <button
                 className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent px-2 text-left text-xs text-neutral-700"
                 type="button"
                 title={project.path}
                 aria-expanded={active}
-                onClick={() => void onSwitchProject(project.path)}
+                onClick={() => {
+                  setConversationsExpanded(false);
+                  void onSwitchProject(project.path);
+                }}
               >
                 <ChevronRight className={cn("shrink-0 text-neutral-400 transition-transform", active && "rotate-90")} size={13} />
                 <Folder className="shrink-0 text-neutral-500" size={15} />
                 <span className="truncate">{project.name}</span>
               </button>
+              <button
+                className={cn(
+                  "grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-neutral-800 focus:opacity-100",
+                  active ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                )}
+                type="button"
+                title={`在 ${project.name} 中新建对话`}
+                aria-label={`在 ${project.name} 中新建对话`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setConversationsExpanded(false);
+                  void createThreadFor(project.path);
+                }}
+              >
+                <Plus size={15} />
+              </button>
               <ProjectActionMenu
                 open={activeMenuPath === project.path}
-                visible={active}
+                visible={false}
                 projectName={project.name}
                 onToggle={() => setActiveMenuPath((current) => current === project.path ? null : project.path)}
                 onClose={() => setActiveMenuPath(null)}
@@ -102,20 +132,45 @@ export default function ProjectConversationTree({
             {active && renderThreads()}
           </section>
         );
-      }) : <div className="px-2 py-3 text-center text-[11px] text-neutral-400">暂无项目资源</div>}
+      }) : <div className="px-2 py-3 text-center text-[11px] text-neutral-400">暂无项目资源</div>)}
 
       <section className="mt-2 grid gap-0.5 border-t border-neutral-200 pt-2">
-        <button
-          className={cn("flex h-9 w-full items-center gap-2 rounded-xl border-0 px-2 text-left text-xs transition", activeProjectPath === null ? "bg-neutral-200 text-neutral-800" : "bg-transparent text-neutral-600 hover:bg-neutral-200/70")}
-          type="button"
-          aria-expanded={activeProjectPath === null}
-          onClick={() => void onSwitchProject(null)}
-        >
-          <ChevronRight className={cn("text-neutral-400 transition-transform", activeProjectPath === null && "rotate-90")} size={13} />
-          <MessageSquareText className="text-neutral-500" size={15} />
-          <span>无项目对话</span>
-        </button>
-        {activeProjectPath === null && renderThreads()}
+        <div className="group flex h-9 min-w-0 items-center rounded-lg transition hover:bg-neutral-200/70">
+          <button
+            className="flex min-w-0 flex-1 items-center gap-1.5 border-0 bg-transparent px-2 text-left text-[11px] text-muted-foreground hover:text-neutral-700"
+            type="button"
+            aria-expanded={conversationsExpanded}
+            onClick={() => {
+              if (conversationsExpanded) {
+                setConversationsExpanded(false);
+                return;
+              }
+              setConversationsExpanded(true);
+              if (activeProjectPath !== null) void onSwitchProject(null);
+            }}
+          >
+            <MessageSquareText size={14} />
+            <span>对话</span>
+            <ChevronRight className={cn("text-neutral-400 transition-transform", conversationsExpanded && "rotate-90")} size={13} />
+          </button>
+          <button
+            className={cn(
+              "grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-neutral-800 focus:opacity-100",
+              activeProjectPath === null ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
+            type="button"
+            title="新建无归属对话"
+            aria-label="新建无归属对话"
+            onClick={(event) => {
+              event.stopPropagation();
+              setConversationsExpanded(true);
+              void createThreadFor(null);
+            }}
+          >
+            <Plus size={15} />
+          </button>
+        </div>
+        {conversationsExpanded && activeProjectPath === null && renderThreads()}
       </section>
     </nav>
   );
