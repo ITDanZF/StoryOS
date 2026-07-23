@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron';
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { WINDOW_IPC_CHANNELS } from '../../shared/window/contracts.ts';
-import type { WindowState } from '../../shared/window/contracts.ts';
+import type { PickDirectoryRequest, WindowState } from '../../shared/window/contracts.ts';
 
 function requireSenderWindow(event: IpcMainEvent | IpcMainInvokeEvent): BrowserWindow {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -27,9 +27,16 @@ export function registerWindowIpc(): () => void {
     };
     ipcMain.handle(WINDOW_IPC_CHANNELS.getState, (event) =>
         getWindowState(requireSenderWindow(event)));
-    ipcMain.handle(WINDOW_IPC_CHANNELS.pickDirectory, async (event) => {
+    ipcMain.handle(WINDOW_IPC_CHANNELS.pickDirectory, async (event, request?: PickDirectoryRequest) => {
+        const title = typeof request?.title === 'string' && request.title.trim()
+            ? request.title.trim()
+            : '选择文件夹';
+        const defaultPath = typeof request?.defaultPath === 'string'
+            ? request.defaultPath.trim()
+            : '';
         const result = await dialog.showOpenDialog(requireSenderWindow(event), {
-            title: '选择现有项目文件夹',
+            title,
+            ...(defaultPath ? { defaultPath } : {}),
             properties: ['openDirectory'],
         });
         return result.canceled ? null : result.filePaths[0] ?? null;

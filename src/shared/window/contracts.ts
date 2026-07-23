@@ -12,9 +12,14 @@ export type WindowState = {
     readonly fullScreen: boolean;
 };
 
+export type PickDirectoryRequest = {
+    readonly title: string;
+    readonly defaultPath?: string;
+};
+
 export type WindowDesktopApi = {
     getState(): Promise<WindowState>;
-    pickDirectory(): Promise<string | null>;
+    pickDirectory(request?: PickDirectoryRequest): Promise<string | null>;
     minimize(): Promise<void>;
     toggleMaximize(): Promise<WindowState>;
     close(): void;

@@ -4,7 +4,6 @@ export type ThreadSkillState = {
 };
 
 export type ThreadMetadata = {
-  readonly projectPath?: string;
   readonly activeSkillIds?: readonly string[];
   readonly disabledSkillIds?: readonly string[];
 };

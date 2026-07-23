@@ -1,18 +1,11 @@
-import { createAgentOrchestrator } from "./Agent/orchestration/index.ts";
-import AgentApplication from "./application/AgentApplication.ts";
 import type { ApplicationEventHandler } from "./application/contracts.ts";
 import ProjectApplication from "./application/ProjectApplication.ts";
-import ThreadApplication from "./application/ThreadApplication.ts";
 import Configuration from "./config/index.ts";
 import DesktopController from "./electron/DesktopController.ts";
-import JsonStore from "./Memory/JsonStore.ts";
 import ProjectJsonStore from "./Memory/ProjectJsonStore.ts";
-import Model from "./model/Model.ts";
-import SkillApplication from "./skills/SkillApplication.ts";
-import SkillContextProviderService from "./skills/SkillContextProvider.ts";
-import SkillDraftService from "./skills/SkillDraftService.ts";
-import SkillInstallService from "./skills/SkillInstallService.ts";
 import WorkSpace from "./workspace/index.ts";
+import LegacyWorkspaceMigrator from "./runtime/LegacyWorkspaceMigrator.ts";
+import WorkspaceRuntimeManager from "./runtime/WorkspaceRuntimeManager.ts";
 
 export type AgentConfigurationRequest = {
     readonly provider: "deepseek" | "openai" | "qwen";
@@ -124,21 +117,9 @@ export default class StoryAgentService {
     private async initializeRuntime(): Promise<void> {
         await this.workspace.createAgentWorkSpace();
         const projects = new ProjectApplication(new ProjectJsonStore());
-        const threads = new ThreadApplication(new JsonStore());
-        const model = new Model();
-        const skills = await SkillApplication.create({ draft: new SkillDraftService(model) });
-        const skillInstaller = new SkillInstallService(skills);
-        const skillContextProvider = new SkillContextProviderService(skills, {
-            threadSkillStateProvider: threads,
-        });
-        const agent = new AgentApplication(createAgentOrchestrator({
-            model,
-            skillContextProvider,
-            skillDefinitions: skills.listSkillDefinitions(),
-            skillDefinitionsProvider: () => skills.listSkillDefinitions(),
-            skillInstaller,
-        }));
-        const controller = new DesktopController({ agent, projects, threads, skills });
+        new LegacyWorkspaceMigrator(projects).migrate();
+        const runtime = await WorkspaceRuntimeManager.create(projects);
+        const controller = new DesktopController({ projects, runtime });
         for (const subscriber of this.subscribers) {
             this.controllerUnsubscribers.set(subscriber, controller.subscribe(subscriber));
         }

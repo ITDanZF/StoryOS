@@ -21,6 +21,7 @@ export type SkillLoadResult = {
 export type SkillLoaderOptions = {
   readonly systemSkillRoot?: string;
   readonly userSkillRoot?: string;
+  readonly projectSkillRoot?: string;
   readonly knownToolNames?: readonly string[];
 };
 
@@ -104,11 +105,13 @@ async function loadRoot(input: {
 export default class SkillLoader {
   private readonly systemSkillRoot: string;
   private readonly userSkillRoot: string;
+  private readonly projectSkillRoot: string | null;
   private readonly knownToolNames: readonly string[];
 
   constructor(options: SkillLoaderOptions = {}) {
     this.systemSkillRoot = options.systemSkillRoot ?? getSystemSkillRoot();
     this.userSkillRoot = options.userSkillRoot ?? getUserSkillRoot();
+    this.projectSkillRoot = options.projectSkillRoot ?? null;
     this.knownToolNames = options.knownToolNames ?? KNOWN_M0_TOOL_NAMES;
   }
 
@@ -127,9 +130,18 @@ export default class SkillLoader {
       loadedAt,
     });
 
+    const projectResult = this.projectSkillRoot
+      ? await loadRoot({
+          root: this.projectSkillRoot,
+          sourceType: "project",
+          knownToolNames: this.knownToolNames,
+          loadedAt,
+        })
+      : Object.freeze({ skills: Object.freeze([]), issues: Object.freeze([]) });
+
     return Object.freeze({
-      skills: Object.freeze([...systemResult.skills, ...userResult.skills]),
-      issues: Object.freeze([...systemResult.issues, ...userResult.issues]),
+      skills: Object.freeze([...systemResult.skills, ...userResult.skills, ...projectResult.skills]),
+      issues: Object.freeze([...systemResult.issues, ...userResult.issues, ...projectResult.issues]),
     });
   }
 }

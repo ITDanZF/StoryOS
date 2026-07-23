@@ -1,5 +1,5 @@
 import type { ApplicationEvent, RunSnapshot } from "../../main/agent/application/contracts.ts";
-import type { CreateProjectRequest, ProjectDto, ProjectSnapshot } from "../../main/agent/application/projectContracts.ts";
+import type { CreateProjectRequest, ProjectDto, ProjectSnapshot, RenameProjectRequest } from "../../main/agent/application/projectContracts.ts";
 import type { MessageDto, ThreadDto, ThreadSnapshot } from "../../main/agent/application/threadContracts.ts";
 import type { ThreadSkillState } from "../../main/agent/application/threadPorts.ts";
 import type { ToolApprovalDecision } from "../../main/agent/security/ToolPolicy.ts";
@@ -20,8 +20,12 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     switchThread: "agent:switch-thread",
     deleteThread: "agent:delete-thread",
     projectSnapshot: "agent:project-snapshot",
+    workspaceSnapshot: "agent:workspace-snapshot",
     createProject: "agent:create-project",
     openProject: "agent:open-project",
+    openProjectDirectory: "agent:open-project-directory",
+    renameProject: "agent:rename-project",
+    deleteProject: "agent:delete-project",
     switchProject: "agent:switch-project",
     removeProject: "agent:remove-project",
     skillSnapshot: "agent:skill-snapshot",
@@ -32,6 +36,11 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     event: "agent:event",
 } as const);
 
+export type WorkspaceSnapshot = {
+    readonly projects: ProjectSnapshot;
+    readonly threads: ThreadSnapshot;
+};
+
 export type AgentDesktopApi = {
     getStatus(): Promise<AgentServiceStatus>;
     configure(request: AgentConfigurationRequest): Promise<AgentServiceStatus>;
@@ -39,16 +48,20 @@ export type AgentDesktopApi = {
     cancelRun(runId: string): Promise<boolean>;
     listRuns(): Promise<readonly RunSnapshot[]>;
     resolveApproval(approvalId: string, decision: ToolApprovalDecision): Promise<boolean>;
-    getThreadSnapshot(projectPath?: string | null): Promise<ThreadSnapshot>;
+    getThreadSnapshot(): Promise<ThreadSnapshot>;
     listMessages(threadId?: string): Promise<readonly MessageDto[]>;
-    createThread(title: string, projectPath?: string | null): Promise<ThreadDto>;
+    createThread(title: string): Promise<ThreadDto>;
     switchThread(threadId: string): Promise<ThreadSnapshot>;
     deleteThread(threadId: string): Promise<ThreadSnapshot>;
     getProjectSnapshot(): Promise<ProjectSnapshot>;
-    createProject(request: CreateProjectRequest): Promise<ProjectDto>;
-    openProject(projectPath: string): Promise<ProjectDto>;
-    switchProject(projectPath: string | null): Promise<ProjectSnapshot>;
-    removeProject(projectPath: string): Promise<ProjectSnapshot>;
+    getWorkspaceSnapshot(): Promise<WorkspaceSnapshot>;
+    createProject(request: CreateProjectRequest): Promise<WorkspaceSnapshot>;
+    openProject(projectPath: string): Promise<WorkspaceSnapshot>;
+    openProjectDirectory(projectPath: string): Promise<void>;
+    renameProject(request: RenameProjectRequest): Promise<WorkspaceSnapshot>;
+    deleteProject(projectPath: string): Promise<WorkspaceSnapshot>;
+    switchProject(projectPath: string | null): Promise<WorkspaceSnapshot>;
+    removeProject(projectPath: string): Promise<WorkspaceSnapshot>;
     getSkillSnapshot(): Promise<SkillSnapshot>;
     getSkill(skillId: string): Promise<SkillDetail | null>;
     useSkill(skillId: string, threadId?: string): Promise<ThreadSkillState>;
@@ -65,6 +78,7 @@ export type {
     CreateProjectRequest,
     ProjectDto,
     ProjectSnapshot,
+    RenameProjectRequest,
     RunSnapshot,
     SkillDetail,
     SkillSnapshot,

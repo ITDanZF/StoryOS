@@ -6,8 +6,10 @@ import type {
   CreateProjectRequest,
   MessageDto,
   ProjectSnapshot,
+  RenameProjectRequest,
   RunSnapshot,
   ThreadSnapshot,
+  WorkspaceSnapshot,
 } from "../../shared/agent/contracts.ts";
 import type { ChatWorkspaceState, MessageView } from "./types.ts";
 
@@ -31,7 +33,6 @@ export function useAgentWorkspace() {
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const activeThreadIdRef = useRef("");
-  const activeProjectPathRef = useRef<string | null>(null);
   const runThreadIdsRef = useRef(new Map<string, string>());
 
   const loadMessages = useCallback(async (threadId: string) => {
@@ -39,21 +40,22 @@ export function useAgentWorkspace() {
     setMessages(result.map((message: MessageDto) => ({ ...message })));
   }, []);
 
-  const loadChat = useCallback(async () => {
-    const [projectSnapshot, runSnapshots] = await Promise.all([
-      window.storyOSAgent.getProjectSnapshot(),
-      window.storyOSAgent.listRuns(),
-    ]);
-    const threadSnapshot = await window.storyOSAgent.getThreadSnapshot(projectSnapshot.activeProjectPath);
-    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
-    activeThreadIdRef.current = threadSnapshot.activeThreadId;
-    setProjects(projectSnapshot);
-    setThreads(threadSnapshot);
-    setRuns(runSnapshots);
-    runSnapshots.forEach((run) => runThreadIdsRef.current.set(run.runId, run.threadId));
-    await loadMessages(threadSnapshot.activeThreadId);
+  const applyWorkspaceSnapshot = useCallback(async (snapshot: WorkspaceSnapshot) => {
+    activeThreadIdRef.current = snapshot.threads.activeThreadId;
+    setProjects(snapshot.projects);
+    setThreads(snapshot.threads);
+    await loadMessages(snapshot.threads.activeThreadId);
   }, [loadMessages]);
 
+  const loadChat = useCallback(async () => {
+    const [workspaceSnapshot, runSnapshots] = await Promise.all([
+      window.storyOSAgent.getWorkspaceSnapshot(),
+      window.storyOSAgent.listRuns(),
+    ]);
+    setRuns(runSnapshots);
+    runSnapshots.forEach((run) => runThreadIdsRef.current.set(run.runId, run.threadId));
+    await applyWorkspaceSnapshot(workspaceSnapshot);
+  }, [applyWorkspaceSnapshot]);
   const handleEvent = useCallback((event: ApplicationEvent) => {
     if (event.type === "run_started") {
       runThreadIdsRef.current.set(event.runId, event.threadId);
@@ -159,9 +161,8 @@ export function useAgentWorkspace() {
 
   const createThread = useCallback(async () => {
     setError(null);
-    const projectPath = activeProjectPathRef.current;
-    const thread = await window.storyOSAgent.createThread("新对话", projectPath);
-    const snapshot = await window.storyOSAgent.getThreadSnapshot(projectPath);
+    const thread = await window.storyOSAgent.createThread("新对话");
+    const snapshot = await window.storyOSAgent.getThreadSnapshot();
     activeThreadIdRef.current = thread.id;
     setThreads(snapshot);
     setMessages([]);
@@ -169,58 +170,56 @@ export function useAgentWorkspace() {
 
   const createProject = useCallback(async (request: CreateProjectRequest) => {
     setError(null);
-    const project = await window.storyOSAgent.createProject(request);
-    const [projectSnapshot, threadSnapshot] = await Promise.all([
-      window.storyOSAgent.getProjectSnapshot(),
-      window.storyOSAgent.getThreadSnapshot(project.path),
-    ]);
-    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
-    activeThreadIdRef.current = threadSnapshot.activeThreadId;
-    setProjects(projectSnapshot);
-    setThreads(threadSnapshot);
-    await loadMessages(threadSnapshot.activeThreadId);
-  }, [loadMessages]);
+    await applyWorkspaceSnapshot(await window.storyOSAgent.createProject(request));
+  }, [applyWorkspaceSnapshot]);
 
   const openProject = useCallback(async (projectPath: string) => {
     setError(null);
-    const project = await window.storyOSAgent.openProject(projectPath);
-    const [projectSnapshot, threadSnapshot] = await Promise.all([
-      window.storyOSAgent.getProjectSnapshot(),
-      window.storyOSAgent.getThreadSnapshot(project.path),
-    ]);
-    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
-    activeThreadIdRef.current = threadSnapshot.activeThreadId;
-    setProjects(projectSnapshot);
-    setThreads(threadSnapshot);
-    await loadMessages(threadSnapshot.activeThreadId);
-  }, [loadMessages]);
+    await applyWorkspaceSnapshot(await window.storyOSAgent.openProject(projectPath));
+  }, [applyWorkspaceSnapshot]);
+  const openProjectDirectory = useCallback(async (projectPath: string) => {
+    setError(null);
+    try {
+      await window.storyOSAgent.openProjectDirectory(projectPath);
+    } catch (cause) {
+      setError(getErrorMessage(cause));
+      throw cause;
+    }
+  }, []);
+
+  const renameProject = useCallback(async (request: RenameProjectRequest) => {
+    setError(null);
+    try {
+      await applyWorkspaceSnapshot(await window.storyOSAgent.renameProject(request));
+    } catch (cause) {
+      setError(getErrorMessage(cause));
+      throw cause;
+    }
+  }, [applyWorkspaceSnapshot]);
+
+  const deleteProject = useCallback(async (projectPath: string) => {
+    setError(null);
+    try {
+      await applyWorkspaceSnapshot(await window.storyOSAgent.deleteProject(projectPath));
+    } catch (cause) {
+      setError(getErrorMessage(cause));
+      throw cause;
+    }
+  }, [applyWorkspaceSnapshot]);
 
   const switchProject = useCallback(async (projectPath: string | null) => {
     setError(null);
-    const projectSnapshot = await window.storyOSAgent.switchProject(projectPath);
-    const threadSnapshot = await window.storyOSAgent.getThreadSnapshot(projectSnapshot.activeProjectPath);
-    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
-    activeThreadIdRef.current = threadSnapshot.activeThreadId;
-    setProjects(projectSnapshot);
-    setThreads(threadSnapshot);
-    await loadMessages(threadSnapshot.activeThreadId);
-  }, [loadMessages]);
+    await applyWorkspaceSnapshot(await window.storyOSAgent.switchProject(projectPath));
+  }, [applyWorkspaceSnapshot]);
 
   const removeProject = useCallback(async (projectPath: string) => {
     setError(null);
-    const projectSnapshot = await window.storyOSAgent.removeProject(projectPath);
-    const threadSnapshot = await window.storyOSAgent.getThreadSnapshot(projectSnapshot.activeProjectPath);
-    activeProjectPathRef.current = projectSnapshot.activeProjectPath;
-    activeThreadIdRef.current = threadSnapshot.activeThreadId;
-    setProjects(projectSnapshot);
-    setThreads(threadSnapshot);
-    await loadMessages(threadSnapshot.activeThreadId);
-  }, [loadMessages]);
-
+    await applyWorkspaceSnapshot(await window.storyOSAgent.removeProject(projectPath));
+  }, [applyWorkspaceSnapshot]);
   const switchThread = useCallback(async (threadId: string) => {
     setError(null);
     await window.storyOSAgent.switchThread(threadId);
-    const snapshot = await window.storyOSAgent.getThreadSnapshot(activeProjectPathRef.current);
+    const snapshot = await window.storyOSAgent.getThreadSnapshot();
     activeThreadIdRef.current = threadId;
     setThreads(snapshot);
     await loadMessages(threadId);
@@ -229,7 +228,7 @@ export function useAgentWorkspace() {
   const deleteThread = useCallback(async (threadId: string) => {
     setError(null);
     await window.storyOSAgent.deleteThread(threadId);
-    const snapshot = await window.storyOSAgent.getThreadSnapshot(activeProjectPathRef.current);
+    const snapshot = await window.storyOSAgent.getThreadSnapshot();
     activeThreadIdRef.current = snapshot.activeThreadId;
     setThreads(snapshot);
     await loadMessages(snapshot.activeThreadId);
@@ -294,6 +293,9 @@ export function useAgentWorkspace() {
     configure,
     createProject,
     openProject,
+    openProjectDirectory,
+    renameProject,
+    deleteProject,
     switchProject,
     removeProject,
     createThread,

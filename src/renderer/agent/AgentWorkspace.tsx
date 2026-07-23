@@ -9,7 +9,7 @@ import { useAgentWorkspace } from "./useAgentWorkspace.ts";
 import WindowTitleBar from '../components/WindowTitleBar.tsx';
 
 export default function AgentWorkspace() {
-  const { state, activeRun, configure, createProject, openProject, switchProject, removeProject, createThread, switchThread, deleteThread, sendMessage, cancelRun, clearError } = useAgentWorkspace();
+  const { state, activeRun, configure, createProject, openProject, openProjectDirectory, renameProject, deleteProject, switchProject, createThread, switchThread, deleteThread, sendMessage, cancelRun, clearError } = useAgentWorkspace();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -42,8 +42,10 @@ export default function AgentWorkspace() {
         onClose={() => setSidebarOpen(false)}
         onCreateProject={createProject}
         onOpenProject={openProject}
+        onOpenProjectDirectory={openProjectDirectory}
+        onRenameProject={renameProject}
+        onDeleteProject={deleteProject}
         onSwitchProject={switchProject}
-        onRemoveProject={removeProject}
         onCreateThread={createThread}
         onSwitchThread={switchThread}
         onDeleteThread={deleteThread}

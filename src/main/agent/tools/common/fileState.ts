@@ -8,6 +8,10 @@ export type ReadFileState = {
 
 const readFileState = new Map<string, ReadFileState>();
 
+export function clearReadFileState(): void {
+  readFileState.clear();
+}
+
 export function rememberReadFile(
   absolutePath: string,
   content: string,

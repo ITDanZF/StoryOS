@@ -1,52 +1,53 @@
 import path from "node:path";
 import { lstat, realpath } from "node:fs/promises";
-import { getCustomizeWorkSpace, getDefaultWorkSpace } from "../../workspace/path.ts";
+import { STORYOS_DIRECTORY } from "../../workspace/ProjectLayout.ts";
 
-export function getWorkspaceRoot() {
-  let configuredWorkspace: string | null = null;
-  try {
-    configuredWorkspace = getCustomizeWorkSpace();
-  } catch {
-    configuredWorkspace = null;
-  }
-  return path.resolve(configuredWorkspace ?? getDefaultWorkSpace());
+let activeWorkspaceRoot: string | null = null;
+
+export function setActiveWorkspaceRoot(workspaceRoot: string): void {
+  activeWorkspaceRoot = path.resolve(workspaceRoot);
 }
 
-export function resolveWorkspacePath(inputPath?: string) {
+export function getWorkspaceRoot(): string {
+  if (!activeWorkspaceRoot) throw new Error("No active StoryOS workspace.");
+  return activeWorkspaceRoot;
+}
+
+function assertNotInternalState(workspaceRoot: string, candidate: string): void {
+  const relative = path.relative(workspaceRoot, candidate);
+  const firstSegment = relative.split(path.sep)[0];
+  if (firstSegment === STORYOS_DIRECTORY) {
+    throw new Error("The .storyos internal state directory is managed by StoryOS and cannot be accessed by file tools.");
+  }
+}
+
+export function resolveWorkspacePath(inputPath?: string): string {
   const workspaceRoot = getWorkspaceRoot();
   const requestedPath = inputPath?.trim() || ".";
   const absolutePath = path.isAbsolute(requestedPath)
     ? path.resolve(requestedPath)
     : path.resolve(workspaceRoot, requestedPath);
   const relativePath = path.relative(workspaceRoot, absolutePath);
-  if (
-    relativePath.startsWith("..") ||
-    path.isAbsolute(relativePath) ||
-    absolutePath.startsWith("\\\\") ||
-    absolutePath.startsWith("//")
-  ) {
-    throw new Error(`Path is outside the agent workspace. Workspace: ${workspaceRoot}`);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath) || absolutePath.startsWith("\\\\") || absolutePath.startsWith("//")) {
+    throw new Error(`Path is outside the active project workspace. Workspace: ${workspaceRoot}`);
   }
+  assertNotInternalState(workspaceRoot, absolutePath);
   return absolutePath;
 }
 
 function assertInsideWorkspace(workspaceRoot: string, candidate: string): void {
   const relativePath = path.relative(workspaceRoot, candidate);
-  if (
-    relativePath.startsWith("..") ||
-    path.isAbsolute(relativePath) ||
-    candidate.startsWith("\\\\") ||
-    candidate.startsWith("//")
-  ) {
-    throw new Error(`Resolved path is outside the agent workspace. Workspace: ${workspaceRoot}`);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath) || candidate.startsWith("\\\\") || candidate.startsWith("//")) {
+    throw new Error(`Resolved path is outside the active project workspace. Workspace: ${workspaceRoot}`);
   }
+  assertNotInternalState(workspaceRoot, candidate);
 }
 
 async function getRealWorkspaceRoot(): Promise<string> {
   try {
     return await realpath(getWorkspaceRoot());
   } catch {
-    throw new Error(`Agent workspace does not exist: ${getWorkspaceRoot()}`);
+    throw new Error(`Active project workspace does not exist: ${getWorkspaceRoot()}`);
   }
 }
 
@@ -63,16 +64,12 @@ async function findExistingAncestor(requestedPath: string, absolutePath: string)
   for (;;) {
     try {
       const entry = await lstat(existingAncestor);
-      if (entry.isSymbolicLink()) {
-        throw new Error(`Symbolic links and junctions are not valid write targets: ${existingAncestor}`);
-      }
+      if (entry.isSymbolicLink()) throw new Error(`Symbolic links and junctions are not valid write targets: ${existingAncestor}`);
       return existingAncestor;
     } catch (error) {
       if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
       const parent = path.dirname(existingAncestor);
-      if (parent === existingAncestor) {
-        throw new Error(`No existing parent directory for path: ${absolutePath}`);
-      }
+      if (parent === existingAncestor) throw new Error(`No existing parent directory for path: ${absolutePath}`);
       existingAncestor = parent;
     }
   }
@@ -83,20 +80,16 @@ export async function assertSafeWorkspaceWritePath(absolutePath: string): Promis
   const workspaceRoot = await getRealWorkspaceRoot();
   const existingAncestor = await findExistingAncestor(requestedPath, absolutePath);
   assertInsideWorkspace(workspaceRoot, await realpath(existingAncestor));
-
   try {
     const targetEntry = await lstat(requestedPath);
-    if (targetEntry.isSymbolicLink()) {
-      throw new Error(`Symbolic links and junctions are not valid write targets: ${requestedPath}`);
-    }
+    if (targetEntry.isSymbolicLink()) throw new Error(`Symbolic links and junctions are not valid write targets: ${requestedPath}`);
     assertInsideWorkspace(workspaceRoot, await realpath(requestedPath));
   } catch (error) {
     if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
   }
 }
 
-export function toWorkspaceRelativePath(absolutePath: string) {
-  const workspaceRoot = getWorkspaceRoot();
-  const relativePath = path.relative(workspaceRoot, absolutePath);
+export function toWorkspaceRelativePath(absolutePath: string): string {
+  const relativePath = path.relative(getWorkspaceRoot(), absolutePath);
   return relativePath === "" ? "." : relativePath.split(path.sep).join("/");
 }

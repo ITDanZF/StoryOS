@@ -1,24 +1,8 @@
-import type {
-  AppendMessageRequest,
-  CreateThreadRequest,
-  MessageDto,
-  ThreadDto,
-  ThreadSnapshot,
-} from "./threadContracts.ts";
-import type {
-  MessageRecord,
-  ThreadPersistence,
-  ThreadMetadata,
-  ThreadRecord,
-  ThreadSkillState,
-} from "./threadPorts.ts";
+import type { AppendMessageRequest, CreateThreadRequest, MessageDto, ThreadDto, ThreadSnapshot } from "./threadContracts.ts";
+import type { MessageRecord, ThreadPersistence, ThreadRecord, ThreadSkillState } from "./threadPorts.ts";
 
 function normalizeSkillIds(skillIds: readonly string[] | undefined): readonly string[] {
-  return Object.freeze(
-    [...new Set((skillIds ?? [])
-      .map((skillId) => skillId.trim())
-      .filter(Boolean))].sort(),
-  );
+  return Object.freeze([...new Set((skillIds ?? []).map((skillId) => skillId.trim()).filter(Boolean))].sort());
 }
 
 function normalizeSkillState(thread: ThreadRecord): ThreadSkillState {
@@ -29,17 +13,13 @@ function normalizeSkillState(thread: ThreadRecord): ThreadSkillState {
 }
 
 function toThreadDto(thread: ThreadRecord): ThreadDto {
-  const projectPath = thread.metadata?.projectPath?.trim();
+  const state = normalizeSkillState(thread);
   return Object.freeze({
     id: thread.id,
     title: thread.title,
     createdAt: thread.createdAt.toISOString(),
     updatedAt: thread.updatedAt.toISOString(),
-    metadata: Object.freeze({
-      ...(projectPath ? { projectPath } : {}),
-      activeSkillIds: normalizeSkillState(thread).activeSkillIds,
-      disabledSkillIds: normalizeSkillState(thread).disabledSkillIds,
-    }),
+    metadata: Object.freeze({ activeSkillIds: state.activeSkillIds, disabledSkillIds: state.disabledSkillIds }),
   });
 }
 
@@ -60,38 +40,25 @@ export default class ThreadApplication {
     this.activeThreadId = store.ensureInitialThread().id;
   }
 
-  getActiveThreadId(): string {
-    return this.activeThreadId;
-  }
+  getActiveThreadId(): string { return this.activeThreadId; }
 
-  getSnapshot(projectPath?: string | null): ThreadSnapshot {
-    const threads = this.listThreadsForProject(projectPath);
+  getSnapshot(): ThreadSnapshot {
+    const threads = this.store.listThreads();
     if (!threads.some((thread) => thread.id === this.activeThreadId)) {
-      const [firstThread] = threads;
-      if (firstThread) {
-        this.activeThreadId = firstThread.id;
-      } else {
-        const thread = this.store.createThread("新对话", undefined, this.threadMetadataForProject(projectPath));
-        this.activeThreadId = thread.id;
-        threads.unshift(thread);
-      }
+      this.activeThreadId = (threads[0] ?? this.store.createThread("新对话")).id;
     }
-
     const activeThread = this.requireThread(this.activeThreadId);
     return Object.freeze({
       activeThreadId: this.activeThreadId,
       activeThread: toThreadDto(activeThread),
-      threads: Object.freeze(threads.map(toThreadDto)),
+      threads: Object.freeze(this.store.listThreads().map(toThreadDto)),
     });
   }
 
   createThread(request: CreateThreadRequest): ThreadDto {
     const title = request.title.trim();
-    if (!title) {
-      throw new Error("Thread title is required.");
-    }
-
-    const thread = this.store.createThread(title, request.id, this.threadMetadataForProject(request.projectPath));
+    if (!title) throw new Error("Thread title is required.");
+    const thread = this.store.createThread(title, request.id);
     this.activeThreadId = thread.id;
     return toThreadDto(thread);
   }
@@ -106,13 +73,7 @@ export default class ThreadApplication {
   appendMessage(request: AppendMessageRequest): MessageDto {
     const threadId = request.threadId?.trim() ?? this.activeThreadId;
     this.requireThread(threadId);
-    return toMessageDto(
-      this.store.appendMessage({
-        threadId,
-        role: request.role,
-        content: request.content,
-      }),
-    );
+    return toMessageDto(this.store.appendMessage({ threadId, role: request.role, content: request.content }));
   }
 
   listMessages(threadId = this.activeThreadId): readonly MessageDto[] {
@@ -124,10 +85,7 @@ export default class ThreadApplication {
     const normalizedId = threadId.trim();
     this.requireThread(normalizedId);
     this.store.deleteThread(normalizedId);
-
-    if (normalizedId === this.activeThreadId) {
-      this.activeThreadId = this.store.ensureInitialThread().id;
-    }
+    if (normalizedId === this.activeThreadId) this.activeThreadId = this.store.ensureInitialThread().id;
     return this.getSnapshot();
   }
 
@@ -139,18 +97,10 @@ export default class ThreadApplication {
     const normalizedSkillId = this.normalizeSkillId(skillId);
     const thread = this.requireThread(threadId);
     const state = normalizeSkillState(thread);
-    const activeSkillIds = normalizeSkillIds([
-      ...state.activeSkillIds,
-      normalizedSkillId,
-    ]);
-    const disabledSkillIds = normalizeSkillIds(
-      state.disabledSkillIds.filter((item) => item !== normalizedSkillId),
-    );
-
     const updated = this.store.updateThreadMetadata(thread.id, {
       ...thread.metadata,
-      activeSkillIds,
-      disabledSkillIds,
+      activeSkillIds: normalizeSkillIds([...state.activeSkillIds, normalizedSkillId]),
+      disabledSkillIds: normalizeSkillIds(state.disabledSkillIds.filter((item) => item !== normalizedSkillId)),
     });
     return normalizeSkillState(updated);
   }
@@ -159,65 +109,33 @@ export default class ThreadApplication {
     const normalizedSkillId = this.normalizeSkillId(skillId);
     const thread = this.requireThread(threadId);
     const state = normalizeSkillState(thread);
-    const activeSkillIds = normalizeSkillIds(
-      state.activeSkillIds.filter((item) => item !== normalizedSkillId),
-    );
-    const disabledSkillIds = normalizeSkillIds([
-      ...state.disabledSkillIds,
-      normalizedSkillId,
-    ]);
-
     const updated = this.store.updateThreadMetadata(thread.id, {
       ...thread.metadata,
-      activeSkillIds,
-      disabledSkillIds,
+      activeSkillIds: normalizeSkillIds(state.activeSkillIds.filter((item) => item !== normalizedSkillId)),
+      disabledSkillIds: normalizeSkillIds([...state.disabledSkillIds, normalizedSkillId]),
     });
     return normalizeSkillState(updated);
   }
 
   clearSkillState(threadId = this.activeThreadId): ThreadSkillState {
     const thread = this.requireThread(threadId);
-    const updated = this.store.updateThreadMetadata(thread.id, {
+    return normalizeSkillState(this.store.updateThreadMetadata(thread.id, {
       ...thread.metadata,
       activeSkillIds: Object.freeze([]),
       disabledSkillIds: Object.freeze([]),
-    });
-    return normalizeSkillState(updated);
+    }));
   }
 
   private requireThread(threadId: string): ThreadRecord {
-    if (!threadId) {
-      throw new Error("Thread id is required.");
-    }
-
+    if (!threadId) throw new Error("Thread id is required.");
     const thread = this.store.getThread(threadId);
-    if (!thread) {
-      throw new Error(`Thread not found: ${threadId}`);
-    }
+    if (!thread) throw new Error(`Thread not found: ${threadId}`);
     return thread;
   }
 
   private normalizeSkillId(skillId: string): string {
     const normalizedSkillId = skillId.trim();
-    if (!normalizedSkillId) {
-      throw new Error("Skill id is required.");
-    }
+    if (!normalizedSkillId) throw new Error("Skill id is required.");
     return normalizedSkillId;
-  }
-
-  private listThreadsForProject(projectPath?: string | null): ThreadRecord[] {
-    if (projectPath === undefined) return this.store.listThreads();
-    const normalizedProjectPath = projectPath?.trim() ?? "";
-    return this.store.listThreads().filter((thread) => {
-      const threadProjectPath = thread.metadata?.projectPath?.trim() ?? "";
-      return normalizedProjectPath
-        ? threadProjectPath === normalizedProjectPath
-        : !threadProjectPath;
-    });
-  }
-
-  private threadMetadataForProject(projectPath?: string | null): ThreadMetadata | undefined {
-    const normalizedProjectPath = projectPath?.trim() ?? "";
-    return normalizedProjectPath ? { projectPath: normalizedProjectPath } : undefined;
   }
 }

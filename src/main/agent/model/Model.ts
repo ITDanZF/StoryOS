@@ -28,17 +28,23 @@ function hasInternalRunTag(metadata: unknown): boolean {
   return Array.isArray(tags) && tags.includes(INTERNAL_RUN_TAG);
 }
 
+export type ModelOptions = { readonly checkpointPath?: string };
+
 export default class Model {
   private readonly CurrentModel: ChatOpenAI;
   private readonly CurrentMemory: Memory;
 
-  constructor() {
-    this.CurrentMemory = new Memory({ checkpointBackend: 'sqlite' });
+  constructor(options: ModelOptions = {}) {
+    this.CurrentMemory = new Memory({ checkpointBackend: 'sqlite', checkpointPath: options.checkpointPath });
     this.CurrentModel = new ChatOpenAI({
       model: process.env[CONFIG_KEYS.MODEL_NAME],
       apiKey: process.env[CONFIG_KEYS.MODEL_API_KEY],
       configuration: { baseURL: process.env[CONFIG_KEYS.MODEL_BASE_URL] },
     });
+  }
+
+  close(): void {
+    this.CurrentMemory.close();
   }
 
   private createRuntimeAgent(input: ModelRunInput) {

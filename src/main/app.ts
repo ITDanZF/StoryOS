@@ -12,12 +12,14 @@ if (started) {
     app.quit();
 }
 
-const MainAppWin = new AppWindowManager({ isOpenDev: true });
+const MainAppWin = new AppWindowManager({ isOpenDev: !app.isPackaged });
 
 app.whenReady().then(async () => {
     const agentService = new StoryAgentService({
         agentHome: getAgentHome(),
-        bundledSkillRoot: path.join(app.getAppPath(), 'skills'),
+        bundledSkillRoot: app.isPackaged
+            ? path.join(process.resourcesPath, 'app.asar.unpacked', 'skills')
+            : path.join(app.getAppPath(), 'skills'),
     });
     await agentService.initialize();
     registerAgentIpc(agentService);

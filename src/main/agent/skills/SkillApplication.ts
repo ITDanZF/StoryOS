@@ -94,14 +94,17 @@ export default class SkillApplication {
     const registry = new SkillRegistry();
     const issues = [...loadResult.issues];
 
-    try {
-      registry.registerMany(loadResult.skills);
-    } catch (error) {
-      issues.push(Object.freeze({
-        sourceType: "system",
-        root: "SkillRegistry",
-        message: error instanceof Error ? error.message : String(error),
-      }));
+    for (const skill of loadResult.skills) {
+      try {
+        registry.register(skill);
+      } catch (error) {
+        issues.push(Object.freeze({
+          sourceType: skill.source.type,
+          root: skill.source.root,
+          filePath: skill.source.filePath,
+          message: error instanceof Error ? error.message : String(error),
+        }));
+      }
     }
 
     for (const warning of syncResult.warnings) {

@@ -1,6 +1,6 @@
 import type { SkillManifest } from "./SkillManifest.ts";
 
-export type SkillSourceType = "system" | "user";
+export type SkillSourceType = "system" | "user" | "project";
 
 export type SkillSource = {
   readonly type: SkillSourceType;

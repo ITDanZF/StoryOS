@@ -8,10 +8,27 @@ import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-nati
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+const packagedRuntimeRoots = [
+    '/.vite',
+    '/assets',
+    '/skills',
+    '/node_modules/better-sqlite3',
+    '/node_modules/bindings',
+    '/node_modules/file-uri-to-path',
+];
+
 const config: ForgeConfig = {
     packagerConfig: {
-        asar: true,
+        asar: {
+            unpack: '**/*.node',
+            unpackDir: '{skills,assets}',
+        },
         icon: 'assets/icons/storyos',
+        ignore: (filePath) => {
+            if (!filePath || filePath === '/node_modules') return false;
+            return !packagedRuntimeRoots.some((root) =>
+                filePath === root || filePath.startsWith(root + '/'));
+        },
     },
     rebuildConfig: {},
     makers: [

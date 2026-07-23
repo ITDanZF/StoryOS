@@ -25,7 +25,6 @@ export type ThreadSnapshot = {
 export type CreateThreadRequest = {
   readonly title: string;
   readonly id?: string;
-  readonly projectPath?: string;
 };
 export type AppendMessageRequest = {
   readonly role: MessageRole;

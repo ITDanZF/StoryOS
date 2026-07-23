@@ -15,6 +15,7 @@ import type {
   StartRunRequest,
 } from "./contracts.ts";
 import type { AgentRunner } from "./ports.ts";
+import type { ApplicationEventRecorder } from "../runtime/RunLogStore.ts";
 
 type RunRecord = {
   promise: Promise<string>;
@@ -49,12 +50,24 @@ function serializeError(error: unknown): SerializableError {
   return { name: "Error", message: String(error) };
 }
 
+export type AgentApplicationOptions = {
+  readonly checkpointPath?: string;
+  readonly eventRecorder?: ApplicationEventRecorder;
+};
+
 export default class AgentApplication {
   private readonly subscribers = new Set<ApplicationEventHandler>();
   private readonly runs = new Map<string, RunRecord>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
 
-  constructor(private readonly runner: AgentRunner) {}
+  constructor(
+    private readonly runner: AgentRunner,
+    private readonly options: AgentApplicationOptions = {},
+  ) {}
+
+  hasActiveRuns(): boolean {
+    return [...this.runs.values()].some((run) => !run.settled);
+  }
 
   subscribe(handler: ApplicationEventHandler): () => void {
     this.subscribers.add(handler);
@@ -327,7 +340,7 @@ export default class AgentApplication {
 
   private clearFailedRunCheckpoints(threadId: string): void {
     try {
-      SqliteStore.clearThreadCheckpoints(threadId);
+      SqliteStore.clearThreadCheckpoints(threadId, this.options.checkpointPath);
     } catch {
       // Best-effort cleanup only. The original run error should remain visible.
     }
@@ -347,6 +360,9 @@ export default class AgentApplication {
   }
 
   private async emit(event: ApplicationEvent): Promise<void> {
+    if (this.options.eventRecorder) {
+      await Promise.allSettled([this.options.eventRecorder.record(event)]);
+    }
     await Promise.allSettled(
       [...this.subscribers].map((subscriber) => subscriber(event)),
     );

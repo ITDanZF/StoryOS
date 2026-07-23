@@ -1,123 +1,137 @@
-import type AgentApplication from "../application/AgentApplication.ts";
+import { shell } from "electron";
 import type ProjectApplication from "../application/ProjectApplication.ts";
-import type { CreateProjectRequest } from "../application/projectContracts.ts";
-import type ThreadApplication from "../application/ThreadApplication.ts";
+import type { CreateProjectRequest, RenameProjectRequest } from "../application/projectContracts.ts";
 import type { ApplicationEventHandler } from "../application/contracts.ts";
 import type { ToolApprovalDecision } from "../security/ToolPolicy.ts";
-import type SkillApplication from "../skills/SkillApplication.ts";
+import type WorkspaceRuntimeManager from "../runtime/WorkspaceRuntimeManager.ts";
 
 export type DesktopControllerDependencies = {
-    readonly agent: AgentApplication;
-    readonly projects: ProjectApplication;
-    readonly threads: ThreadApplication;
-    readonly skills: SkillApplication;
+  readonly projects: ProjectApplication;
+  readonly runtime: WorkspaceRuntimeManager;
 };
 
 export default class DesktopController {
-    constructor(private readonly dependencies: DesktopControllerDependencies) {}
+  constructor(private readonly dependencies: DesktopControllerDependencies) {}
 
-    subscribe(handler: ApplicationEventHandler): () => void {
-        return this.dependencies.agent.subscribe(handler);
+  subscribe(handler: ApplicationEventHandler): () => void {
+    return this.dependencies.runtime.subscribe(handler);
+  }
+
+  sendMessage(request: { readonly threadId: string; readonly content: string }) {
+    const threadId = request.threadId.trim();
+    const content = request.content.trim();
+    if (!threadId) throw new Error("Thread id is required.");
+    if (!content) throw new Error("Message content is required.");
+    const { threads, agent } = this.dependencies.runtime;
+    threads.appendMessage({ threadId, role: "user", content });
+    const runId = agent.startRun({ threadId, input: content });
+    void agent.waitForRun(runId).then((answer) => {
+      threads.appendMessage({ threadId, role: "assistant", content: answer });
+    }).catch(() => {
+      // Run failures are emitted by AgentApplication; partial assistant replies are not persisted.
+    });
+    return Object.freeze({ runId });
+  }
+
+  cancelRun(runId: string): boolean { return this.dependencies.runtime.agent.cancelRun(runId); }
+  listRuns() { return this.dependencies.runtime.agent.listRuns(); }
+  resolveApproval(approvalId: string, decision: ToolApprovalDecision) {
+    return this.dependencies.runtime.agent.resolveApproval(approvalId, decision);
+  }
+  getThreadSnapshot() { return this.dependencies.runtime.threads.getSnapshot(); }
+  listMessages(threadId?: string) { return this.dependencies.runtime.threads.listMessages(threadId); }
+  createThread(title: string) { return this.dependencies.runtime.threads.createThread({ title }); }
+  switchThread(threadId: string) { return this.dependencies.runtime.threads.switchThread(threadId); }
+  deleteThread(threadId: string) { return this.dependencies.runtime.threads.deleteThread(threadId); }
+  getProjectSnapshot() { return this.dependencies.projects.getSnapshot(); }
+  getWorkspaceSnapshot() {
+    return Object.freeze({ projects: this.dependencies.projects.getSnapshot(), threads: this.dependencies.runtime.threads.getSnapshot() });
+  }
+
+  async createProject(request: CreateProjectRequest) {
+    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    const project = this.dependencies.projects.createProject(request);
+    try {
+      await this.dependencies.runtime.activate(project.path);
+      return this.getWorkspaceSnapshot();
+    } catch (error) {
+      this.dependencies.projects.switchProject(previousPath);
+      await this.dependencies.runtime.activate(previousPath);
+      throw error;
     }
+  }
 
-    sendMessage(request: { readonly threadId: string; readonly content: string }) {
-        const threadId = request.threadId.trim();
-        const content = request.content.trim();
-        if (!threadId) throw new Error("Thread id is required.");
-        if (!content) throw new Error("Message content is required.");
-
-        this.dependencies.threads.appendMessage({ threadId, role: "user", content });
-        const runId = this.dependencies.agent.startRun({ threadId, input: content });
-        void this.dependencies.agent.waitForRun(runId).then((answer) => {
-            this.dependencies.threads.appendMessage({
-                threadId,
-                role: "assistant",
-                content: answer,
-            });
-        }).catch(() => {
-            // Failed runs are reported through ApplicationEvent. Partial answers
-            // are deliberately not persisted as conversation history.
-        });
-        return Object.freeze({ runId });
+  async openProject(projectPath: string) {
+    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    const project = this.dependencies.projects.openProject(projectPath);
+    try {
+      await this.dependencies.runtime.activate(project.path);
+      return this.getWorkspaceSnapshot();
+    } catch (error) {
+      this.dependencies.projects.switchProject(previousPath);
+      await this.dependencies.runtime.activate(previousPath);
+      throw error;
     }
+  }
 
-    cancelRun(runId: string): boolean {
-        return this.dependencies.agent.cancelRun(runId);
-    }
+  async openProjectDirectory(projectPath: string): Promise<void> {
+    const project = this.dependencies.projects.getProject(projectPath);
+    const errorMessage = await shell.openPath(project.path);
+    if (errorMessage) throw new Error(`Could not open project directory: ${errorMessage}`);
+  }
 
-    listRuns() {
-        return this.dependencies.agent.listRuns();
+  async renameProject(request: RenameProjectRequest) {
+    const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === request.projectPath;
+    if (wasActive) this.dependencies.runtime.closeForProjectMutation(request.projectPath);
+    const result = this.dependencies.projects.renameProject(request);
+    try {
+      if (wasActive) await this.dependencies.runtime.activate(result.project.path);
+      return this.getWorkspaceSnapshot();
+    } catch (error) {
+      this.dependencies.projects.rollbackProjectRename(result);
+      if (wasActive) await this.dependencies.runtime.activate(result.previousProject.path);
+      throw error;
     }
+  }
 
-    resolveApproval(approvalId: string, decision: ToolApprovalDecision) {
-        return this.dependencies.agent.resolveApproval(approvalId, decision);
+  async deleteProject(projectPath: string) {
+    const project = this.dependencies.projects.getProject(projectPath);
+    const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === project.path;
+    if (wasActive) this.dependencies.runtime.closeForProjectMutation(project.path);
+    try {
+      await shell.trashItem(project.path);
+    } catch (error) {
+      if (wasActive) await this.dependencies.runtime.activate(project.path);
+      throw error;
     }
+    const snapshot = this.dependencies.projects.removeProject(project.path);
+    await this.dependencies.runtime.activate(snapshot.activeProjectPath);
+    return this.getWorkspaceSnapshot();
+  }
 
-    getThreadSnapshot(projectPath?: string | null) {
-        return this.dependencies.threads.getSnapshot(projectPath);
+  async switchProject(projectPath: string | null) {
+    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    await this.dependencies.runtime.activate(projectPath);
+    try {
+      this.dependencies.projects.switchProject(projectPath);
+      return this.getWorkspaceSnapshot();
+    } catch (error) {
+      await this.dependencies.runtime.activate(previousPath);
+      throw error;
     }
+  }
 
-    listMessages(threadId?: string) {
-        return this.dependencies.threads.listMessages(threadId);
-    }
+  async removeProject(projectPath: string) {
+    const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === projectPath;
+    if (wasActive) this.dependencies.runtime.closeForProjectMutation(projectPath);
+    const snapshot = this.dependencies.projects.removeProject(projectPath);
+    await this.dependencies.runtime.activate(snapshot.activeProjectPath);
+    return this.getWorkspaceSnapshot();
+  }
 
-    createThread(title: string, projectPath?: string | null) {
-        return this.dependencies.threads.createThread({ title, projectPath: projectPath ?? undefined });
-    }
-
-    switchThread(threadId: string) {
-        return this.dependencies.threads.switchThread(threadId);
-    }
-
-    deleteThread(threadId: string) {
-        return this.dependencies.threads.deleteThread(threadId);
-    }
-
-    getProjectSnapshot() {
-        return this.dependencies.projects.getSnapshot();
-    }
-
-    createProject(request: CreateProjectRequest) {
-        const project = this.dependencies.projects.createProject(request);
-        this.dependencies.threads.getSnapshot(project.path);
-        return project;
-    }
-
-    openProject(projectPath: string) {
-        const project = this.dependencies.projects.openProject(projectPath);
-        this.dependencies.threads.getSnapshot(project.path);
-        return project;
-    }
-
-    switchProject(projectPath: string | null) {
-        const snapshot = this.dependencies.projects.switchProject(projectPath);
-        this.dependencies.threads.getSnapshot(snapshot.activeProjectPath);
-        return snapshot;
-    }
-
-    removeProject(projectPath: string) {
-        const snapshot = this.dependencies.projects.removeProject(projectPath);
-        this.dependencies.threads.getSnapshot(snapshot.activeProjectPath);
-        return snapshot;
-    }
-
-    getSkillSnapshot() {
-        return this.dependencies.skills.getSnapshot();
-    }
-
-    getSkill(skillId: string) {
-        return this.dependencies.skills.getSkill(skillId);
-    }
-
-    useSkill(skillId: string, threadId?: string) {
-        return this.dependencies.threads.useSkill(skillId, threadId);
-    }
-
-    disableSkill(skillId: string, threadId?: string) {
-        return this.dependencies.threads.disableSkill(skillId, threadId);
-    }
-
-    clearSkillState(threadId?: string) {
-        return this.dependencies.threads.clearSkillState(threadId);
-    }
+  getSkillSnapshot() { return this.dependencies.runtime.skills.getSnapshot(); }
+  getSkill(skillId: string) { return this.dependencies.runtime.skills.getSkill(skillId); }
+  useSkill(skillId: string, threadId?: string) { return this.dependencies.runtime.threads.useSkill(skillId, threadId); }
+  disableSkill(skillId: string, threadId?: string) { return this.dependencies.runtime.threads.disableSkill(skillId, threadId); }
+  clearSkillState(threadId?: string) { return this.dependencies.runtime.threads.clearSkillState(threadId); }
 }
