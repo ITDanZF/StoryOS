@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { WINDOW_IPC_CHANNELS } from '../../shared/window/contracts.ts';
 import type { WindowState } from '../../shared/window/contracts.ts';
@@ -27,6 +27,13 @@ export function registerWindowIpc(): () => void {
     };
     ipcMain.handle(WINDOW_IPC_CHANNELS.getState, (event) =>
         getWindowState(requireSenderWindow(event)));
+    ipcMain.handle(WINDOW_IPC_CHANNELS.pickDirectory, async (event) => {
+        const result = await dialog.showOpenDialog(requireSenderWindow(event), {
+            title: '选择现有项目文件夹',
+            properties: ['openDirectory'],
+        });
+        return result.canceled ? null : result.filePaths[0] ?? null;
+    });
     ipcMain.handle(WINDOW_IPC_CHANNELS.minimize, (event) => {
         requireSenderWindow(event).minimize();
     });
@@ -41,6 +48,7 @@ export function registerWindowIpc(): () => void {
 
     return () => {
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.getState);
+        ipcMain.removeHandler(WINDOW_IPC_CHANNELS.pickDirectory);
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.minimize);
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.toggleMaximize);
         ipcMain.removeListener(WINDOW_IPC_CHANNELS.close, closeWindow);

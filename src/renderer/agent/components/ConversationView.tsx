@@ -66,7 +66,7 @@ export default function ConversationView({ messages, loading }: ConversationView
             >
               {message.role !== "user" && <div className="mb-2 mt-1 text-[11px] font-semibold text-neutral-600">StoryOS AI</div>}
               <MessageContent content={message.content || (message.streaming ? "正在思考" : "")} />
-              {message.streaming && <span className="streaming-cursor" aria-label="正在生成" />}
+              {message.streaming && <span className="ml-1 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-neutral-500 align-[-2px] motion-reduce:animate-none" aria-label="正在生成" />}
             </div>
           </article>
         ))}

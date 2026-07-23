@@ -1,5 +1,6 @@
 export const WINDOW_IPC_CHANNELS = Object.freeze({
     getState: 'window:get-state',
+    pickDirectory: 'window:pick-directory',
     minimize: 'window:minimize',
     toggleMaximize: 'window:toggle-maximize',
     close: 'window:close',
@@ -13,6 +14,7 @@ export type WindowState = {
 
 export type WindowDesktopApi = {
     getState(): Promise<WindowState>;
+    pickDirectory(): Promise<string | null>;
     minimize(): Promise<void>;
     toggleMaximize(): Promise<WindowState>;
     close(): void;
