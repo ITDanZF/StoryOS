@@ -1,28 +1,35 @@
-import { editFileTool } from "./io/editFile.ts";
-import { listFilesTool } from "./io/listFiles.ts";
-import { readFileTool } from "./io/readFile.ts";
-import { searchTextTool } from "./io/searchText.ts";
-import { writeFileTool } from "./io/writeFile.ts";
+import { getDefaultWorkSpace } from "../workspace/path.ts";
 import type { SkillInstaller } from "../skills/SkillInstallService.ts";
+import WorkspaceToolContext from "./WorkspaceToolContext.ts";
+import { createEditFileTool } from "./io/editFile.ts";
+import { createListFilesTool } from "./io/listFiles.ts";
+import { createReadFileTool } from "./io/readFile.ts";
+import { createSearchTextTool } from "./io/searchText.ts";
+import { createWriteFileTool } from "./io/writeFile.ts";
 import { createSkillTool } from "./skill/createSkill.ts";
 
 export type CreateToolsOptions = {
   readonly skillInstaller?: SkillInstaller;
+  readonly workspaceContext?: WorkspaceToolContext;
 };
 
 export function createTools(options: CreateToolsOptions = {}) {
+  const context = options.workspaceContext
+    ?? new WorkspaceToolContext(getDefaultWorkSpace());
   return [
-    readFileTool,
-    writeFileTool,
-    editFileTool,
-    listFilesTool,
-    searchTextTool,
+    createReadFileTool(context),
+    createWriteFileTool(context),
+    createEditFileTool(context),
+    createListFilesTool(context),
+    createSearchTextTool(context),
     ...(options.skillInstaller ? [createSkillTool(options.skillInstaller)] : []),
   ];
 }
 
 export default class Tools {
+  constructor(private readonly context?: WorkspaceToolContext) {}
+
   getTools() {
-    return createTools();
+    return createTools({ workspaceContext: this.context });
   }
 }

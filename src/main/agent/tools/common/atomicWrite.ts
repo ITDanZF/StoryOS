@@ -1,14 +1,15 @@
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { assertSafeWorkspaceWritePath } from "./path.ts";
+import type WorkspacePathResolver from "./path.ts";
 
 export async function atomicWriteTextFile(
   absolutePath: string,
   content: string,
+  paths: WorkspacePathResolver,
 ): Promise<void> {
-  await assertSafeWorkspaceWritePath(absolutePath);
+  await paths.assertSafeWrite(absolutePath);
   await mkdir(path.dirname(absolutePath), { recursive: true });
-  await assertSafeWorkspaceWritePath(absolutePath);
+  await paths.assertSafeWrite(absolutePath);
   const temporaryPath = path.join(
     path.dirname(absolutePath),
     `.${path.basename(absolutePath)}.${crypto.randomUUID()}.tmp`,

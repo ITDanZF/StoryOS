@@ -12,8 +12,7 @@ import SkillDraftService from "../skills/SkillDraftService.ts";
 import SkillInstallService from "../skills/SkillInstallService.ts";
 import SkillLoader from "../skills/SkillLoader.ts";
 import SkillScaffoldService from "../skills/SkillScaffoldService.ts";
-import { clearReadFileState } from "../tools/common/fileState.ts";
-import { setActiveWorkspaceRoot } from "../tools/common/path.ts";
+import WorkspaceToolContext from "../tools/WorkspaceToolContext.ts";
 import { getWorkspaceLayout, type WorkspaceLayout } from "../workspace/ProjectLayout.ts";
 import RunLogStore from "./RunLogStore.ts";
 
@@ -69,8 +68,6 @@ export default class WorkspaceRuntimeManager {
       ? getWorkspaceLayout(project.path)
       : getWorkspaceLayout(snapshot.systemWorkspace.path, true);
 
-    setActiveWorkspaceRoot(layout.filesRoot);
-    clearReadFileState();
     const threads = new ThreadApplication(new JsonStore(layout.conversationsRoot));
     const model = new Model({ checkpointPath: layout.checkpointPath });
     const skills = await SkillApplication.create({
@@ -80,12 +77,14 @@ export default class WorkspaceRuntimeManager {
     });
     const skillInstaller = new SkillInstallService(skills);
     const skillContextProvider = new SkillContextProviderService(skills, { threadSkillStateProvider: threads });
+    const workspaceContext = new WorkspaceToolContext(layout.filesRoot);
     const agent = new AgentApplication(createAgentOrchestrator({
       model,
       skillContextProvider,
       skillDefinitions: skills.listSkillDefinitions(),
       skillDefinitionsProvider: () => skills.listSkillDefinitions(),
       skillInstaller,
+      workspaceContext,
     }), {
       checkpointPath: layout.checkpointPath,
       eventRecorder: new RunLogStore(layout.runsRoot),
@@ -142,6 +141,5 @@ export default class WorkspaceRuntimeManager {
     this.current.unsubscribe();
     this.current.model.close();
     this.current = null;
-    clearReadFileState();
   }
 }

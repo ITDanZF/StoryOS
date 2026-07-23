@@ -1,11 +1,8 @@
-import type { ModelRunInput } from "../model/Model.ts";
 import ToolResolver from "../tools/ToolResolver.ts";
-import {
-  createAgentEvent,
-  emitAgentEvent,
-  emitToolExecutionEvent,
-  type AgentEventHandler,
-} from "./AgentEvent.ts";
+import { emitToolExecutionEvent, type AgentEventHandler } from "./AgentEvent.ts";
+import AgentExecutor, {
+  type AgentModelRunner,
+} from "./AgentExecutor.ts";
 import AgentRegistry from "./AgentRegistry.ts";
 import { createExecutionContext } from "./ExecutionContext.ts";
 import RunBudget, { DEFAULT_RUN_LIMITS } from "./RunLimits.ts";
@@ -14,6 +11,8 @@ import ToolPolicy, {
   denyToolApproval,
   type ToolApprovalHandler,
 } from "../security/ToolPolicy.ts";
+
+export type { AgentModelRunner } from "./AgentExecutor.ts";
 
 export type RunAgentInput = {
   readonly agentType: string;
@@ -51,19 +50,19 @@ export type AgentRunResult =
       readonly error: string;
     };
 
-export type AgentModelRunner = {
-  stream(input: ModelRunInput): AsyncIterable<string>;
-  invokeText?(input: ModelRunInput): Promise<string>;
-};
-
 export default class AgentRuntime {
+  private readonly executor: AgentExecutor;
+
   constructor(
     private readonly registry: AgentRegistry,
-    private readonly model: AgentModelRunner,
+    model: AgentModelRunner,
     private readonly toolResolver: ToolResolver,
     private readonly toolPolicy: ToolPolicy = new ToolPolicy(),
     private readonly approval: ToolApprovalHandler = denyToolApproval,
-  ) {}
+    executor?: AgentExecutor,
+  ) {
+    this.executor = executor ?? new AgentExecutor(model);
+  }
 
   async run(input: RunAgentInput): Promise<AgentRunResult> {
     if (!input.prompt.trim()) {
@@ -89,118 +88,48 @@ export default class AgentRuntime {
       onEvent: (event) =>
         emitToolExecutionEvent(input.onEvent, context, event),
     });
-    const chunks: string[] = [];
-
-    await emitAgentEvent(
-      input.onEvent,
-      createAgentEvent(context, {
-        type: "run_started",
-        threadId: context.threadId,
-        parentRunId: context.parentRunId,
-        depth: context.depth,
-      }),
-    );
-
-    if (context.signal?.aborted) {
-      return this.abort(context, chunks, input.onEvent);
-    }
-
-    try {
-      const modelInput: ModelRunInput = {
-        prompt: input.prompt,
-        threadId: context.threadId,
-        systemPrompt: definition.systemPrompt,
-        tools,
-        signal: context.signal,
-        maxTurns: definition.maxTurns ?? budget.limits.maxTurns,
-        visibility: "internal",
-      };
-      const appendChunk = async (chunk: string) => {
-        chunks.push(chunk);
-        await emitAgentEvent(
-          input.onEvent,
-          createAgentEvent(context, {
-            type: "text_delta",
-            content: chunk,
-          }),
-        );
-      };
-
-      if (this.model.invokeText) {
-        await appendChunk(await this.model.invokeText(modelInput));
-      } else {
-        for await (const chunk of this.model.stream(modelInput)) {
-          await appendChunk(chunk);
-        }
-      }
-
-      const content = chunks.join("");
-
-      await emitAgentEvent(
-        input.onEvent,
-        createAgentEvent(context, {
-          type: "run_completed",
-          content,
-        }),
-      );
-
-      return Object.freeze({
-        status: "completed",
-        runId: context.runId,
-        agentType: context.agentType,
-        threadId: context.threadId,
-        content,
-      });
-    } catch (error) {
-      if (context.signal?.aborted) {
-        return this.abort(context, chunks, input.onEvent);
-      }
-
-      const partialContent = chunks.join("");
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-
-      await emitAgentEvent(
-        input.onEvent,
-        createAgentEvent(context, {
-          type: "run_failed",
-          partialContent,
-          error: errorMessage,
-        }),
-      );
-
-      return Object.freeze({
-        status: "failed",
-        runId: context.runId,
-        agentType: context.agentType,
-        threadId: context.threadId,
-        partialContent,
-        error: errorMessage,
-      });
-    }
-  }
-
-  private async abort(
-    context: ReturnType<typeof createExecutionContext>,
-    chunks: readonly string[],
-    onEvent: AgentEventHandler | undefined,
-  ): Promise<AgentRunResult> {
-    const partialContent = chunks.join("");
-
-    await emitAgentEvent(
-      onEvent,
-      createAgentEvent(context, {
-        type: "run_aborted",
-        partialContent,
-      }),
-    );
-
-    return Object.freeze({
-      status: "aborted",
+    const result = await this.executor.execute({
+      context,
+      prompt: input.prompt,
+      systemPrompt: definition.systemPrompt,
+      tools,
+      maxTurns: definition.maxTurns ?? budget.limits.maxTurns,
+      visibility: "internal",
+      mode: "text",
+      onEvent: input.onEvent,
+    });
+    const source = {
       runId: context.runId,
       agentType: context.agentType,
       threadId: context.threadId,
-      partialContent,
-    });
+    };
+
+    switch (result.status) {
+      case "completed":
+        return Object.freeze({
+          status: "completed",
+          ...source,
+          content: result.content,
+        });
+      case "aborted":
+        return Object.freeze({
+          status: "aborted",
+          ...source,
+          partialContent: result.partialContent,
+        });
+      case "failed":
+        return Object.freeze({
+          status: "failed",
+          ...source,
+          partialContent: result.partialContent,
+          error: result.error,
+        });
+      case "timed_out":
+        return Object.freeze({
+          status: "aborted",
+          ...source,
+          partialContent: result.partialContent,
+        });
+    }
   }
 }

@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ProjectApplication from "../../src/main/agent/application/ProjectApplication.ts";
 import ProjectJsonStore from "../../src/main/agent/Memory/ProjectJsonStore.ts";
 import LegacyWorkspaceMigrator from "../../src/main/agent/runtime/LegacyWorkspaceMigrator.ts";
-import { resolveWorkspacePath, setActiveWorkspaceRoot } from "../../src/main/agent/tools/common/path.ts";
+import WorkspaceToolContext from "../../src/main/agent/tools/WorkspaceToolContext.ts";
 
 const roots: string[] = [];
 
@@ -53,11 +53,40 @@ describe("project workspace isolation", () => {
     const { root } = createHarness();
     const projectRoot = path.join(root, "ProjectA");
     mkdirSync(path.join(projectRoot, ".storyos"), { recursive: true });
-    setActiveWorkspaceRoot(projectRoot);
+    const context = new WorkspaceToolContext(projectRoot);
 
-    expect(resolveWorkspacePath("chapter.md")).toBe(path.join(projectRoot, "chapter.md"));
-    expect(() => resolveWorkspacePath(path.join(root, "ProjectB", "secret.md"))).toThrow("outside the active project workspace");
-    expect(() => resolveWorkspacePath(".storyos/project.json")).toThrow("internal state directory");
+    expect(context.paths.resolve("chapter.md")).toBe(path.join(projectRoot, "chapter.md"));
+    expect(() => context.paths.resolve(path.join(root, "ProjectB", "secret.md"))).toThrow("outside the active project workspace");
+    expect(() => context.paths.resolve(".storyos/project.json")).toThrow("internal state directory");
+  });
+
+  it("keeps workspace roots and read-before-write state isolated per context", async () => {
+    const { root } = createHarness();
+    const projectA = path.join(root, "ProjectA");
+    const projectB = path.join(root, "ProjectB");
+    mkdirSync(projectA);
+    mkdirSync(projectB);
+    const fileA = path.join(projectA, "chapter.md");
+    writeFileSync(fileA, "chapter", "utf8");
+    const contextA = new WorkspaceToolContext(projectA);
+    const contextB = new WorkspaceToolContext(projectB);
+    const sameRootContext = new WorkspaceToolContext(projectA);
+
+    expect(contextA.paths.resolve("chapter.md")).toBe(fileA);
+    expect(contextB.paths.resolve("chapter.md")).toBe(path.join(projectB, "chapter.md"));
+
+    contextA.files.remember(
+      fileA,
+      "chapter",
+      statSync(fileA).mtimeMs,
+      false,
+    );
+    await expect(
+      contextA.files.assertFreshForWrite(fileA, "chapter"),
+    ).resolves.toBeUndefined();
+    await expect(
+      sameRootContext.files.assertFreshForWrite(fileA, "chapter"),
+    ).rejects.toThrow("File has not been read yet");
   });
 
   it("migrates legacy conversations into their owning project or the system workspace", () => {

@@ -1,7 +1,9 @@
 import Model from "../../model/Model.ts";
 import ToolResolver from "../../tools/ToolResolver.ts";
+import type WorkspaceToolContext from "../../tools/WorkspaceToolContext.ts";
 import ToolPolicy, { denyToolApproval } from "../../security/ToolPolicy.ts";
 import type { SkillInstaller } from "../../skills/SkillInstallService.ts";
+import AgentExecutor from "../AgentExecutor.ts";
 import AgentGenerator from "../AgentGenerator.ts";
 import AgentRuntime from "../AgentRuntime.ts";
 import AgentRegistry from "../AgentRegistry.ts";
@@ -24,6 +26,7 @@ export type AgentOrchestratorFactoryOptions = {
   readonly skillDefinitions?: readonly SkillDefinition[];
   readonly skillDefinitionsProvider?: () => readonly SkillDefinition[];
   readonly skillInstaller?: SkillInstaller;
+  readonly workspaceContext?: WorkspaceToolContext;
 };
 
 function isSkillAgent(definition: { readonly metadata?: Readonly<Record<string, unknown>> }) {
@@ -46,8 +49,11 @@ export function createAgentOrchestrator(
   const skillInstaller = "maxTurns" in options
     ? undefined
     : options.skillInstaller;
+  const workspaceContext = "maxTurns" in options
+    ? undefined
+    : options.workspaceContext;
   const model = "maxTurns" in options ? new Model() : options.model ?? new Model();
-  const toolResolver = new ToolResolver({ skillInstaller });
+  const toolResolver = new ToolResolver({ skillInstaller, workspaceContext });
   const registry = new AgentRegistry(builtInAgents);
   const syncSkillAgents = () => registry.replaceWhere(
     isSkillAgent,
@@ -60,6 +66,15 @@ export function createAgentOrchestrator(
     syncSkillAgents();
   });
   const policy = new ToolPolicy();
+  const executor = new AgentExecutor(model);
+  const taskRuntime = new AgentRuntime(
+    registry,
+    model,
+    toolResolver,
+    policy,
+    denyToolApproval,
+    executor,
+  );
   const directRunner = new AgentGenerator({
     model,
     registry,
@@ -67,14 +82,9 @@ export function createAgentOrchestrator(
     policy,
     limits,
     skillContextProvider,
+    executor,
+    subagentRuntime: taskRuntime,
   });
-  const taskRuntime = new AgentRuntime(
-    registry,
-    model,
-    toolResolver,
-    policy,
-    denyToolApproval,
-  );
   const scheduler = new TaskScheduler(
     new AgentTaskRunner(taskRuntime),
     new ResultReviewer(model),

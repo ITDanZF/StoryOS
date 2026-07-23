@@ -9,6 +9,7 @@ import ToolPolicy, {
   type ToolApprovalHandler,
 } from "../security/ToolPolicy.ts";
 import type { SkillContextProvider } from "../skills/SkillContextProvider.ts";
+import AgentExecutor from "./AgentExecutor.ts";
 import AgentRuntime from "./AgentRuntime.ts";
 import AgentRegistry from "./AgentRegistry.ts";
 import {
@@ -44,6 +45,8 @@ export type AgentGeneratorOptions = {
   readonly registry?: AgentRegistry;
   readonly toolResolver?: ToolResolver;
   readonly skillContextProvider?: SkillContextProvider;
+  readonly executor?: AgentExecutor;
+  readonly subagentRuntime?: AgentRuntime;
 };
 
 const delegationInstructions = [
@@ -57,10 +60,10 @@ function createMainSystemPrompt(skillPrompt: string): string {
 }
 
 export default class AgentGenerator {
-  private readonly model: Model;
   private readonly registry: AgentRegistry;
   private readonly toolResolver: ToolResolver;
   private readonly subagentRuntime: AgentRuntime;
+  private readonly executor: AgentExecutor;
   private readonly approval: ToolApprovalHandler;
   private readonly policy: ToolPolicy;
   private readonly limits: RunLimits;
@@ -68,19 +71,21 @@ export default class AgentGenerator {
   private readonly activeRuns = new Map<string, RunAbortScope>();
 
   constructor(options: AgentGeneratorOptions = {}) {
-    this.model = options.model ?? new AgentModel().getActiveAgent().model;
+    const model = options.model ?? new AgentModel().getActiveAgent().model;
     this.registry = options.registry ?? createBuiltInAgentRegistry();
     this.toolResolver = options.toolResolver ?? new ToolResolver();
     this.approval = options.approval ?? denyToolApproval;
     this.policy = options.policy ?? new ToolPolicy();
     this.limits = options.limits ?? DEFAULT_RUN_LIMITS;
     this.skillContextProvider = options.skillContextProvider;
-    this.subagentRuntime = new AgentRuntime(
+    this.executor = options.executor ?? new AgentExecutor(model);
+    this.subagentRuntime = options.subagentRuntime ?? new AgentRuntime(
       this.registry,
-      this.model,
+      model,
       this.toolResolver,
       this.policy,
       this.approval,
+      this.executor,
     );
   }
 
@@ -139,118 +144,60 @@ export default class AgentGenerator {
       throw new Error(`Run is already active: ${context.runId}`);
     }
     this.activeRuns.set(context.runId, abortScope);
-    const chunks: string[] = [];
+    const initiallyAborted = context.signal?.aborted ?? false;
 
     try {
-      await emitAgentEvent(
-        options.onAgentEvent,
-        createAgentEvent(context, {
-          type: "run_started",
-          threadId: context.threadId,
-          parentRunId: context.parentRunId,
-          depth: context.depth,
-        }),
-      );
-
-      if (context.signal?.aborted) {
-        await emitAgentEvent(
-          options.onAgentEvent,
-          createAgentEvent(context, {
-            type: "run_aborted",
-            partialContent: "",
-          }),
-        );
-        return "";
-      }
-
-      const skillContext = await this.skillContextProvider?.getSkillContext(input, {
-        threadId: options.threadId,
-      });
-      if (skillContext && skillContext.selections.length > 0) {
-        await emitAgentEvent(
-          options.onAgentEvent,
-          createAgentEvent(context, {
-            type: "skill_selected",
-            skills: skillContext.selections.map((selection) => Object.freeze({
-              id: selection.skill.manifest.id,
-              name: selection.skill.manifest.name,
-              score: selection.score,
-              reasons: selection.reasons,
-              matchedTerms: selection.matchedTerms,
-            })),
-          }),
-        );
-      }
-
-      for await (const chunk of this.model.stream({
+      const result = await this.executor.execute({
+        context,
         prompt: input,
-        threadId: context.threadId,
-        systemPrompt: createMainSystemPrompt(skillContext?.prompt ?? ""),
+        systemPrompt: async () => {
+          const skillContext = await this.skillContextProvider?.getSkillContext(input, {
+            threadId: options.threadId,
+          });
+          if (skillContext && skillContext.selections.length > 0) {
+            await emitAgentEvent(
+              options.onAgentEvent,
+              createAgentEvent(context, {
+                type: "skill_selected",
+                skills: skillContext.selections.map((selection) => Object.freeze({
+                  id: selection.skill.manifest.id,
+                  name: selection.skill.manifest.name,
+                  score: selection.score,
+                  reasons: selection.reasons,
+                  matchedTerms: selection.matchedTerms,
+                })),
+              }),
+            );
+          }
+          return createMainSystemPrompt(skillContext?.prompt ?? "");
+        },
         tools,
-        signal: context.signal,
         maxTurns: this.limits.maxTurns,
-      })) {
-        chunks.push(chunk);
+        mode: "stream",
+        checkAbortAfterModel: true,
+        timeout: {
+          timedOut: abortScope.timedOut,
+          timeoutMs: this.limits.timeoutMs,
+        },
+        onChunk: options.onChunk,
+        onEvent: options.onAgentEvent,
+      });
 
-        await emitAgentEvent(
-          options.onAgentEvent,
-          createAgentEvent(context, {
-            type: "text_delta",
-            content: chunk,
-          }),
-        );
-
-        await options.onChunk?.(chunk);
+      switch (result.status) {
+        case "completed":
+          return result.content;
+        case "timed_out":
+          throw new RunTimedOutError(result.timeoutMs);
+        case "aborted":
+          if (initiallyAborted) {
+            return "";
+          }
+          throw result.cause
+            ?? context.signal?.reason
+            ?? new Error("Agent run aborted.");
+        case "failed":
+          throw result.cause;
       }
-
-      if (context.signal?.aborted) {
-        throw context.signal.reason ?? new Error("Agent run aborted.");
-      }
-
-      const content = chunks.join("");
-      await emitAgentEvent(
-        options.onAgentEvent,
-        createAgentEvent(context, {
-          type: "run_completed",
-          content,
-        }),
-      );
-      return content;
-    } catch (error) {
-      const partialContent = chunks.join("");
-
-      if (abortScope.timedOut()) {
-        await emitAgentEvent(
-          options.onAgentEvent,
-          createAgentEvent(context, {
-            type: "run_timed_out",
-            partialContent,
-            timeoutMs: this.limits.timeoutMs,
-          }),
-        );
-        throw new RunTimedOutError(this.limits.timeoutMs);
-      }
-
-      if (context.signal?.aborted) {
-        await emitAgentEvent(
-          options.onAgentEvent,
-          createAgentEvent(context, {
-            type: "run_aborted",
-            partialContent,
-          }),
-        );
-      } else {
-        await emitAgentEvent(
-          options.onAgentEvent,
-          createAgentEvent(context, {
-            type: "run_failed",
-            partialContent,
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        );
-      }
-
-      throw error;
     } finally {
       abortScope.dispose();
       this.activeRuns.delete(context.runId);
