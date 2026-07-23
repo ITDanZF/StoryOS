@@ -94,6 +94,7 @@ export default class AgentRuntime {
       systemPrompt: definition.systemPrompt,
       tools,
       maxTurns: definition.maxTurns ?? budget.limits.maxTurns,
+      modelReference: definition.model,
       visibility: "internal",
       mode: "text",
       onEvent: input.onEvent,

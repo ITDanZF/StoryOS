@@ -1,4 +1,8 @@
-import { MemorySaver } from "@langchain/langgraph";
+import {
+  MemorySaver,
+  type BaseCheckpointSaver,
+} from "@langchain/langgraph";
+import type { ModelSessionStore } from "../model/ModelSessionStore.ts";
 import SqliteStore from "./SqliteStore.ts";
 
 export type ThreadId = string;
@@ -7,8 +11,8 @@ export type MemoryStore = {
   checkpointPath?: string;
 };
 
-export default class Memory {
-  private readonly checkpointer;
+export default class Memory implements ModelSessionStore {
+  private readonly checkpointer: BaseCheckpointSaver;
   private readonly sqliteStore: SqliteStore | null;
 
   constructor(params: MemoryStore = {}) {
@@ -22,7 +26,7 @@ export default class Memory {
     }
   }
 
-  getCheckpointer() {
+  getCheckpointer(): BaseCheckpointSaver {
     return this.checkpointer;
   }
 

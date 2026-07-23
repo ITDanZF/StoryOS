@@ -4,7 +4,9 @@ import AgentApplication from "../application/AgentApplication.ts";
 import type { ApplicationEventHandler } from "../application/contracts.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ThreadApplication from "../application/ThreadApplication.ts";
+import Memory from "../Memory/index.ts";
 import JsonStore from "../Memory/JsonStore.ts";
+import type { ModelConnectionConfiguration } from "../model/ModelConfiguration.ts";
 import Model from "../model/Model.ts";
 import SkillApplication from "../skills/SkillApplication.ts";
 import SkillContextProviderService from "../skills/SkillContextProvider.ts";
@@ -23,6 +25,7 @@ export type ActiveWorkspaceRuntime = {
   readonly agent: AgentApplication;
   readonly skills: SkillApplication;
   readonly model: Model;
+  readonly modelSessions: Memory;
   readonly unsubscribe: () => void;
 };
 
@@ -36,10 +39,16 @@ export default class WorkspaceRuntimeManager {
   private readonly subscribers = new Set<ApplicationEventHandler>();
   private current: ActiveWorkspaceRuntime | null = null;
 
-  private constructor(private readonly projects: ProjectApplication) {}
+  private constructor(
+    private readonly projects: ProjectApplication,
+    private readonly modelConfiguration: ModelConnectionConfiguration,
+  ) {}
 
-  static async create(projects: ProjectApplication): Promise<WorkspaceRuntimeManager> {
-    const manager = new WorkspaceRuntimeManager(projects);
+  static async create(
+    projects: ProjectApplication,
+    modelConfiguration: ModelConnectionConfiguration,
+  ): Promise<WorkspaceRuntimeManager> {
+    const manager = new WorkspaceRuntimeManager(projects, modelConfiguration);
     await manager.activate(projects.getSnapshot().activeProjectPath);
     return manager;
   }
@@ -69,14 +78,23 @@ export default class WorkspaceRuntimeManager {
       : getWorkspaceLayout(snapshot.systemWorkspace.path, true);
 
     const threads = new ThreadApplication(new JsonStore(layout.conversationsRoot));
-    const model = new Model({ checkpointPath: layout.checkpointPath });
+    const modelSessions = new Memory({
+      checkpointBackend: "sqlite",
+      checkpointPath: layout.checkpointPath,
+    });
+    const model = new Model({
+      configuration: this.modelConfiguration,
+      sessions: modelSessions,
+    });
     const skills = await SkillApplication.create({
       loader: new SkillLoader({ projectSkillRoot: layout.skillsRoot }),
       scaffold: new SkillScaffoldService({ userSkillRoot: layout.skillsRoot }),
       draft: new SkillDraftService(model),
     });
     const skillInstaller = new SkillInstallService(skills);
-    const skillContextProvider = new SkillContextProviderService(skills, { threadSkillStateProvider: threads });
+    const skillContextProvider = new SkillContextProviderService(skills, {
+      threadSkillStateProvider: threads,
+    });
     const workspaceContext = new WorkspaceToolContext(layout.filesRoot);
     const agent = new AgentApplication(createAgentOrchestrator({
       model,
@@ -100,6 +118,7 @@ export default class WorkspaceRuntimeManager {
       agent,
       skills,
       model,
+      modelSessions,
       unsubscribe,
     });
   }
@@ -126,7 +145,9 @@ export default class WorkspaceRuntimeManager {
 
   private matchesCurrent(projectPath: string | null): boolean {
     if (!this.current) return false;
-    if (this.current.projectPath === null || projectPath === null) return this.current.projectPath === projectPath;
+    if (this.current.projectPath === null || projectPath === null) {
+      return this.current.projectPath === projectPath;
+    }
     return samePath(this.current.projectPath, projectPath);
   }
 
@@ -139,7 +160,7 @@ export default class WorkspaceRuntimeManager {
   private closeCurrent(): void {
     if (!this.current) return;
     this.current.unsubscribe();
-    this.current.model.close();
+    this.current.modelSessions.close();
     this.current = null;
   }
 }

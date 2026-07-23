@@ -2,7 +2,7 @@ import type { AgentRunResult } from "../AgentRuntime.ts";
 import type RunBudget from "../RunLimits.ts";
 import type { ToolApprovalHandler } from "../../security/ToolPolicy.ts";
 import type { AgentEventHandler } from "../AgentEvent.ts";
-import type { ModelRunInput } from "../../model/Model.ts";
+import type { ModelRunInput } from "../../model/ModelGateway.ts";
 import type {
   ApprovedTaskResult,
   ExecutionPlan,

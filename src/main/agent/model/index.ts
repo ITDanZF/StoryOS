@@ -1,4 +1,9 @@
+import Memory from "../Memory/index.ts";
+import {
+  readModelConnectionConfigurationFromEnvironment,
+} from "./ModelConfiguration.ts";
 import Model from "./Model.ts";
+
 export type AgentId = string;
 export type AgentStatus = "idle" | "running" | "disabled";
 
@@ -19,9 +24,17 @@ export type CreateAgentOptions = {
   metadata?: Record<string, unknown>;
 };
 
+function createDefaultModel(): Model {
+  return new Model({
+    configuration: readModelConnectionConfigurationFromEnvironment(),
+    sessions: new Memory(),
+  });
+}
+
 export default class AgentModel {
   private AgentManage = new Map<AgentId, AgentRuntime>();
   private activeAgentId: AgentId | null = null;
+
   constructor() {
     this.createAgent({
       id: "1",
@@ -34,37 +47,24 @@ export default class AgentModel {
       throw new Error(`Agent already exists: ${options.id}`);
     }
 
-    const model = new Model();
-
     const agent: AgentRuntime = {
       id: options.id,
       name: options.name,
       description: options.description,
-      model: options.model ?? model,
+      model: options.model ?? createDefaultModel(),
       status: "idle",
       metadata: options.metadata,
     };
 
     this.AgentManage.set(agent.id, agent);
-
-    if (!this.activeAgentId) {
-      this.activeAgentId = agent.id;
-    }
-
+    if (!this.activeAgentId) this.activeAgentId = agent.id;
     return agent;
   }
 
   getActiveAgent(): AgentRuntime {
-    if (!this.activeAgentId) {
-      throw new Error("No active agent");
-    }
-
+    if (!this.activeAgentId) throw new Error("No active agent");
     const agent = this.AgentManage.get(this.activeAgentId);
-
-    if (!agent) {
-      throw new Error(`Active agent not found: ${this.activeAgentId}`);
-    }
-
+    if (!agent) throw new Error(`Active agent not found: ${this.activeAgentId}`);
     return agent;
   }
 

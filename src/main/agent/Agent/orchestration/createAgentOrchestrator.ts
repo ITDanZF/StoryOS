@@ -1,3 +1,9 @@
+import Memory from "../../Memory/index.ts";
+import {
+  readModelConnectionConfigurationFromEnvironment,
+} from "../../model/ModelConfiguration.ts";
+import type { ModelGatewayRegistration } from "../../model/ModelRouter.ts";
+import ModelRouter from "../../model/ModelRouter.ts";
 import Model from "../../model/Model.ts";
 import ToolResolver from "../../tools/ToolResolver.ts";
 import type WorkspaceToolContext from "../../tools/WorkspaceToolContext.ts";
@@ -22,6 +28,7 @@ import TaskScheduler from "./TaskScheduler.ts";
 export type AgentOrchestratorFactoryOptions = {
   readonly limits?: RunLimits;
   readonly model?: Model;
+  readonly modelGateways?: readonly ModelGatewayRegistration[];
   readonly skillContextProvider?: SkillContextProvider;
   readonly skillDefinitions?: readonly SkillDefinition[];
   readonly skillDefinitionsProvider?: () => readonly SkillDefinition[];
@@ -33,26 +40,34 @@ function isSkillAgent(definition: { readonly metadata?: Readonly<Record<string, 
   return definition.metadata?.source === "skill";
 }
 
+function createDefaultModel(): Model {
+  return new Model({
+    configuration: readModelConnectionConfigurationFromEnvironment(),
+    sessions: new Memory(),
+  });
+}
+
 export function createAgentOrchestrator(
   options: AgentOrchestratorFactoryOptions | RunLimits = {},
 ): AgentOrchestrator {
-  const limits = "maxTurns" in options ? options : options.limits ?? DEFAULT_RUN_LIMITS;
-  const skillContextProvider = "maxTurns" in options
+  const usesLegacyLimits = "maxTurns" in options;
+  const limits = usesLegacyLimits ? options : options.limits ?? DEFAULT_RUN_LIMITS;
+  const skillContextProvider = usesLegacyLimits
     ? undefined
     : options.skillContextProvider;
-  const skillDefinitions = "maxTurns" in options
+  const skillDefinitions = usesLegacyLimits
     ? []
     : options.skillDefinitions ?? [];
-  const skillDefinitionsProvider = "maxTurns" in options
+  const skillDefinitionsProvider = usesLegacyLimits
     ? () => skillDefinitions
     : options.skillDefinitionsProvider ?? (() => skillDefinitions);
-  const skillInstaller = "maxTurns" in options
-    ? undefined
-    : options.skillInstaller;
-  const workspaceContext = "maxTurns" in options
-    ? undefined
-    : options.workspaceContext;
-  const model = "maxTurns" in options ? new Model() : options.model ?? new Model();
+  const skillInstaller = usesLegacyLimits ? undefined : options.skillInstaller;
+  const workspaceContext = usesLegacyLimits ? undefined : options.workspaceContext;
+  const model = usesLegacyLimits ? createDefaultModel() : options.model ?? createDefaultModel();
+  const modelRouter = new ModelRouter(
+    model,
+    usesLegacyLimits ? [] : options.modelGateways,
+  );
   const toolResolver = new ToolResolver({ skillInstaller, workspaceContext });
   const registry = new AgentRegistry(builtInAgents);
   const syncSkillAgents = () => registry.replaceWhere(
@@ -65,8 +80,9 @@ export function createAgentOrchestrator(
   skillInstaller?.onAfterInstall?.(() => {
     syncSkillAgents();
   });
+
   const policy = new ToolPolicy();
-  const executor = new AgentExecutor(model);
+  const executor = new AgentExecutor(modelRouter);
   const taskRuntime = new AgentRuntime(
     registry,
     model,

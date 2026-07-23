@@ -3,6 +3,10 @@ import ProjectApplication from "./application/ProjectApplication.ts";
 import Configuration from "./config/index.ts";
 import DesktopController from "./electron/DesktopController.ts";
 import ProjectJsonStore from "./Memory/ProjectJsonStore.ts";
+import {
+  createModelConnectionConfiguration,
+  type ModelConnectionConfiguration,
+} from "./model/ModelConfiguration.ts";
 import WorkSpace from "./workspace/index.ts";
 import LegacyWorkspaceMigrator from "./runtime/LegacyWorkspaceMigrator.ts";
 import WorkspaceRuntimeManager from "./runtime/WorkspaceRuntimeManager.ts";
@@ -46,7 +50,9 @@ export default class StoryAgentService {
         await this.workspace.createHomeRoot();
         const config = this.configuration.loadConfig();
         this.configured = config !== null;
-        if (config && !this.controller) await this.initializeRuntime();
+        if (config && !this.controller) {
+            await this.initializeRuntime(createModelConnectionConfiguration(config));
+        }
         return this.getStatus();
     }
 
@@ -72,16 +78,17 @@ export default class StoryAgentService {
             throw new Error("Base URL must use HTTP or HTTPS.");
         }
 
-        this.configuration.saveConfig({
+        const config = {
             MODEL_PROVIDER: request.provider,
             MODEL_NAME: modelName,
             MODEL_BASE_URL: baseUrl,
             MODEL_API_KEY: apiKey,
             AGENT_WORKSPACE: workspacePath,
             LOG_LEVEL: "info",
-        });
+        } as const;
+        this.configuration.saveConfig(config);
         this.configured = true;
-        await this.initializeRuntime();
+        await this.initializeRuntime(createModelConnectionConfiguration(config));
         return this.getStatus();
     }
 
@@ -114,11 +121,13 @@ export default class StoryAgentService {
         };
     }
 
-    private async initializeRuntime(): Promise<void> {
+    private async initializeRuntime(
+        modelConfiguration: ModelConnectionConfiguration,
+    ): Promise<void> {
         await this.workspace.createAgentWorkSpace();
         const projects = new ProjectApplication(new ProjectJsonStore());
         new LegacyWorkspaceMigrator(projects).migrate();
-        const runtime = await WorkspaceRuntimeManager.create(projects);
+        const runtime = await WorkspaceRuntimeManager.create(projects, modelConfiguration);
         const controller = new DesktopController({ projects, runtime });
         for (const subscriber of this.subscribers) {
             this.controllerUnsubscribers.set(subscriber, controller.subscribe(subscriber));

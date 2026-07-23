@@ -1,4 +1,5 @@
-import type { ModelRunInput } from "../model/Model.ts";
+import type { ModelGateway, ModelRunInput } from "../model/ModelGateway.ts";
+import ModelRouter from "../model/ModelRouter.ts";
 import type { RegisteredTool } from "../tools/ToolResolver.ts";
 import {
   createAgentEvent,
@@ -7,10 +8,7 @@ import {
 } from "./AgentEvent.ts";
 import type { ExecutionContext } from "./ExecutionContext.ts";
 
-export type AgentModelRunner = {
-  stream(input: ModelRunInput): AsyncIterable<string>;
-  invokeText?(input: ModelRunInput): Promise<string>;
-};
+export type AgentModelRunner = ModelGateway;
 
 export type AgentExecutionResult =
   | {
@@ -41,6 +39,7 @@ export type AgentExecutorInput = {
   readonly systemPrompt: string | (() => string | Promise<string>);
   readonly tools: readonly RegisteredTool[];
   readonly maxTurns: number;
+  readonly modelReference?: string;
   readonly visibility?: ModelRunInput["visibility"];
   readonly mode: "stream" | "text";
   readonly checkAbortAfterModel?: boolean;
@@ -57,7 +56,13 @@ function errorMessage(error: unknown): string {
 }
 
 export default class AgentExecutor {
-  constructor(private readonly model: AgentModelRunner) {}
+  private readonly modelRouter: ModelRouter;
+
+  constructor(model: AgentModelRunner | ModelRouter) {
+    this.modelRouter = model instanceof ModelRouter
+      ? model
+      : new ModelRouter(model);
+  }
 
   async execute(input: AgentExecutorInput): Promise<AgentExecutionResult> {
     const { context } = input;
@@ -90,15 +95,16 @@ export default class AgentExecutor {
         maxTurns: input.maxTurns,
         ...(input.visibility ? { visibility: input.visibility } : {}),
       };
+      const model = this.modelRouter.resolve(input.modelReference);
 
-      if (input.mode === "text" && this.model.invokeText) {
+      if (input.mode === "text" && model.invokeText) {
         await this.appendChunk(
-          await this.model.invokeText(modelInput),
+          await model.invokeText(modelInput),
           input,
           chunks,
         );
       } else {
-        for await (const chunk of this.model.stream(modelInput)) {
+        for await (const chunk of model.stream(modelInput)) {
           await this.appendChunk(chunk, input, chunks);
         }
       }
