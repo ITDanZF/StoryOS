@@ -1,15 +1,15 @@
-import { ChevronDown, Folder, FolderOpen, FolderPlus, Plus, Settings2, X } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen, FolderPlus, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { AgentServiceStatus, CreateProjectRequest, ProjectDto, ProjectSnapshot, RenameProjectRequest, ThreadSnapshot } from "../../../shared/agent/contracts.ts";
+import type { CreateProjectRequest, ProjectDto, ProjectSnapshot, RenameProjectRequest, ThreadSnapshot } from "../../../shared/agent/contracts.ts";
 import { cn } from "../../../lib/utils.ts";
 import StoryLogo from "./StoryLogo.tsx";
 import CreateProjectDialog from "./CreateProjectDialog.tsx";
 import ProjectConversationTree from "./ProjectConversationTree.tsx";
 import RenameProjectDialog from "./RenameProjectDialog.tsx";
+import SettingsLauncher, { type SettingsPage } from "./SettingsLauncher.tsx";
 
 type WorkspaceSidebarProps = {
   readonly open: boolean;
-  readonly status: AgentServiceStatus | null;
   readonly projects: ProjectSnapshot | null;
   readonly threads: ThreadSnapshot | null;
   readonly onClose: () => void;
@@ -22,12 +22,11 @@ type WorkspaceSidebarProps = {
   readonly onCreateThread: () => Promise<void>;
   readonly onSwitchThread: (threadId: string) => Promise<void>;
   readonly onDeleteThread: (threadId: string) => Promise<void>;
-  readonly onOpenSettings: () => void;
+  readonly onOpenSettings: (page: SettingsPage) => void;
 };
 
 export default function WorkspaceSidebar({
   open,
-  status,
   projects,
   threads,
   onClose,
@@ -125,11 +124,7 @@ export default function WorkspaceSidebar({
           )}
         </div>
 
-        <button className="grid min-h-13 w-full shrink-0 grid-cols-[31px_minmax(0,1fr)_18px] items-center gap-2 border-0 border-t border-neutral-200 bg-transparent px-2 pt-2 text-left hover:bg-neutral-200/60" type="button" onClick={onOpenSettings}>
-          <StoryLogo className="size-[30px] rounded-full" />
-          <span className="grid min-w-0 gap-0.5"><strong className="truncate text-[11px]">{status?.modelName ?? "配置 AI 模型"}</strong><span className={cn("text-[10px]", status?.initialized ? "text-emerald-700" : "text-amber-700")}>{status?.initialized ? `${status.provider} · 已连接` : "尚未连接"}</span></span>
-          <Settings2 size={16} className="text-neutral-400" />
-        </button>
+        <SettingsLauncher onSelect={onOpenSettings} />
       </aside>
       {createProjectOpen && projects && <CreateProjectDialog defaultParentPath={projects.creationDefaults.parentPath} onClose={() => setCreateProjectOpen(false)} onCreate={createProject} />}
       {renameTarget && <RenameProjectDialog projectName={renameTarget.name} onClose={() => setRenameTarget(null)} onRename={(name) => onRenameProject({ projectPath: renameTarget.path, name })} />}

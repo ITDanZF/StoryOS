@@ -1,8 +1,9 @@
 import { ChevronDown, Menu, Settings2, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import ConfigurationDialog from "./components/ConfigurationDialog.tsx";
 import ConversationView from "./components/ConversationView.tsx";
 import MessageComposer from "./components/MessageComposer.tsx";
+import SettingsCenter from "./components/SettingsCenter.tsx";
+import type { SettingsPage } from "./components/SettingsLauncher.tsx";
 import WorkspaceSidebar from "./components/WorkspaceSidebar.tsx";
 import { useAgentWorkspace } from "./useAgentWorkspace.ts";
 
@@ -11,10 +12,10 @@ import WindowTitleBar from '../components/WindowTitleBar.tsx';
 export default function AgentWorkspace() {
   const { state, activeRun, configure, createProject, openProject, openProjectDirectory, renameProject, deleteProject, switchProject, createThread, switchThread, deleteThread, sendMessage, cancelRun, clearError } = useAgentWorkspace();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsPage, setSettingsPage] = useState<SettingsPage | null>(null);
 
   useEffect(() => {
-    if (!state.loading && state.status && !state.status.initialized) setSettingsOpen(true);
+    if (!state.loading && state.status && !state.status.initialized) setSettingsPage("settings");
   }, [state.loading, state.status]);
 
   useEffect(() => {
@@ -23,11 +24,14 @@ export default function AgentWorkspace() {
         event.preventDefault();
         void createThread();
       }
-      if (event.key === "Escape") setSidebarOpen(false);
+      if (event.key === "Escape") {
+        if (settingsPage && state.status?.initialized) setSettingsPage(null);
+        else setSidebarOpen(false);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createThread]);
+  }, [createThread, settingsPage, state.status?.initialized]);
 
   const activeThread = state.threads?.activeThread;
   const activeProject = state.projects?.activeProject;
@@ -36,7 +40,6 @@ export default function AgentWorkspace() {
       <WindowTitleBar />
       <WorkspaceSidebar
         open={sidebarOpen}
-        status={state.status}
         projects={state.projects}
         threads={state.threads}
         onClose={() => setSidebarOpen(false)}
@@ -49,7 +52,10 @@ export default function AgentWorkspace() {
         onCreateThread={createThread}
         onSwitchThread={switchThread}
         onDeleteThread={deleteThread}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={(page) => {
+          setSidebarOpen(false);
+          setSettingsPage(page);
+        }}
       />
 
       <section className="m-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 border-border bg-white sm:m-1.5 sm:rounded-xl sm:border lg:ml-2 2xl:mr-3">
@@ -63,7 +69,7 @@ export default function AgentWorkspace() {
           <div className="flex items-center gap-1.5 [-webkit-app-region:no-drag]">
             {activeRun && <span className="hidden h-7 items-center gap-1.5 rounded-full bg-violet-50 px-2.5 text-[10px] text-violet-700 sm:flex"><Sparkles size={14} />AI 正在回复</span>}
             <span className="hidden h-7 items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 text-[10px] text-neutral-500 md:flex"><span className={`size-1.5 rounded-full ${state.status?.initialized ? "bg-emerald-500" : "bg-neutral-400"}`} />{state.status?.initialized ? "已连接" : "未配置"}</span>
-            <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100" type="button" title="模型配置" aria-label="模型配置" onClick={() => setSettingsOpen(true)}><Settings2 size={18} /></button>
+            <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100" type="button" title="模型配置" aria-label="模型配置" onClick={() => setSettingsPage("settings")}><Settings2 size={18} /></button>
           </div>
         </header>
 
@@ -84,7 +90,15 @@ export default function AgentWorkspace() {
           <span className="flex-1">{state.error}</span><button className="grid size-7 place-items-center rounded-md border-0 bg-transparent hover:bg-red-100" type="button" onClick={clearError} aria-label="关闭错误提示"><X size={16} /></button>
         </div>
       )}
-      {settingsOpen && state.status && <ConfigurationDialog status={state.status} required={!state.status.initialized} onConfigure={configure} onClose={() => setSettingsOpen(false)} />}
+      {settingsPage && state.status && (
+        <SettingsCenter
+          page={settingsPage}
+          status={state.status}
+          required={!state.status.initialized}
+          onConfigure={configure}
+          onBack={() => setSettingsPage(null)}
+        />
+      )}
     </main>
   );
 }
