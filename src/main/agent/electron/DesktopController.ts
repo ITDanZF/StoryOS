@@ -82,7 +82,7 @@ export default class DesktopController {
 
   async renameProject(request: RenameProjectRequest) {
     const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === request.projectPath;
-    if (wasActive) this.dependencies.runtime.closeForProjectMutation(request.projectPath);
+    if (wasActive) await this.dependencies.runtime.closeForProjectMutation(request.projectPath);
     const result = this.dependencies.projects.renameProject(request);
     try {
       if (wasActive) await this.dependencies.runtime.activate(result.project.path);
@@ -97,7 +97,7 @@ export default class DesktopController {
   async deleteProject(projectPath: string) {
     const project = this.dependencies.projects.getProject(projectPath);
     const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === project.path;
-    if (wasActive) this.dependencies.runtime.closeForProjectMutation(project.path);
+    if (wasActive) await this.dependencies.runtime.closeForProjectMutation(project.path);
     try {
       await shell.trashItem(project.path);
     } catch (error) {
@@ -123,11 +123,13 @@ export default class DesktopController {
 
   async removeProject(projectPath: string) {
     const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === projectPath;
-    if (wasActive) this.dependencies.runtime.closeForProjectMutation(projectPath);
+    if (wasActive) await this.dependencies.runtime.closeForProjectMutation(projectPath);
     const snapshot = this.dependencies.projects.removeProject(projectPath);
     await this.dependencies.runtime.activate(snapshot.activeProjectPath);
     return this.getWorkspaceSnapshot();
   }
+
+  shutdown(): Promise<void> { return this.dependencies.runtime.shutdown(); }
 
   getSkillSnapshot() { return this.dependencies.runtime.skills.getSnapshot(); }
   getSkill(skillId: string) { return this.dependencies.runtime.skills.getSkill(skillId); }

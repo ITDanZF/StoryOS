@@ -81,7 +81,8 @@ function createHarness() {
     skills: { getSnapshot: vi.fn(() => ({ skills: [], issues: [], loadedAt: new Date(0).toISOString() })), getSkill: vi.fn(() => null) },
     subscribe: vi.fn((): (() => void) => () => undefined),
     activate: vi.fn(async () => undefined),
-    closeForProjectMutation: vi.fn(),
+    closeForProjectMutation: vi.fn(async () => undefined),
+    shutdown: vi.fn(async () => undefined),
   };
   const dependencies = { projects, runtime } as unknown as DesktopControllerDependencies;
   vi.mocked(shell.openPath).mockClear();
@@ -135,4 +136,12 @@ describe("DesktopController", () => {
     expect(harness.runtime.closeForProjectMutation).toHaveBeenCalledWith("C:\\projects\\Story");
     expect(harness.runtime.activate).toHaveBeenCalledWith("C:\\projects\\Renamed");
   });
+  it("delegates shutdown to the workspace runtime", async () => {
+    const harness = createHarness();
+
+    await harness.controller.shutdown();
+
+    expect(harness.runtime.shutdown).toHaveBeenCalledOnce();
+  });
+
 });

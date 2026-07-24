@@ -20,7 +20,7 @@ import type { AgentRunner } from "./ports.ts";
 import type { ApplicationEventRecorder } from "../runtime/RunLogStore.ts";
 
 type RunRecord = {
-  promise: Promise<string>;
+  promise: Promise<string> | null;
   readonly threadId: string;
   readonly startedAt: string;
   readonly checkpointSnapshot: ThreadCheckpointSnapshot | null;
@@ -56,6 +56,8 @@ function serializeError(error: unknown): SerializableError {
 export type AgentApplicationOptions = {
   readonly checkpointPath?: string;
   readonly eventRecorder?: ApplicationEventRecorder;
+  readonly initialRuns?: readonly RunSnapshot[];
+  readonly maxRetainedRuns?: number;
 };
 
 export default class AgentApplication {
@@ -63,11 +65,37 @@ export default class AgentApplication {
   private readonly runs = new Map<string, RunRecord>();
   private readonly activeRunIdsByThread = new Map<string, string>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
+  private readonly maxRetainedRuns: number;
+  private acceptingRuns = true;
+  private shutdownPromise: Promise<void> | null = null;
 
   constructor(
     private readonly runner: AgentRunner,
     private readonly options: AgentApplicationOptions = {},
-  ) {}
+  ) {
+    this.maxRetainedRuns = options.maxRetainedRuns ?? 100;
+    if (!Number.isInteger(this.maxRetainedRuns) || this.maxRetainedRuns < 0) {
+      throw new Error("maxRetainedRuns must be a non-negative integer.");
+    }
+    for (const snapshot of [...(options.initialRuns ?? [])].reverse()) {
+      this.runs.set(snapshot.runId, {
+        promise: null,
+        threadId: snapshot.threadId,
+        startedAt: snapshot.startedAt,
+        checkpointSnapshot: null,
+        status: snapshot.status,
+        ...(snapshot.completedAt ? { completedAt: snapshot.completedAt } : {}),
+        ...(snapshot.durationMs !== undefined
+          ? { durationMs: snapshot.durationMs }
+          : {}),
+        ...(snapshot.content !== undefined ? { content: snapshot.content } : {}),
+        ...(snapshot.error ? { error: snapshot.error } : {}),
+        cancelError: null,
+        settled: true,
+      });
+    }
+    this.evictSettledRuns();
+  }
 
   hasActiveRuns(): boolean {
     return this.activeRunIdsByThread.size > 0;
@@ -79,6 +107,9 @@ export default class AgentApplication {
   }
 
   startRun(request: StartRunRequest): string {
+    if (!this.acceptingRuns) {
+      throw new Error("Agent application is shutting down.");
+    }
     const threadId = request.threadId.trim();
     const input = request.input.trim();
 
@@ -119,7 +150,13 @@ export default class AgentApplication {
     if (!run) {
       throw new Error(`Run not found: ${runId}`);
     }
-    return run.promise;
+    if (run.promise) return run.promise;
+    if (run.status === "completed") {
+      return Promise.resolve(run.content ?? "");
+    }
+    const error = new Error(run.error?.message ?? `Run did not complete: ${runId}`);
+    error.name = run.error?.name ?? "Error";
+    return Promise.reject(error);
   }
 
   getRun(runId: string): RunSnapshot | null {
@@ -258,6 +295,7 @@ export default class AgentApplication {
         this.activeRunIdsByThread.delete(threadId);
       }
       this.rejectPendingApprovals(runId);
+      this.evictSettledRuns();
     }
   }
 
@@ -380,6 +418,46 @@ export default class AgentApplication {
       );
     } catch {
       // Best-effort rollback only. The original run error remains visible.
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.shutdownPromise) return this.shutdownPromise;
+    this.acceptingRuns = false;
+    this.shutdownPromise = this.performShutdown();
+    return this.shutdownPromise;
+  }
+
+  private async performShutdown(): Promise<void> {
+    const activeRuns = [...this.activeRunIdsByThread.values()]
+      .map((runId) => this.runs.get(runId))
+      .filter((run): run is RunRecord => Boolean(run));
+    for (const runId of [...this.activeRunIdsByThread.values()]) {
+      this.cancelRun(runId);
+    }
+    await Promise.allSettled(
+      activeRuns
+        .map((run) => run.promise)
+        .filter((promise): promise is Promise<string> => promise !== null),
+    );
+    for (const runId of [...this.activeRunIdsByThread.values()]) {
+      this.rejectPendingApprovals(runId);
+    }
+    await this.options.eventRecorder?.flush?.();
+    await this.options.eventRecorder?.close?.();
+    this.subscribers.clear();
+    this.pendingApprovals.clear();
+    this.activeRunIdsByThread.clear();
+    this.runs.clear();
+  }
+
+  private evictSettledRuns(): void {
+    const settledRunIds = [...this.runs.entries()]
+      .filter(([, run]) => run.settled)
+      .map(([runId]) => runId);
+    const excess = settledRunIds.length - this.maxRetainedRuns;
+    for (const runId of settledRunIds.slice(0, Math.max(0, excess))) {
+      this.runs.delete(runId);
     }
   }
 

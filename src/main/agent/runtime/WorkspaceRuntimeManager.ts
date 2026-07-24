@@ -27,13 +27,15 @@ export type ActiveWorkspaceRuntime = {
   readonly model: Model;
   readonly modelSessions: Memory;
   readonly unsubscribe: () => void;
-  readonly close: () => void;
+  readonly close: () => Promise<void>;
 };
 
 type RuntimeResourceScope = {
   modelSessions: Memory | null;
+  runLogs: RunLogStore | null;
+  agent: AgentApplication | null;
   unsubscribe: (() => void) | null;
-  closed: boolean;
+  closePromise: Promise<void> | null;
 };
 
 function samePath(first: string, second: string): boolean {
@@ -77,14 +79,16 @@ export default class WorkspaceRuntimeManager {
     const next = await this.createRuntime(projectPath);
     const previous = this.current;
     this.current = next;
-    this.closeRuntime(previous);
+    await this.closeRuntime(previous);
   }
 
   private async createRuntime(projectPath: string | null): Promise<ActiveWorkspaceRuntime> {
     const resources: RuntimeResourceScope = {
       modelSessions: null,
+      runLogs: null,
+      agent: null,
       unsubscribe: null,
-      closed: false,
+      closePromise: null,
     };
 
     try {
@@ -117,6 +121,9 @@ export default class WorkspaceRuntimeManager {
         threadSkillStateProvider: threads,
       });
       const workspaceContext = new WorkspaceToolContext(layout.filesRoot);
+      const runLogs = new RunLogStore(layout.runsRoot);
+      resources.runLogs = runLogs;
+      const initialRuns = await runLogs.loadRunSnapshots(100);
       const agent = new AgentApplication(createAgentOrchestrator({
         model,
         skillContextProvider,
@@ -126,8 +133,11 @@ export default class WorkspaceRuntimeManager {
         workspaceContext,
       }), {
         checkpointPath: layout.checkpointPath,
-        eventRecorder: new RunLogStore(layout.runsRoot),
+        eventRecorder: runLogs,
+        initialRuns,
+        maxRetainedRuns: 100,
       });
+      resources.agent = agent;
       const unsubscribe = agent.subscribe((event) =>
         Promise.allSettled([...this.subscribers].map((subscriber) => subscriber(event))).then(() => {
           // Subscriber failures are isolated from the active agent run.
@@ -145,24 +155,30 @@ export default class WorkspaceRuntimeManager {
         close: () => this.closeResourceScope(resources),
       });
     } catch (error) {
-      this.closeResourceScope(resources);
+      await this.closeResourceScope(resources);
       throw error;
     }
   }
 
-  closeForProjectMutation(projectPath: string): void {
-    if (!this.current?.projectPath || !samePath(this.current.projectPath, projectPath)) return;
+  async closeForProjectMutation(projectPath: string): Promise<void> {
+    if (!this.current?.projectPath ||
+      !samePath(this.current.projectPath, projectPath)) return;
     this.assertCanLeaveCurrent();
-    this.closeCurrent();
+    await this.closeCurrent();
   }
 
   hasActiveRun(): boolean {
     return this.current?.agent.hasActiveRuns() ?? false;
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.assertCanLeaveCurrent();
-    this.closeCurrent();
+    await this.closeCurrent();
+  }
+
+  async shutdown(): Promise<void> {
+    await this.closeCurrent();
+    this.subscribers.clear();
   }
 
   private requireCurrent(): ActiveWorkspaceRuntime {
@@ -184,23 +200,38 @@ export default class WorkspaceRuntimeManager {
     }
   }
 
-  private closeCurrent(): void {
-    this.closeRuntime(this.current);
+  private async closeCurrent(): Promise<void> {
+    const current = this.current;
     this.current = null;
+    await this.closeRuntime(current);
   }
 
-  private closeRuntime(runtime: ActiveWorkspaceRuntime | null): void {
+  private async closeRuntime(
+    runtime: ActiveWorkspaceRuntime | null,
+  ): Promise<void> {
     if (!runtime) return;
-    runtime.close();
+    await runtime.close();
   }
 
-  private closeResourceScope(resources: RuntimeResourceScope): void {
-    if (resources.closed) return;
-    resources.closed = true;
-    try {
-      resources.unsubscribe?.();
-    } finally {
-      resources.modelSessions?.close();
-    }
+  private closeResourceScope(
+    resources: RuntimeResourceScope,
+  ): Promise<void> {
+    if (resources.closePromise) return resources.closePromise;
+    resources.closePromise = (async () => {
+      try {
+        if (resources.agent) {
+          await resources.agent.shutdown();
+        } else {
+          await resources.runLogs?.close();
+        }
+      } finally {
+        try {
+          resources.unsubscribe?.();
+        } finally {
+          resources.modelSessions?.close();
+        }
+      }
+    })();
+    return resources.closePromise;
   }
 }

@@ -40,6 +40,8 @@ export default class StoryAgentService {
     private readonly controllerUnsubscribers = new Map<ApplicationEventHandler, () => void>();
     private controller: DesktopController | null = null;
     private configured = false;
+    private runtimeInitialization: Promise<void> | null = null;
+    private shutdownPromise: Promise<void> | null = null;
 
     constructor(private readonly options: StoryAgentServiceOptions) {
         process.env.MINI_AGENT_HOME = options.agentHome;
@@ -121,7 +123,53 @@ export default class StoryAgentService {
         };
     }
 
-    private async initializeRuntime(
+    shutdown(): Promise<void> {
+        if (this.shutdownPromise) return this.shutdownPromise;
+        this.shutdownPromise = this.performShutdown();
+        return this.shutdownPromise;
+    }
+
+    private async performShutdown(): Promise<void> {
+        if (this.runtimeInitialization) {
+            await Promise.allSettled([this.runtimeInitialization]);
+        }
+        const controller = this.controller;
+        this.controller = null;
+        for (const unsubscribe of this.controllerUnsubscribers.values()) {
+            try {
+                unsubscribe();
+            } catch {
+                // One faulty listener must not block runtime shutdown.
+            }
+        }
+        this.controllerUnsubscribers.clear();
+        try {
+            await controller?.shutdown();
+        } finally {
+            this.subscribers.clear();
+        }
+    }
+
+    private initializeRuntime(
+        modelConfiguration: ModelConnectionConfiguration,
+    ): Promise<void> {
+        if (this.shutdownPromise) {
+            return Promise.reject(new Error("Agent service is shutting down."));
+        }
+        if (this.runtimeInitialization) {
+            return this.runtimeInitialization;
+        }
+        const initialization = this.performInitializeRuntime(modelConfiguration);
+        const tracked = initialization.finally(() => {
+            if (this.runtimeInitialization === tracked) {
+                this.runtimeInitialization = null;
+            }
+        });
+        this.runtimeInitialization = tracked;
+        return tracked;
+    }
+
+    private async performInitializeRuntime(
         modelConfiguration: ModelConnectionConfiguration,
     ): Promise<void> {
         await this.workspace.createAgentWorkSpace();
