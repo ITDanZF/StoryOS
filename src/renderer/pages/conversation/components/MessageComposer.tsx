@@ -6,7 +6,7 @@ import {
   Square,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "../../../lib/utils.ts";
+import { cn } from "../../../../lib/utils.ts";
 
 type MessageComposerProps = {
   readonly disabled: boolean;

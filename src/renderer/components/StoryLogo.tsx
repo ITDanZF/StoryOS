@@ -1,5 +1,5 @@
-import storyLogoUrl from "../../assets/storyos-logo.svg";
-import { cn } from "../../../lib/utils.ts";
+import storyLogoUrl from "../assets/storyos-logo.svg";
+import { cn } from "../../lib/utils.ts";
 
 type StoryLogoProps = {
   readonly className?: string;

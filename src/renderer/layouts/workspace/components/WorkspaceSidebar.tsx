@@ -1,8 +1,8 @@
 import { ChevronDown, Folder, FolderOpen, FolderPlus, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { CreateProjectRequest, ProjectDto, ProjectSnapshot, RenameProjectRequest, ThreadSnapshot } from "../../../shared/agent/contracts.ts";
-import { cn } from "../../../lib/utils.ts";
-import StoryLogo from "./StoryLogo.tsx";
+import type { CreateProjectRequest, ProjectDto, ProjectSnapshot, RenameProjectRequest, ThreadSnapshot } from "../../../../shared/agent/contracts.ts";
+import { cn } from "../../../../lib/utils.ts";
+import StoryLogo from "../../../components/StoryLogo.tsx";
 import CreateProjectDialog from "./CreateProjectDialog.tsx";
 import ProjectConversationTree from "./ProjectConversationTree.tsx";
 import RenameProjectDialog from "./RenameProjectDialog.tsx";

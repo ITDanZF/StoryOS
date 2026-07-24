@@ -10,8 +10,8 @@ import type {
   RunSnapshot,
   ThreadSnapshot,
   WorkspaceSnapshot,
-} from "../../shared/agent/contracts.ts";
-import type { ChatWorkspaceState, MessageView } from "./types.ts";
+} from "../../../../shared/agent/contracts.ts";
+import type { ChatWorkspaceState, MessageView } from "../types.ts";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -166,6 +166,7 @@ export function useAgentWorkspace() {
     activeThreadIdRef.current = thread.id;
     setThreads(snapshot);
     setMessages([]);
+    return thread;
   }, []);
 
   const createProject = useCallback(async (request: CreateProjectRequest) => {
@@ -232,6 +233,7 @@ export function useAgentWorkspace() {
     activeThreadIdRef.current = snapshot.activeThreadId;
     setThreads(snapshot);
     await loadMessages(snapshot.activeThreadId);
+    return snapshot;
   }, [loadMessages]);
 
   const sendMessage = useCallback(async (content: string) => {

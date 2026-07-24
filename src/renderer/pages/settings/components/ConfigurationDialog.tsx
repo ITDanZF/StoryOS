@@ -1,6 +1,6 @@
 import { Bot, CheckCircle2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { AgentConfigurationRequest, AgentServiceStatus } from "../../../shared/agent/contracts.ts";
+import type { AgentConfigurationRequest, AgentServiceStatus } from "../../../../shared/agent/contracts.ts";
 
 type ConfigurationDialogProps = {
   readonly status: AgentServiceStatus | null;

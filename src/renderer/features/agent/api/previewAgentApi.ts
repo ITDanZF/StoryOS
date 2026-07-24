@@ -6,7 +6,7 @@ import type {
   ProjectSnapshot,
   ThreadDto,
   ThreadSnapshot,
-} from "../../shared/agent/contracts.ts";
+} from "../../../../shared/agent/contracts.ts";
 
 const previewEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
 

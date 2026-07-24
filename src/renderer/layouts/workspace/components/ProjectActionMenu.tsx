@@ -1,7 +1,7 @@
 import { FolderOpen, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "../../../lib/utils.ts";
+import { cn } from "../../../../lib/utils.ts";
 
 type ProjectActionMenuProps = {
   readonly open: boolean;

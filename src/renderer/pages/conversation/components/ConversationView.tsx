@@ -1,6 +1,6 @@
 import { Bot, Sparkles } from "lucide-react";
 import { useEffect, useRef } from "react";
-import type { MessageView } from "../types.ts";
+import type { MessageView } from "../../../features/agent/types.ts";
 
 type ConversationViewProps = {
   readonly messages: readonly MessageView[];

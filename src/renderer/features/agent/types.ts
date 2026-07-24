@@ -4,7 +4,7 @@ import type {
   ProjectSnapshot,
   RunSnapshot,
   ThreadSnapshot,
-} from "../../shared/agent/contracts.ts";
+} from "../../../shared/agent/contracts.ts";
 
 export type MessageView = MessageDto & {
   readonly streaming?: boolean;

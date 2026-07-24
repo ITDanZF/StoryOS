@@ -10,8 +10,8 @@ import type {
   ProjectDto,
   ProjectSnapshot,
   ThreadSnapshot,
-} from "../../../shared/agent/contracts.ts";
-import { cn } from "../../../lib/utils.ts";
+} from "../../../../shared/agent/contracts.ts";
+import { cn } from "../../../../lib/utils.ts";
 import AnimatedCollapse from "./AnimatedCollapse.tsx";
 import ProjectActionMenu from "./ProjectActionMenu.tsx";
 
