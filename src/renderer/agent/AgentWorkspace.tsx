@@ -69,7 +69,13 @@ export default function AgentWorkspace() {
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           <ConversationView messages={state.messages} loading={state.loading} />
-          <MessageComposer disabled={!state.status?.initialized || !activeThread} activeRunId={activeRun?.runId} onSend={sendMessage} onCancel={cancelRun} />
+          <MessageComposer
+            disabled={!state.status?.initialized || !activeThread}
+            activeRunId={activeRun?.runId}
+            projectName={activeProject?.name}
+            onSend={sendMessage}
+            onCancel={cancelRun}
+          />
         </div>
       </section>
 
