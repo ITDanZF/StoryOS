@@ -96,7 +96,7 @@ export default function WorkspaceSidebar({
         <div className="relative shrink-0" ref={projectMenuRef}>
           <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] text-muted-foreground">
             <button className="flex items-center gap-1.5 border-0 bg-transparent p-0 text-[11px] text-muted-foreground hover:text-neutral-700" type="button" aria-expanded={projectsExpanded} onClick={() => { setProjectsExpanded((value) => !value); setProjectMenuOpen(false); }}>
-              <Folder size={14} /><span>项目</span><ChevronDown className={cn("transition-transform", !projectsExpanded && "-rotate-90")} size={13} />
+              <Folder size={14} /><span>项目</span><ChevronDown className={cn("transition-transform duration-200 ease-out motion-reduce:transition-none", !projectsExpanded && "-rotate-90")} size={13} />
             </button>
             <button className={cn("grid size-8 place-items-center rounded-xl border bg-transparent text-neutral-500 transition hover:bg-white hover:text-neutral-800", projectMenuOpen ? "border-amber-500 bg-white text-neutral-800 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]" : "border-transparent")} type="button" title="项目操作" aria-label="项目操作" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen((value) => !value)}><FolderPlus size={17} /></button>
           </div>
