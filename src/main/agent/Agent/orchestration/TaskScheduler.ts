@@ -1,4 +1,7 @@
-import { createRunAbortScope } from "../RunLimits.ts";
+import {
+  createRunAbortScope,
+  RunBudgetExceededError,
+} from "../RunLimits.ts";
 import type {
   ApprovedTaskResult,
   OrchestrationEventHandler,
@@ -191,9 +194,14 @@ export default class TaskScheduler {
               startedAt: new Date(startedAt).toISOString(),
               completedAt,
               durationMs: Date.now() - startedAt,
-              ...(agentResult.status === "failed" ? { error: agentResult.error } : {}),
+              ...(agentResult.status === "failed"
+                ? { error: agentResult.error }
+                : {}),
             };
       } catch (error) {
+        if (error instanceof RunBudgetExceededError) {
+          throw error;
+        }
         result = {
           taskId: task.id,
           agentRunId: "unknown",
@@ -215,7 +223,12 @@ export default class TaskScheduler {
       }
 
       this.throwIfAborted(request.signal);
-      const review = await this.safeReview(request, task, result, dependencyResults);
+      const review = await this.safeReview(
+        request,
+        task,
+        result,
+        dependencyResults,
+      );
       this.throwIfAborted(request.signal);
       const reviewedResult = Object.freeze({ ...result, review });
       await emit(request.onEvent, {
@@ -284,6 +297,9 @@ export default class TaskScheduler {
         budget: request.budget,
       });
     } catch (error) {
+      if (error instanceof RunBudgetExceededError) {
+        throw error;
+      }
       return Object.freeze({
         decision: "fail",
         score: 0,

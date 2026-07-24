@@ -1,6 +1,8 @@
 import type { AgentEvent } from "../Agent/AgentEvent.ts";
 import { RunTimedOutError } from "../Agent/RunLimits.ts";
-import SqliteStore from "../Memory/SqliteStore.ts";
+import SqliteStore, {
+  type ThreadCheckpointSnapshot,
+} from "../Memory/SqliteStore.ts";
 import { createToolApprovalPreview } from "../security/ToolPreview.ts";
 import type {
   ToolApprovalDecision,
@@ -21,6 +23,7 @@ type RunRecord = {
   promise: Promise<string>;
   readonly threadId: string;
   readonly startedAt: string;
+  readonly checkpointSnapshot: ThreadCheckpointSnapshot | null;
   status: RunStatus;
   completedAt?: string;
   durationMs?: number;
@@ -58,6 +61,7 @@ export type AgentApplicationOptions = {
 export default class AgentApplication {
   private readonly subscribers = new Set<ApplicationEventHandler>();
   private readonly runs = new Map<string, RunRecord>();
+  private readonly activeRunIdsByThread = new Map<string, string>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
 
   constructor(
@@ -66,7 +70,7 @@ export default class AgentApplication {
   ) {}
 
   hasActiveRuns(): boolean {
-    return [...this.runs.values()].some((run) => !run.settled);
+    return this.activeRunIdsByThread.size > 0;
   }
 
   subscribe(handler: ApplicationEventHandler): () => void {
@@ -85,17 +89,26 @@ export default class AgentApplication {
       throw new Error("Agent input is required.");
     }
 
+    const activeRunId = this.activeRunIdsByThread.get(threadId);
+    if (activeRunId) {
+      throw new Error(
+        `Thread already has an active run: ${threadId} (${activeRunId}).`,
+      );
+    }
+
     const runId = `run_${crypto.randomUUID()}`;
     const startedAt = Date.now();
     const record: RunRecord = {
       promise: Promise.resolve(""),
       threadId,
       startedAt: new Date(startedAt).toISOString(),
+      checkpointSnapshot: this.captureCheckpoints(threadId),
       status: "running",
       cancelError: null,
       settled: false,
     };
     this.runs.set(runId, record);
+    this.activeRunIdsByThread.set(threadId, runId);
     const promise = this.executeRun(runId, threadId, input, startedAt);
     record.promise = promise;
     return runId;
@@ -225,6 +238,7 @@ export default class AgentApplication {
         run.error = serializedError;
         run.completedAt = completedAt;
         run.durationMs = Date.now() - startedAt;
+        this.restoreCheckpoints(run.checkpointSnapshot);
       }
 
       await this.emit({
@@ -234,12 +248,14 @@ export default class AgentApplication {
         durationMs: run?.durationMs ?? Date.now() - startedAt,
         timestamp: completedAt,
       });
-      this.clearFailedRunCheckpoints(threadId);
       throw error;
     } finally {
       const run = this.runs.get(runId);
       if (run) {
         run.settled = true;
+      }
+      if (this.activeRunIdsByThread.get(threadId) === runId) {
+        this.activeRunIdsByThread.delete(threadId);
       }
       this.rejectPendingApprovals(runId);
     }
@@ -343,11 +359,27 @@ export default class AgentApplication {
     }
   }
 
-  private clearFailedRunCheckpoints(threadId: string): void {
+  private captureCheckpoints(
+    threadId: string,
+  ): ThreadCheckpointSnapshot | null {
+    if (!this.options.checkpointPath) return null;
+    return SqliteStore.captureThreadCheckpoints(
+      threadId,
+      this.options.checkpointPath,
+    );
+  }
+
+  private restoreCheckpoints(
+    snapshot: ThreadCheckpointSnapshot | null,
+  ): void {
+    if (!snapshot || !this.options.checkpointPath) return;
     try {
-      SqliteStore.clearThreadCheckpoints(threadId, this.options.checkpointPath);
+      SqliteStore.restoreThreadCheckpoints(
+        snapshot,
+        this.options.checkpointPath,
+      );
     } catch {
-      // Best-effort cleanup only. The original run error should remain visible.
+      // Best-effort rollback only. The original run error remains visible.
     }
   }
 
