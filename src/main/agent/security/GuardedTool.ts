@@ -53,6 +53,13 @@ function summarizeInput(toolName: string, input: unknown): string {
     return `Create skill: ${skillId}`;
   }
 
+  if (
+    ["edit_text_range", "batch_edit_text", "normalize_text"].includes(toolName)
+  ) {
+    const source = filePath ?? "inline text";
+    return `Process text with ${toolName}: ${source}`;
+  }
+
   return filePath ? `Execute ${toolName}: ${filePath}` : `Execute ${toolName}`;
 }
 
@@ -90,7 +97,7 @@ export function guardTools(
           summary: summarizeInput(originalTool.name, input),
           input,
         });
-        const permission = policy.getPermission(originalTool.name);
+        const permission = policy.getPermission(originalTool.name, input);
 
         if (permission === "deny") {
           await emit(options.onEvent, { type: "tool_rejected", request });

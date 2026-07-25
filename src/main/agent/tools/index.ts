@@ -7,6 +7,7 @@ import { createReadFileTool } from "./io/readFile.ts";
 import { createSearchTextTool } from "./io/searchText.ts";
 import { createWriteFileTool } from "./io/writeFile.ts";
 import { createSkillTool } from "./skill/createSkill.ts";
+import { createTextTools } from "./text/index.ts";
 
 export type CreateToolsOptions = {
   readonly skillInstaller?: SkillInstaller;
@@ -22,6 +23,7 @@ export function createTools(options: CreateToolsOptions = {}) {
     createEditFileTool(context),
     createListFilesTool(context),
     createSearchTextTool(context),
+    ...createTextTools(context),
     ...(options.skillInstaller ? [createSkillTool(options.skillInstaller)] : []),
   ];
 }

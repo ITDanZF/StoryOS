@@ -44,5 +44,18 @@ export function createToolApprovalPreview(
     ].join("\n"));
   }
 
+  if (
+    request.toolName === "edit_text_range" ||
+    request.toolName === "batch_edit_text" ||
+    request.toolName === "normalize_text"
+  ) {
+    return truncate([
+      `Text operation: ${request.toolName}`,
+      `Target: ${typeof input.path === "string" ? input.path : "inline text"}`,
+      "",
+      JSON.stringify(input, null, 2),
+    ].join("\n"));
+  }
+
   return "";
 }

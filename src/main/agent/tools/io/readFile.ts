@@ -1,13 +1,14 @@
 import { tool } from "langchain";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
+import { calculateTextRevision } from "../common/revision.ts";
 import { addLineNumbers, readTextFile, sliceLines, truncateResult } from "../common/text.ts";
 
 export function createReadFileTool(context: WorkspaceToolContext) {
   return tool(
     async ({ path, offset, limit }) => {
       const absolutePath = await context.paths.resolveExisting(path);
-      const { content, mtimeMs, size } = await readTextFile(absolutePath);
+      const { content, lineEnding, mtimeMs, size } = await readTextFile(absolutePath);
       const range = sliceLines(content, offset, limit);
       const numberedContent = addLineNumbers(range.selectedLines, range.startLine);
       const truncated = truncateResult(numberedContent);
@@ -18,6 +19,7 @@ export function createReadFileTool(context: WorkspaceToolContext) {
       return [
         `File: ${context.paths.toRelative(absolutePath)}`,
         `Size: ${size} bytes`,
+        `Revision: ${calculateTextRevision(content, lineEnding)}`,
         `Lines: ${range.selectedLines.length}/${range.totalLines}`,
         partial ? "Partial: true" : "Partial: false",
         "",
