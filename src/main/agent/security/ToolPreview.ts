@@ -20,8 +20,10 @@ export function createToolApprovalPreview(
   const input = request.input as Record<string, unknown>;
 
   if (request.toolName === "edit_file") {
-    const oldValue = typeof input.old_string === "string" ? input.old_string : "";
-    const newValue = typeof input.new_string === "string" ? input.new_string : "";
+    const oldValue =
+      typeof input.old_string === "string" ? input.old_string : "";
+    const newValue =
+      typeof input.new_string === "string" ? input.new_string : "";
     return truncate(
       ["--- existing", oldValue, "+++ proposed", newValue].join("\n"),
     );
@@ -35,26 +37,33 @@ export function createToolApprovalPreview(
   if (request.toolName === "create_skill") {
     const id = typeof input.id === "string" ? input.id : "<unknown>";
     const content = typeof input.content === "string" ? input.content : "";
-    return truncate([
-      `Create Skill: ${id}`,
-      `Target: ~/.mini-agent/skills/user/${id}/SKILL.md`,
-      "",
-      "+++ proposed SKILL.md",
-      content,
-    ].join("\n"));
+    return truncate(
+      [
+        `Create Skill: ${id}`,
+        `Target: ~/.mini-agent/skills/user/${id}/SKILL.md`,
+        "",
+        "+++ proposed SKILL.md",
+        content,
+      ].join("\n"),
+    );
   }
 
   if (
     request.toolName === "edit_text_range" ||
     request.toolName === "batch_edit_text" ||
-    request.toolName === "normalize_text"
+    request.toolName === "normalize_text" ||
+    request.toolName === "replace_text" ||
+    request.toolName === "transform_lines" ||
+    request.toolName === "merge_text"
   ) {
-    return truncate([
-      `Text operation: ${request.toolName}`,
-      `Target: ${typeof input.path === "string" ? input.path : "inline text"}`,
-      "",
-      JSON.stringify(input, null, 2),
-    ].join("\n"));
+    return truncate(
+      [
+        `Text operation: ${request.toolName}`,
+        `Target: ${request.toolName === "merge_text" ? (typeof input.output_path === "string" ? input.output_path : "inline result") : typeof input.path === "string" ? input.path : "inline text"}`,
+        "",
+        JSON.stringify(input, null, 2),
+      ].join("\n"),
+    );
   }
 
   return "";

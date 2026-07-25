@@ -7,6 +7,7 @@ export const MAX_SEARCH_LIMIT = 500;
 
 export const DEFAULT_EXCLUDED_DIRS = new Set([
   ".git",
+  ".storyos",
   ".hg",
   ".svn",
   "node_modules",

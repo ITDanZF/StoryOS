@@ -15,7 +15,10 @@ import SkillInstallService from "../skills/SkillInstallService.ts";
 import SkillLoader from "../skills/SkillLoader.ts";
 import SkillScaffoldService from "../skills/SkillScaffoldService.ts";
 import WorkspaceToolContext from "../tools/WorkspaceToolContext.ts";
-import { getWorkspaceLayout, type WorkspaceLayout } from "../workspace/ProjectLayout.ts";
+import {
+  getWorkspaceLayout,
+  type WorkspaceLayout,
+} from "../workspace/ProjectLayout.ts";
 import RunLogStore from "./RunLogStore.ts";
 
 export type ActiveWorkspaceRuntime = {
@@ -41,7 +44,9 @@ type RuntimeResourceScope = {
 function samePath(first: string, second: string): boolean {
   const left = path.resolve(first);
   const right = path.resolve(second);
-  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+  return process.platform === "win32"
+    ? left.toLowerCase() === right.toLowerCase()
+    : left === right;
 }
 
 export default class WorkspaceRuntimeManager {
@@ -67,10 +72,18 @@ export default class WorkspaceRuntimeManager {
     return () => this.subscribers.delete(handler);
   }
 
-  get threads(): ThreadApplication { return this.requireCurrent().threads; }
-  get agent(): AgentApplication { return this.requireCurrent().agent; }
-  get skills(): SkillApplication { return this.requireCurrent().skills; }
-  get activeProjectPath(): string | null { return this.requireCurrent().projectPath; }
+  get threads(): ThreadApplication {
+    return this.requireCurrent().threads;
+  }
+  get agent(): AgentApplication {
+    return this.requireCurrent().agent;
+  }
+  get skills(): SkillApplication {
+    return this.requireCurrent().skills;
+  }
+  get activeProjectPath(): string | null {
+    return this.requireCurrent().projectPath;
+  }
 
   async activate(projectPath: string | null): Promise<void> {
     if (this.current && this.matchesCurrent(projectPath)) return;
@@ -82,7 +95,9 @@ export default class WorkspaceRuntimeManager {
     await this.closeRuntime(previous);
   }
 
-  private async createRuntime(projectPath: string | null): Promise<ActiveWorkspaceRuntime> {
+  private async createRuntime(
+    projectPath: string | null,
+  ): Promise<ActiveWorkspaceRuntime> {
     const resources: RuntimeResourceScope = {
       modelSessions: null,
       runLogs: null,
@@ -93,15 +108,19 @@ export default class WorkspaceRuntimeManager {
 
     try {
       const snapshot = this.projects.getSnapshot();
-      const project = projectPath === null
-        ? null
-        : snapshot.projects.find((item) => samePath(item.path, projectPath));
-      if (projectPath !== null && !project) throw new Error(`Project not found: ${projectPath}`);
+      const project =
+        projectPath === null
+          ? null
+          : snapshot.projects.find((item) => samePath(item.path, projectPath));
+      if (projectPath !== null && !project)
+        throw new Error(`Project not found: ${projectPath}`);
       const layout = project
         ? getWorkspaceLayout(project.path)
         : getWorkspaceLayout(snapshot.systemWorkspace.path, true);
 
-      const threads = new ThreadApplication(new JsonStore(layout.conversationsRoot));
+      const threads = new ThreadApplication(
+        new JsonStore(layout.conversationsRoot),
+      );
       const modelSessions = new Memory({
         checkpointBackend: "sqlite",
         checkpointPath: layout.checkpointPath,
@@ -113,35 +132,46 @@ export default class WorkspaceRuntimeManager {
       });
       const skills = await SkillApplication.create({
         loader: new SkillLoader({ projectSkillRoot: layout.skillsRoot }),
-        scaffold: new SkillScaffoldService({ userSkillRoot: layout.skillsRoot }),
+        scaffold: new SkillScaffoldService({
+          userSkillRoot: layout.skillsRoot,
+        }),
         draft: new SkillDraftService(model),
       });
       const skillInstaller = new SkillInstallService(skills);
       const skillContextProvider = new SkillContextProviderService(skills, {
         threadSkillStateProvider: threads,
       });
-      const workspaceContext = new WorkspaceToolContext(layout.filesRoot);
+      const workspaceContext = new WorkspaceToolContext(
+        layout.filesRoot,
+        path.join(layout.stateRoot, "text-index"),
+      );
       const runLogs = new RunLogStore(layout.runsRoot);
       resources.runLogs = runLogs;
       const initialRuns = await runLogs.loadRunSnapshots(100);
-      const agent = new AgentApplication(createAgentOrchestrator({
-        model,
-        skillContextProvider,
-        skillDefinitions: skills.listSkillDefinitions(),
-        skillDefinitionsProvider: () => skills.listSkillDefinitions(),
-        skillInstaller,
-        workspaceContext,
-      }), {
-        checkpointPath: layout.checkpointPath,
-        eventRecorder: runLogs,
-        initialRuns,
-        maxRetainedRuns: 100,
-      });
+      const agent = new AgentApplication(
+        createAgentOrchestrator({
+          model,
+          skillContextProvider,
+          skillDefinitions: skills.listSkillDefinitions(),
+          skillDefinitionsProvider: () => skills.listSkillDefinitions(),
+          skillInstaller,
+          workspaceContext,
+        }),
+        {
+          checkpointPath: layout.checkpointPath,
+          eventRecorder: runLogs,
+          initialRuns,
+          maxRetainedRuns: 100,
+        },
+      );
       resources.agent = agent;
       const unsubscribe = agent.subscribe((event) =>
-        Promise.allSettled([...this.subscribers].map((subscriber) => subscriber(event))).then(() => {
+        Promise.allSettled(
+          [...this.subscribers].map((subscriber) => subscriber(event)),
+        ).then(() => {
           // Subscriber failures are isolated from the active agent run.
-        }));
+        }),
+      );
       resources.unsubscribe = unsubscribe;
       return Object.freeze({
         projectPath: project?.path ?? null,
@@ -161,8 +191,11 @@ export default class WorkspaceRuntimeManager {
   }
 
   async closeForProjectMutation(projectPath: string): Promise<void> {
-    if (!this.current?.projectPath ||
-      !samePath(this.current.projectPath, projectPath)) return;
+    if (
+      !this.current?.projectPath ||
+      !samePath(this.current.projectPath, projectPath)
+    )
+      return;
     this.assertCanLeaveCurrent();
     await this.closeCurrent();
   }
@@ -182,7 +215,8 @@ export default class WorkspaceRuntimeManager {
   }
 
   private requireCurrent(): ActiveWorkspaceRuntime {
-    if (!this.current) throw new Error("StoryOS workspace runtime is not initialized.");
+    if (!this.current)
+      throw new Error("StoryOS workspace runtime is not initialized.");
     return this.current;
   }
 
@@ -196,7 +230,9 @@ export default class WorkspaceRuntimeManager {
 
   private assertCanLeaveCurrent(): void {
     if (this.current?.agent.hasActiveRuns()) {
-      throw new Error("当前项目仍有 AI 任务运行，请先停止任务后再切换、重命名或删除项目。");
+      throw new Error(
+        "当前项目仍有 AI 任务运行，请先停止任务后再切换、重命名或删除项目。",
+      );
     }
   }
 
@@ -213,9 +249,7 @@ export default class WorkspaceRuntimeManager {
     await runtime.close();
   }
 
-  private closeResourceScope(
-    resources: RuntimeResourceScope,
-  ): Promise<void> {
+  private closeResourceScope(resources: RuntimeResourceScope): Promise<void> {
     if (resources.closePromise) return resources.closePromise;
     resources.closePromise = (async () => {
       try {

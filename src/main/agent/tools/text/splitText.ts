@@ -2,6 +2,7 @@ import { tool } from "langchain";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { offsetToPosition } from "./ranges.ts";
+import { createStructuralChunks } from "./indexing/structuralChunks.ts";
 import {
   loadTextSource,
   stringifyTextToolResult,
@@ -46,8 +47,10 @@ function characterUnits(
   for (const character of content) {
     const start = offset;
     offset += character.length;
-    const isCjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
-      .test(character);
+    const isCjk =
+      /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(
+        character,
+      );
     const size = estimatedTokens
       ? isCjk
         ? 1
@@ -62,7 +65,13 @@ function characterUnits(
 
 function getUnits(
   content: string,
-  strategy: "lines" | "paragraphs" | "sentences" | "characters" | "estimated_tokens",
+  strategy:
+    | "lines"
+    | "paragraphs"
+    | "sentences"
+    | "characters"
+    | "estimated_tokens"
+    | "structure",
 ): SplitUnit[] {
   switch (strategy) {
     case "lines":
@@ -75,6 +84,12 @@ function getUnits(
       return characterUnits(content, false);
     case "estimated_tokens":
       return characterUnits(content, true);
+    case "structure":
+      return createStructuralChunks(content).map((chunk) => ({
+        start: chunk.startOffset,
+        end: chunk.endOffset,
+        size: 1,
+      }));
   }
 }
 
@@ -170,7 +185,7 @@ export function createSplitTextTool(context: WorkspaceToolContext) {
     {
       name: "split_text",
       description: [
-        "Split text into bounded chunks by lines, paragraphs, sentences, Unicode characters, or estimated tokens.",
+        "Split text into bounded chunks by document structure, lines, paragraphs, sentences, Unicode characters, or estimated tokens.",
         "Supports overlap, chunk limits, exact positions, and metadata-only results.",
       ].join(" "),
       schema: z.object({
@@ -181,6 +196,7 @@ export function createSplitTextTool(context: WorkspaceToolContext) {
           "sentences",
           "characters",
           "estimated_tokens",
+          "structure",
         ]),
         max_size: z.number().positive().max(100_000),
         overlap: z.number().min(0).max(99_999).optional(),

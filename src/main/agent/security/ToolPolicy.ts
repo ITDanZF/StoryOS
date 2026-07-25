@@ -22,12 +22,20 @@ const DEFAULT_PERMISSIONS: Readonly<Record<string, ToolPermission>> =
     extract_text: "allow",
     split_text: "allow",
     validate_text: "allow",
+    inspect_text: "allow",
+    analyze_text_structure: "allow",
+    ranked_search_text: "allow",
+    find_similar_text: "allow",
+    select_text_context: "allow",
     delegate_task: "allow",
     write_file: "ask",
     edit_file: "ask",
     edit_text_range: "ask",
     batch_edit_text: "ask",
     normalize_text: "ask",
+    replace_text: "ask",
+    transform_lines: "ask",
+    merge_text: "ask",
     create_skill: "ask",
   });
 
@@ -35,8 +43,9 @@ export default class ToolPolicy {
   private readonly sessionAllowedTools = new Set<string>();
 
   constructor(
-    private readonly permissions: Readonly<Record<string, ToolPermission>> =
-      DEFAULT_PERMISSIONS,
+    private readonly permissions: Readonly<
+      Record<string, ToolPermission>
+    > = DEFAULT_PERMISSIONS,
   ) {}
 
   getPermission(toolName: string, input?: unknown): ToolPermission {
@@ -47,12 +56,32 @@ export default class ToolPolicy {
     const permission = this.permissions[toolName] ?? "deny";
     if (
       permission === "ask" &&
-      ["edit_text_range", "batch_edit_text", "normalize_text"].includes(toolName) &&
+      [
+        "edit_text_range",
+        "batch_edit_text",
+        "normalize_text",
+        "replace_text",
+        "transform_lines",
+      ].includes(toolName) &&
       input &&
       typeof input === "object"
     ) {
       const values = input as Record<string, unknown>;
       if (typeof values.text === "string" || values.preview_only === true) {
+        return "allow";
+      }
+    }
+    if (
+      permission === "ask" &&
+      toolName === "merge_text" &&
+      input &&
+      typeof input === "object"
+    ) {
+      const values = input as Record<string, unknown>;
+      if (
+        typeof values.output_path !== "string" ||
+        values.preview_only === true
+      ) {
         return "allow";
       }
     }

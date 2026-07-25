@@ -39,6 +39,8 @@ function summarizeInput(toolName: string, input: unknown): string {
 
   const values = input as Record<string, unknown>;
   const filePath = typeof values.path === "string" ? values.path : undefined;
+  const outputPath =
+    typeof values.output_path === "string" ? values.output_path : undefined;
 
   if (toolName === "edit_file" && filePath) {
     return `Edit file: ${filePath}`;
@@ -52,9 +54,18 @@ function summarizeInput(toolName: string, input: unknown): string {
     const skillId = typeof values.id === "string" ? values.id : "<unknown>";
     return `Create skill: ${skillId}`;
   }
+  if (toolName === "merge_text") {
+    return `Merge text${outputPath ? ` into: ${outputPath}` : " inline"}`;
+  }
 
   if (
-    ["edit_text_range", "batch_edit_text", "normalize_text"].includes(toolName)
+    [
+      "edit_text_range",
+      "batch_edit_text",
+      "normalize_text",
+      "replace_text",
+      "transform_lines",
+    ].includes(toolName)
   ) {
     const source = filePath ?? "inline text";
     return `Process text with ${toolName}: ${source}`;
