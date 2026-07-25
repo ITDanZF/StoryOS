@@ -3,7 +3,7 @@ import WorkspaceLayout from "../layouts/workspace/WorkspaceLayout.tsx";
 import AboutPage from "../pages/about/AboutPage.tsx";
 import ConversationPage from "../pages/conversation/ConversationPage.tsx";
 import SettingsPage from "../pages/settings/SettingsPage.tsx";
-import RouteErrorPage from "./RouteErrorPage.tsx";
+import RouteErrorPage from "../pages/404/RouteErrorPage.tsx";
 
 export const router = createHashRouter([
   {
