@@ -1,4 +1,5 @@
 export { default as AgentApplication } from "./AgentApplication.ts";
+export { default as NovelApplication } from "./NovelApplication.ts";
 export { default as ThreadApplication } from "./ThreadApplication.ts";
 export type {
   ApplicationEvent,
@@ -10,6 +11,21 @@ export type {
 } from "./contracts.ts";
 export type { AgentRunner, AgentRunnerRunOptions } from "./ports.ts";
 export type { ApplicationEventRecorder, RunHistoryStore } from "./runPorts.ts";
+export type {
+  ChapterDto,
+  ChapterRevisionDto,
+  NovelDto,
+  VolumeDto,
+} from "./novelContracts.ts";
+export type {
+  ChapterRecord,
+  ChapterRevisionRecord,
+  ChapterStatus,
+  NovelPersistence,
+  NovelRecord,
+  NovelStatus,
+  VolumeRecord,
+} from "./novelPorts.ts";
 export type {
   AppendMessageRequest,
   CreateThreadRequest,

@@ -2,6 +2,7 @@ import path from "node:path";
 import { createAgentOrchestrator } from "../Agent/orchestration/index.ts";
 import AgentApplication from "../application/AgentApplication.ts";
 import type { ApplicationEventHandler } from "../application/contracts.ts";
+import NovelApplication from "../application/NovelApplication.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ThreadApplication from "../application/ThreadApplication.ts";
 import Memory from "../Memory/index.ts";
@@ -15,6 +16,7 @@ import SkillLoader from "../skills/SkillLoader.ts";
 import SkillScaffoldService from "../skills/SkillScaffoldService.ts";
 import WorkspaceToolContext from "../tools/WorkspaceToolContext.ts";
 import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
+import SqliteNovelStore from "../storage/project/SqliteNovelStore.ts";
 import SqliteRunStore from "../storage/project/SqliteRunStore.ts";
 import SqliteThreadStore from "../storage/project/SqliteThreadStore.ts";
 import SqliteTextIndexStore from "../storage/project/SqliteTextIndexStore.ts";
@@ -27,6 +29,7 @@ export type ActiveWorkspaceRuntime = {
   readonly projectPath: string | null;
   readonly layout: WorkspaceLayout;
   readonly threads: ThreadApplication;
+  readonly novels: NovelApplication;
   readonly agent: AgentApplication;
   readonly skills: SkillApplication;
   readonly model: Model;
@@ -77,6 +80,9 @@ export default class WorkspaceRuntimeManager {
   get threads(): ThreadApplication {
     return this.requireCurrent().threads;
   }
+  get novels(): NovelApplication {
+    return this.requireCurrent().novels;
+  }
   get agent(): AgentApplication {
     return this.requireCurrent().agent;
   }
@@ -124,6 +130,9 @@ export default class WorkspaceRuntimeManager {
       resources.projectDatabase = projectDatabase;
       const threads = new ThreadApplication(
         new SqliteThreadStore(projectDatabase.handle),
+      );
+      const novels = new NovelApplication(
+        new SqliteNovelStore(projectDatabase.handle),
       );
       const modelSessions = new Memory({
         checkpointBackend: "sqlite",
@@ -181,6 +190,7 @@ export default class WorkspaceRuntimeManager {
         projectPath: project?.path ?? null,
         layout,
         threads,
+        novels,
         agent,
         skills,
         model,
