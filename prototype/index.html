@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StoryOS · 书籍创作工作区原型</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.8A1.8 1.8 0 0 1 4.8 6H9l2 2h8.2A1.8 1.8 0 0 1 21 9.8v7.4a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 17.2Z"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 3v-3.5A2 2 0 0 1 3 15V7a2 2 0 0 1 2-2Z"/><path d="M7 9h10M7 13h7"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11a2 2 0 0 1 2 2v15a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v17a2.5 2.5 0 0 1 2.5-2.5H20Z"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-panel-left" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-panel-right" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.3 4.2L17.5 9l-4.2 1.8L12 15l-1.3-4.2L6.5 9l4.2-1.8Z"/><path d="m19 14 .7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7Z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+  </svg>
+
+  <main class="app-shell" id="app">
+    <header class="titlebar">
+      <strong>StoryOS</strong>
+      <div class="window-actions" aria-label="窗口操作">
+        <button aria-label="最小化">−</button><button aria-label="最大化">□</button><button class="window-close" aria-label="关闭">×</button>
+      </div>
+    </header>
+
+    <aside class="global-sidebar" aria-label="全局导航">
+      <div class="brand">
+        <span class="brand-mark"><svg><use href="#i-spark"/></svg></span>
+        <span><strong>StoryOS</strong><small>AI WORKSPACE</small></span>
+      </div>
+
+      <button class="new-chat" type="button" data-action="new-chat"><svg><use href="#i-plus"/></svg><span>新建对话</span><kbd>Ctrl K</kbd></button>
+
+      <section class="sidebar-section projects-section">
+        <header><span><svg><use href="#i-folder"/></svg>项目</span><button type="button" aria-label="新建项目"><svg><use href="#i-plus"/></svg></button></header>
+        <div class="project-row selected"><svg class="disclosure open"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>myStory</strong></div>
+        <button class="project-book active" type="button"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>12章</small></button>
+      </section>
+
+      <section class="sidebar-section conversations-section">
+        <header><span><svg><use href="#i-message"/></svg>对话</span><button type="button" data-action="new-chat" aria-label="新建对话"><svg><use href="#i-plus"/></svg></button></header>
+        <nav id="conversation-list">
+          <button class="conversation-row active" type="button" data-conversation="chapter"><span class="tree-rail"></span><span>第一章创作助手</span><small>刚刚</small></button>
+          <button class="conversation-row" type="button" data-conversation="world"><span class="tree-rail"></span><span>世界观讨论</span><small>昨天</small></button>
+          <button class="conversation-row" type="button" data-conversation="outline"><span class="tree-rail"></span><span>情节大纲推演</span><small>周一</small></button>
+        </nav>
+      </section>
+
+      <button class="settings-row" type="button"><span><svg><use href="#i-settings"/></svg>设置</span><svg><use href="#i-chevron"/></svg></button>
+    </aside>
+
+    <section class="workspace">
+      <header class="workspace-header">
+        <div class="breadcrumb"><strong>myStory</strong><span>/</span><span id="breadcrumb-volume">第一卷</span><span>/</span><span id="breadcrumb-chapter">第一章</span></div>
+        <div class="workspace-actions">
+          <span class="connection"><i></i>已连接</span>
+          <button class="icon-button" type="button" data-action="toggle-toc" aria-label="显示或隐藏目录" title="显示或隐藏目录 (Ctrl+B)"><svg><use href="#i-panel-left"/></svg></button>
+          <button class="icon-button" type="button" data-action="toggle-ai" aria-label="显示或隐藏 AI" title="显示或隐藏 AI (Ctrl+J)"><svg><use href="#i-panel-right"/></svg></button>
+        </div>
+      </header>
+
+      <div class="creation-workspace">
+        <aside class="book-panel" aria-label="书籍目录">
+          <div class="book-panel-header">
+            <div><span class="eyebrow">当前书籍</span><h1>长夜</h1></div>
+            <button class="icon-button subtle" type="button" aria-label="书籍菜单"><svg><use href="#i-more"/></svg></button>
+          </div>
+          <label class="catalog-search"><svg><use href="#i-search"/></svg><input type="search" placeholder="搜索章节" aria-label="搜索章节"></label>
+          <div class="catalog-tabs" role="tablist"><button class="active" type="button">目录</button><button type="button" disabled title="后续功能">设定</button><button type="button" disabled title="后续功能">关系</button></div>
+          <nav class="chapter-tree" id="chapter-tree" aria-label="章节目录">
+            <button class="overview-row" type="button"><svg><use href="#i-book"/></svg><span>书籍概览</span><small>42,680 字</small></button>
+            <section class="volume open" data-volume="第一卷">
+              <header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>第一卷</strong><small>城市之夜</small></span></button><button class="chapter-add" type="button" aria-label="在第一卷新建章节"><svg><use href="#i-plus"/></svg></button></header>
+              <div class="volume-chapters">
+                <button class="chapter-row active" type="button" data-chapter="chapter-1"><span class="chapter-index">01</span><span><strong>雨夜</strong><small>草稿 · 1,248 字</small></span><i></i></button>
+                <button class="chapter-row" type="button" data-chapter="chapter-2"><span class="chapter-index">02</span><span><strong>来客</strong><small>草稿 · 2,016 字</small></span><i></i></button>
+                <button class="chapter-row" type="button" data-chapter="chapter-3"><span class="chapter-index">03</span><span><strong>旧照片</strong><small>大纲 · 386 字</small></span><i></i></button>
+              </div>
+            </section>
+            <section class="volume open" data-volume="第二卷">
+              <header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>第二卷</strong><small>黎明之前</small></span></button><button class="chapter-add" type="button" aria-label="在第二卷新建章节"><svg><use href="#i-plus"/></svg></button></header>
+              <div class="volume-chapters">
+                <button class="chapter-row" type="button" data-chapter="chapter-4"><span class="chapter-index">04</span><span><strong>回声</strong><small>大纲 · 524 字</small></span><i></i></button>
+                <button class="chapter-row" type="button" data-chapter="chapter-5"><span class="chapter-index">05</span><span><strong>破晓</strong><small>未开始</small></span><i></i></button>
+              </div>
+            </section>
+          </nav>
+          <button class="catalog-new" type="button" data-action="add-chapter"><svg><use href="#i-plus"/></svg>新建章节</button>
+        </aside>
+
+        <div class="resize-handle toc-resizer" role="separator" aria-label="调整目录宽度"></div>
+
+        <article class="editor-panel">
+          <header class="editor-header">
+            <div class="chapter-heading"><span class="chapter-kicker" id="chapter-kicker">第一卷 · 第 1 章</span><input id="chapter-title" value="雨夜" aria-label="章节标题"></div>
+            <div class="editor-meta"><span class="save-status saved" id="save-status"><svg><use href="#i-check"/></svg>已保存</span><span id="word-count">1,248 字</span><button class="icon-button subtle" type="button" aria-label="历史版本"><svg><use href="#i-history"/></svg></button><button class="icon-button subtle" type="button" aria-label="章节菜单"><svg><use href="#i-more"/></svg></button></div>
+          </header>
+          <div class="editor-toolbar" aria-label="编辑工具栏">
+            <button type="button" title="正文">正文⌄</button><span></span><button type="button"><b>B</b></button><button type="button"><i>I</i></button><button type="button">“</button><span></span><button class="ask-ai" type="button" data-action="ask-selection"><svg><use href="#i-spark"/></svg>询问 AI</button>
+          </div>
+          <div class="editor-scroll">
+            <div class="document-page">
+              <div class="chapter-editor" id="chapter-editor" contenteditable="true" spellcheck="false" aria-label="章节正文"></div>
+              <footer><span id="document-position">第 1 章</span><span>StoryOS 自动保存已开启</span></footer>
+            </div>
+          </div>
+        </article>
+
+        <div class="resize-handle ai-resizer" role="separator" aria-label="调整 AI 对话宽度"></div>
+
+        <aside class="ai-panel" aria-label="AI 对话">
+          <header class="ai-header">
+            <div class="ai-title"><span class="ai-avatar"><svg><use href="#i-spark"/></svg></span><span><strong id="conversation-title">第一章创作助手</strong><small><i></i> AI 助手在线</small></span></div>
+            <div><button class="icon-button subtle" type="button" data-action="new-chat" aria-label="新建对话"><svg><use href="#i-plus"/></svg></button><button class="icon-button subtle" type="button" data-action="focus-ai" aria-label="展开对话"><svg><use href="#i-expand"/></svg></button><button class="icon-button subtle" type="button" aria-label="对话菜单"><svg><use href="#i-more"/></svg></button></div>
+          </header>
+          <div class="context-bar"><span>上下文</span><button type="button" id="context-chip"><svg><use href="#i-book"/></svg><span>第一章 · 雨夜</span><b>×</b></button><button class="context-add" type="button"><svg><use href="#i-plus"/></svg></button></div>
+          <div class="messages" id="messages" aria-live="polite">
+            <div class="date-divider"><span>今天</span></div>
+            <article class="message user-message"><p>帮我看看第一章开场的氛围是否足够紧张，尤其是林默走进巷子的这一段。</p></article>
+            <article class="message assistant-message">
+              <div class="message-author"><span class="ai-avatar small"><svg><use href="#i-spark"/></svg></span><strong>StoryOS</strong></div>
+              <p>整体的雨夜氛围已经成立，但紧张感出现得稍晚。可以把“异常”提前到林默进入巷子之前，让读者先察觉危险。</p>
+              <p>我建议收紧脚步声这一段，并减少对街景的解释，让感官信息更集中。</p>
+              <section class="suggestion-card">
+                <header><span><svg><use href="#i-spark"/></svg>修改建议</span><small>替换选中段落</small></header>
+                <div><del>他慢慢地向巷子深处走去，雨水落在肩上。</del><ins>脚步声在雨里多出了一拍。林默停下，那声音也随之消失。</ins></div>
+                <footer><button type="button" class="secondary">查看差异</button><button type="button" class="primary" data-action="apply-suggestion">应用到正文</button></footer>
+              </section>
+            </article>
+          </div>
+          <form class="ai-composer" id="ai-composer">
+            <div class="composer-scope"><span><svg><use href="#i-folder"/></svg>项目 / myStory</span><span>·</span><strong id="composer-chapter">第一章</strong></div>
+            <textarea id="ai-input" rows="3" placeholder="输入消息，和 AI 一起打磨这一章……" aria-label="发送消息"></textarea>
+            <footer><span>Enter 发送 · Shift + Enter 换行</span><button type="submit" aria-label="发送"><svg><use href="#i-send"/></svg></button></footer>
+          </form>
+        </aside>
+
+        <button class="restore-panel restore-toc" type="button" data-action="toggle-toc"><svg><use href="#i-panel-left"/></svg><span>目录</span></button>
+        <button class="restore-panel restore-ai" type="button" data-action="toggle-ai"><svg><use href="#i-spark"/></svg><span>AI</span></button>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
