@@ -40,20 +40,63 @@
         <span><strong>StoryOS</strong><small>AI WORKSPACE</small></span>
       </div>
 
-      <button class="new-chat" type="button" data-action="new-chat"><svg><use href="#i-plus"/></svg><span>新建对话</span><kbd>Ctrl K</kbd></button>
+      <button class="new-chat" type="button" data-action="new-global-chat"><svg><use href="#i-plus"/></svg><span>新建对话</span><kbd>Ctrl K</kbd></button>
 
       <section class="sidebar-section projects-section">
-        <header><span><svg><use href="#i-folder"/></svg>项目</span><button type="button" aria-label="新建项目"><svg><use href="#i-plus"/></svg></button></header>
-        <div class="project-row selected"><svg class="disclosure open"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>myStory</strong></div>
-        <button class="project-book active" type="button"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>12章</small></button>
+        <header><span><svg><use href="#i-folder"/></svg>项目</span><button type="button" data-action="new-project" aria-label="新建项目"><svg><use href="#i-plus"/></svg></button></header>
+        <div class="project-tree" id="project-tree">
+          <p class="sidebar-empty" id="empty-projects" hidden>暂无项目</p>
+          <section class="project-node open selected" data-project="myStory">
+            <button class="project-row" type="button" data-action="toggle-project" aria-expanded="true">
+              <svg class="disclosure open"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>myStory</strong>
+            </button>
+            <div class="project-children">
+              <button class="project-book active" type="button" data-project="myStory"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>12章</small></button>
+              <div class="project-conversations-title"><span><svg><use href="#i-message"/></svg>项目对话</span><button type="button" data-action="new-chat" data-project="myStory" aria-label="在 myStory 中新建对话"><svg><use href="#i-plus"/></svg></button></div>
+              <nav aria-label="myStory 的对话">
+                <button class="conversation-row active" type="button" data-project="myStory" data-conversation="chapter"><span class="tree-rail"></span><span>第一章创作助手</span><small>刚刚</small></button>
+                <button class="conversation-row" type="button" data-project="myStory" data-conversation="world"><span class="tree-rail"></span><span>世界观讨论</span><small>昨天</small></button>
+                <button class="conversation-row" type="button" data-project="myStory" data-conversation="outline"><span class="tree-rail"></span><span>情节大纲推演</span><small>周一</small></button>
+                <p class="sidebar-empty conversation-empty" hidden>暂无对话</p>
+              </nav>
+            </div>
+          </section>
+
+          <section class="project-node" data-project="starSea">
+            <button class="project-row" type="button" data-action="toggle-project" aria-expanded="false">
+              <svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>星海纪元</strong>
+            </button>
+            <div class="project-children">
+              <button class="project-book" type="button" data-project="starSea"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>8章</small></button>
+              <div class="project-conversations-title"><span><svg><use href="#i-message"/></svg>项目对话</span><button type="button" data-action="new-chat" data-project="starSea" aria-label="在星海纪元中新建对话"><svg><use href="#i-plus"/></svg></button></div>
+              <nav aria-label="星海纪元的对话">
+                <button class="conversation-row" type="button" data-project="starSea" data-conversation="character"><span class="tree-rail"></span><span>主角设定讨论</span><small>2小时前</small></button>
+                <button class="conversation-row" type="button" data-project="starSea" data-conversation="volume"><span class="tree-rail"></span><span>第一卷结构梳理</span><small>周二</small></button>
+                <p class="sidebar-empty conversation-empty" hidden>暂无对话</p>
+              </nav>
+            </div>
+          </section>
+
+          <section class="project-node" data-project="mistHarbor">
+            <button class="project-row" type="button" data-action="toggle-project" aria-expanded="false">
+              <svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>雾港来信</strong>
+            </button>
+            <div class="project-children">
+              <button class="project-book" type="button" data-project="mistHarbor"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>5章</small></button>
+              <div class="project-conversations-title"><span><svg><use href="#i-message"/></svg>项目对话</span><button type="button" data-action="new-chat" data-project="mistHarbor" aria-label="在雾港来信中新建对话"><svg><use href="#i-plus"/></svg></button></div>
+              <nav aria-label="雾港来信的对话">
+                <button class="conversation-row" type="button" data-project="mistHarbor" data-conversation="clue"><span class="tree-rail"></span><span>线索一致性检查</span><small>周三</small></button>
+                <p class="sidebar-empty conversation-empty" hidden>暂无对话</p>
+              </nav>
+            </div>
+          </section>
+        </div>
       </section>
 
-      <section class="sidebar-section conversations-section">
-        <header><span><svg><use href="#i-message"/></svg>对话</span><button type="button" data-action="new-chat" aria-label="新建对话"><svg><use href="#i-plus"/></svg></button></header>
-        <nav id="conversation-list">
-          <button class="conversation-row active" type="button" data-conversation="chapter"><span class="tree-rail"></span><span>第一章创作助手</span><small>刚刚</small></button>
-          <button class="conversation-row" type="button" data-conversation="world"><span class="tree-rail"></span><span>世界观讨论</span><small>昨天</small></button>
-          <button class="conversation-row" type="button" data-conversation="outline"><span class="tree-rail"></span><span>情节大纲推演</span><small>周一</small></button>
+      <section class="sidebar-section global-conversations-section">
+        <header><span><svg><use href="#i-message"/></svg>对话</span><button type="button" data-action="new-global-chat" aria-label="新建全局对话"><svg><use href="#i-plus"/></svg></button></header>
+        <nav id="global-conversation-list" aria-label="全局对话">
+          <p class="sidebar-empty" id="empty-global-conversations">暂无对话</p>
         </nav>
       </section>
 
@@ -62,7 +105,7 @@
 
     <section class="workspace">
       <header class="workspace-header">
-        <div class="breadcrumb"><strong>myStory</strong><span>/</span><span id="breadcrumb-volume">第一卷</span><span>/</span><span id="breadcrumb-chapter">第一章</span></div>
+        <div class="breadcrumb"><strong id="current-project-name">myStory</strong><span>/</span><span id="breadcrumb-volume">第一卷</span><span>/</span><span id="breadcrumb-chapter">第一章</span></div>
         <div class="workspace-actions">
           <span class="connection"><i></i>已连接</span>
           <button class="icon-button" type="button" data-action="toggle-toc" aria-label="显示或隐藏目录" title="显示或隐藏目录 (Ctrl+B)"><svg><use href="#i-panel-left"/></svg></button>
@@ -73,7 +116,7 @@
       <div class="creation-workspace">
         <aside class="book-panel" aria-label="书籍目录">
           <div class="book-panel-header">
-            <div><span class="eyebrow">当前书籍</span><h1>长夜</h1></div>
+            <div><span class="eyebrow">当前书籍</span><h1 id="current-book-title">长夜</h1></div>
             <button class="icon-button subtle" type="button" aria-label="书籍菜单"><svg><use href="#i-more"/></svg></button>
           </div>
           <label class="catalog-search"><svg><use href="#i-search"/></svg><input type="search" placeholder="搜索章节" aria-label="搜索章节"></label>
@@ -140,7 +183,7 @@
             </article>
           </div>
           <form class="ai-composer" id="ai-composer">
-            <div class="composer-scope"><span><svg><use href="#i-folder"/></svg>项目 / myStory</span><span>·</span><strong id="composer-chapter">第一章</strong></div>
+            <div class="composer-scope"><span><svg><use href="#i-folder"/></svg>项目 / <b id="composer-project">myStory</b></span><span>·</span><strong id="composer-chapter">第一章</strong></div>
             <textarea id="ai-input" rows="3" placeholder="输入消息，和 AI 一起打磨这一章……" aria-label="发送消息"></textarea>
             <footer><span>Enter 发送 · Shift + Enter 换行</span><button type="submit" aria-label="发送"><svg><use href="#i-send"/></svg></button></footer>
           </form>

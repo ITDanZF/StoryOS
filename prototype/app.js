@@ -56,6 +56,12 @@ const chapters = {
   }
 };
 
+const projects = {
+  myStory: { name: "myStory", bookTitle: "长夜" },
+  starSea: { name: "星海纪元", bookTitle: "星海无声" },
+  mistHarbor: { name: "雾港来信", bookTitle: "潮痕" }
+};
+
 const app = document.querySelector("#app");
 const editor = document.querySelector("#chapter-editor");
 const titleInput = document.querySelector("#chapter-title");
@@ -65,6 +71,8 @@ const messages = document.querySelector("#messages");
 const aiInput = document.querySelector("#ai-input");
 const toast = document.querySelector("#toast");
 let activeChapterId = null;
+let activeProjectId = "myStory";
+let activeConversationScope = "project";
 let saveTimer = null;
 let toastTimer = null;
 
@@ -122,7 +130,7 @@ function renderChapter(id) {
   document.querySelector("#document-position").textContent = `第 ${chapter.number} 章`;
   document.querySelector("#composer-chapter").textContent = `第${chapter.number}章`;
   document.querySelector("#context-chip span").textContent = `第${chapter.number}章 · ${chapter.title}`;
-  document.querySelector("#context-chip").hidden = false;
+  document.querySelector("#context-chip").hidden = activeConversationScope === "global";
   titleInput.value = chapter.title;
   editor.innerHTML = chapter.content.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
   wordCount.textContent = `${chapter.words.toLocaleString("zh-CN")} 字`;
@@ -140,6 +148,93 @@ function showToast(text) {
   toast.textContent = text;
   toast.classList.add("visible");
   toastTimer = setTimeout(() => toast.classList.remove("visible"), 2200);
+}
+
+function openProjectNode(projectId) {
+  document.querySelectorAll(".project-node").forEach((node) => {
+    const isTarget = node.dataset.project === projectId;
+    node.classList.toggle("open", isTarget);
+    const toggle = node.querySelector('[data-action="toggle-project"]');
+    toggle.setAttribute("aria-expanded", String(isTarget));
+    toggle.querySelector(".disclosure").classList.toggle("open", isTarget);
+  });
+}
+
+function activateProject(projectId) {
+  const project = projects[projectId];
+  if (!project) return;
+  activeProjectId = projectId;
+  openProjectNode(projectId);
+  document.querySelectorAll(".project-node").forEach((node) => node.classList.toggle("selected", node.dataset.project === projectId));
+  document.querySelectorAll(".project-book").forEach((button) => button.classList.toggle("active", button.dataset.project === projectId));
+  document.querySelector("#current-project-name").textContent = project.name;
+  document.querySelector("#current-book-title").textContent = project.bookTitle;
+  document.querySelector("#composer-project").textContent = project.name;
+}
+
+function selectConversation(row) {
+  activeConversationScope = "project";
+  activateProject(row.dataset.project);
+  document.querySelectorAll(".conversation-row").forEach((item) => item.classList.toggle("active", item === row));
+  document.querySelectorAll(".global-conversation-row").forEach((item) => item.classList.remove("active"));
+  document.querySelector("#conversation-title").textContent = row.querySelector("span:nth-child(2)").textContent;
+  document.querySelector("#composer-chapter").textContent = `第${chapters[activeChapterId].number}章`;
+  document.querySelector("#context-chip").hidden = false;
+  app.classList.remove("ai-collapsed");
+}
+
+function updateSidebarEmptyStates() {
+  document.querySelector("#empty-projects").hidden = document.querySelectorAll(".project-node").length > 0;
+  document.querySelectorAll(".project-node").forEach((node) => {
+    const empty = node.querySelector(".conversation-empty");
+    empty.hidden = node.querySelectorAll(".conversation-row").length > 0;
+  });
+  document.querySelector("#empty-global-conversations").hidden =
+    document.querySelectorAll(".global-conversation-row").length > 0;
+}
+
+function selectGlobalConversation(row) {
+  activeConversationScope = "global";
+  document.querySelectorAll(".conversation-row").forEach((item) => item.classList.remove("active"));
+  document.querySelectorAll(".global-conversation-row").forEach((item) => item.classList.toggle("active", item === row));
+  document.querySelector("#conversation-title").textContent = row.querySelector("span").textContent;
+  document.querySelector("#composer-project").textContent = "全局对话";
+  document.querySelector("#composer-chapter").textContent = "无书籍上下文";
+  document.querySelector("#context-chip").hidden = true;
+  app.classList.remove("ai-collapsed");
+}
+
+function createGlobalConversation() {
+  const list = document.querySelector("#global-conversation-list");
+  const row = document.createElement("button");
+  row.className = "global-conversation-row";
+  row.type = "button";
+  row.dataset.conversation = `global-${Date.now()}`;
+  row.innerHTML = "<span>新对话</span><small>刚刚</small>";
+  list.prepend(row);
+  row.addEventListener("click", () => selectGlobalConversation(row));
+  updateSidebarEmptyStates();
+  selectGlobalConversation(row);
+  showToast("已创建全局对话，不携带任何项目或书籍上下文");
+  aiInput.focus();
+}
+
+function createProjectConversation(projectId) {
+  activateProject(projectId);
+  const projectNode = document.querySelector(`.project-node[data-project="${projectId}"]`);
+  const nav = projectNode.querySelector("nav");
+  const row = document.createElement("button");
+  row.className = "conversation-row";
+  row.type = "button";
+  row.dataset.project = projectId;
+  row.dataset.conversation = `new-${Date.now()}`;
+  row.innerHTML = '<span class="tree-rail"></span><span>新对话</span><small>刚刚</small>';
+  nav.prepend(row);
+  row.addEventListener("click", () => selectConversation(row));
+  updateSidebarEmptyStates();
+  selectConversation(row);
+  showToast(`已在「${projects[projectId].name}」中创建对话`);
+  aiInput.focus();
 }
 
 function appendMessage(role, text) {
@@ -166,8 +261,12 @@ function simulateAssistantReply() {
   messages.scrollTop = messages.scrollHeight;
   setTimeout(() => {
     typing.remove();
-    const chapter = chapters[activeChapterId];
-    appendMessage("assistant", `我正在结合《${chapter.title}》当前修订进行分析。这个段落的感官信息很清楚，可以再强化人物此刻的具体目标，让紧张感不仅来自环境，也来自他害怕失去什么。`);
+    if (activeConversationScope === "global") {
+      appendMessage("assistant", "这是一个全局对话，我不会自动读取任何项目或书籍内容。你可以在这里讨论通用写作方法、灵感或其他不属于具体项目的话题。");
+    } else {
+      const chapter = chapters[activeChapterId];
+      appendMessage("assistant", `我正在结合《${chapter.title}》当前修订进行分析。这个段落的感官信息很清楚，可以再强化人物此刻的具体目标，让紧张感不仅来自环境，也来自他害怕失去什么。`);
+    }
   }, 900);
 }
 
@@ -242,9 +341,20 @@ aiInput.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  const action = event.target.closest("[data-action]")?.dataset.action;
+  const actionTarget = event.target.closest("[data-action]");
+  const action = actionTarget?.dataset.action;
   if (action === "toggle-toc") togglePanel("toc");
   if (action === "toggle-ai") togglePanel("ai");
+  if (action === "toggle-project") {
+    const node = actionTarget.closest(".project-node");
+    const shouldOpen = !node.classList.contains("open");
+    document.querySelectorAll(".project-node").forEach((item) => {
+      const isTarget = item === node && shouldOpen;
+      item.classList.toggle("open", isTarget);
+      item.querySelector('[data-action="toggle-project"]').setAttribute("aria-expanded", String(isTarget));
+      item.querySelector(".disclosure").classList.toggle("open", isTarget);
+    });
+  }
   if (action === "focus-ai") {
     app.classList.remove("ai-collapsed");
     app.classList.toggle("ai-focus");
@@ -261,20 +371,23 @@ document.addEventListener("click", (event) => {
     showToast("修改已应用，并将保存为新的章节版本");
   }
   if (action === "new-chat") {
-    document.querySelector("#conversation-title").textContent = "新对话";
-    document.querySelectorAll(".conversation-row").forEach((row) => row.classList.remove("active"));
-    showToast("已创建项目对话，当前章节上下文仍然保留");
-    aiInput.focus();
+    createProjectConversation(actionTarget.dataset.project || activeProjectId);
   }
+  if (action === "new-global-chat") createGlobalConversation();
+  if (action === "new-project") showToast("原型演示：创建项目后，将自动生成一本书和独立的项目对话区");
   if (action === "add-chapter") showToast("原型演示：这里将创建新章节并自动打开");
 });
 
 document.querySelectorAll(".conversation-row").forEach((row) => {
-  row.addEventListener("click", () => {
-    document.querySelectorAll(".conversation-row").forEach((item) => item.classList.remove("active"));
-    row.classList.add("active");
-    document.querySelector("#conversation-title").textContent = row.querySelector("span:nth-child(2)").textContent;
-    app.classList.remove("ai-collapsed");
+  row.addEventListener("click", () => selectConversation(row));
+});
+
+document.querySelectorAll(".project-book").forEach((button) => {
+  button.addEventListener("click", () => {
+    activateProject(button.dataset.project);
+    const firstConversation = button.closest(".project-node").querySelector(".conversation-row");
+    if (firstConversation) selectConversation(firstConversation);
+    showToast(`已切换到「${projects[button.dataset.project].name}」书籍工作区`);
   });
 });
 
@@ -295,10 +408,11 @@ document.addEventListener("keydown", (event) => {
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
-    document.querySelector('[data-action="new-chat"]').click();
+    createGlobalConversation();
   }
 });
 
 bindResizer(".toc-resizer", "--toc-width", 190, 330);
 bindResizer(".ai-resizer", "--assistant-width", 310, 520, true);
-renderChapter(activeChapterId);
+updateSidebarEmptyStates();
+renderChapter("chapter-1");
