@@ -31,22 +31,7 @@ if (previewEnabled && !window.storyOSAgent) {
   const keyForScope = (scope: ConversationScope) =>
     scope.kind === "global" ? "system-default" : scope.projectId;
 
-  const ensureThread = (): ThreadDto => {
-    const scope = scopeId();
-    const existing = threadsByScope.get(scope) ?? [];
-    const active = existing.find((thread) => thread.id === activeThreads.get(scope)) ?? existing[0];
-    if (active) return active;
-    const thread: ThreadDto = { id: crypto.randomUUID(), title: "新对话", createdAt: now, updatedAt: now, metadata: {} };
-    threadsByScope.set(scope, [thread]);
-    activeThreads.set(scope, thread.id);
-    messages.set(thread.id, []);
-    return thread;
-  };
-
-  const threadSnapshot = (): ThreadSnapshot => {
-    const activeThread = ensureThread();
-    return { activeThreadId: activeThread.id, activeThread, threads: threadsByScope.get(scopeId()) ?? [activeThread] };
-  };
+  const threadSnapshot = (): ThreadSnapshot => threadSnapshotFor(activeScope());
   const threadSnapshotFor = (scope: ConversationScope): ThreadSnapshot => {
     const key = keyForScope(scope);
     const existing = threadsByScope.get(key) ?? [];
@@ -96,7 +81,6 @@ if (previewEnabled && !window.storyOSAgent) {
     return { runId };
   };
 
-  ensureThread();
   const api: AgentDesktopApi = {
     getStatus: async () => ({ configured: true, initialized: true, provider: "deepseek", modelName: "deepseek-chat", baseUrl: "https://api.deepseek.com" }),
     configure: async () => ({ configured: true, initialized: true }),
@@ -105,7 +89,7 @@ if (previewEnabled && !window.storyOSAgent) {
       scope,
       threads: threadSnapshotFor(scope),
     }),
-    listMessages: async (threadId = ensureThread().id) => messages.get(threadId) ?? [],
+    listMessages: async (threadId) => threadId ? messages.get(threadId) ?? [] : [],
     listConversationMessages: async ({ threadId }) => messages.get(threadId) ?? [],
     createThread: async (title) => {
       const thread: ThreadDto = { id: crypto.randomUUID(), title, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), metadata: {} };
@@ -200,7 +184,6 @@ if (previewEnabled && !window.storyOSAgent) {
         updatedAt: createdAt,
       });
       activeProjectId = project.id;
-      ensureThread();
       return workspaceSnapshot();
     },
     openProject: async (projectPath) => {
@@ -223,7 +206,6 @@ if (previewEnabled && !window.storyOSAgent) {
         updatedAt: createdAt,
       });
       activeProjectId = project.id;
-      ensureThread();
       return workspaceSnapshot();
     },
     openProjectDirectory: async () => undefined,
@@ -239,7 +221,6 @@ if (previewEnabled && !window.storyOSAgent) {
     deleteProject: async (projectPath) => api.removeProject(projectPath),
     switchProject: async (projectPath) => {
       activeProjectId = projects.find((project) => project.path === projectPath)?.id ?? null;
-      ensureThread();
       return workspaceSnapshot();
     },
     removeProject: async (projectPath) => {
@@ -247,7 +228,6 @@ if (previewEnabled && !window.storyOSAgent) {
       projects = projects.filter((project) => project.path !== projectPath);
       if (removed?.id === activeProjectId) activeProjectId = null;
       if (removed) projectBooks.delete(removed.id);
-      ensureThread();
       return workspaceSnapshot();
     },
     listRuns: async () => [],

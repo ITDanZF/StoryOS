@@ -1,6 +1,8 @@
 import type {
   AgentServiceStatus,
+  ConversationScope,
   MessageDto,
+  ProjectNavigationSnapshot,
   ProjectSnapshot,
   RunSnapshot,
   ThreadSnapshot,
@@ -15,6 +17,9 @@ export type ChatWorkspaceState = {
   readonly status: AgentServiceStatus | null;
   readonly projects: ProjectSnapshot | null;
   readonly threads: ThreadSnapshot | null;
+  readonly conversationScope: ConversationScope;
+  readonly globalThreads: ThreadSnapshot | null;
+  readonly projectNavigations: Readonly<Record<string, ProjectNavigationSnapshot>>;
   readonly messages: readonly MessageView[];
   readonly runs: readonly RunSnapshot[];
   readonly error: string | null;

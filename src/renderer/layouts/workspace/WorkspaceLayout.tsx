@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import type { ConversationScope } from "../../../shared/agent/contracts.ts";
 import WindowTitleBar from "../../components/WindowTitleBar.tsx";
 import "../../features/agent/api/previewAgentApi.ts";
 import { useAgentWorkspace } from "../../features/agent/hooks/useAgentWorkspace.ts";
@@ -25,8 +26,10 @@ export default function WorkspaceLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const openConversation = useCallback(async () => {
-    const thread = await createThread();
+  const openConversation = useCallback(async (
+    scope: ConversationScope = { kind: "global" },
+  ) => {
+    const thread = await createThread(scope);
     navigate(`/conversations/${thread.id}`);
   }, [createThread, navigate]);
 
@@ -54,7 +57,12 @@ export default function WorkspaceLayout() {
       <WorkspaceSidebar
         open={sidebarOpen}
         projects={state.projects}
-        threads={state.threads}
+        activeBookProjectId={
+          location.pathname.match(/^\/projects\/([^/]+)\/book$/)?.[1] ?? null
+        }
+        conversationScope={state.conversationScope}
+        globalThreads={state.globalThreads}
+        projectNavigations={state.projectNavigations}
         onClose={() => setSidebarOpen(false)}
         onCreateProject={async (request) => {
           await createProject(request);
@@ -71,17 +79,23 @@ export default function WorkspaceLayout() {
           await switchProject(projectPath);
           navigate("/conversations");
         }}
-        onCreateThread={async () => {
-          await openConversation();
+        onOpenBookWorkspace={async (project) => {
+          if (state.projects?.activeProjectId !== project.id) {
+            await switchProject(project.path);
+          }
+          navigate(`/projects/${project.id}/book`);
+        }}
+        onCreateConversation={async (scope) => {
+          await openConversation(scope);
           setSidebarOpen(false);
         }}
-        onSwitchThread={async (threadId) => {
-          await switchThread(threadId);
+        onSwitchConversation={async (scope, threadId) => {
+          await switchThread(threadId, scope);
           navigate(`/conversations/${threadId}`);
           setSidebarOpen(false);
         }}
-        onDeleteThread={async (threadId) => {
-          const snapshot = await deleteThread(threadId);
+        onDeleteConversation={async (scope, threadId) => {
+          const snapshot = await deleteThread(threadId, scope);
           navigate(
             snapshot.activeThreadId
               ? `/conversations/${snapshot.activeThreadId}`

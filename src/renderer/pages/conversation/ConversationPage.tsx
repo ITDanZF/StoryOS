@@ -10,7 +10,14 @@ export default function ConversationPage() {
   const { threadId } = useParams();
   const navigate = useNavigate();
   const activeThread = state.threads?.activeThread;
-  const activeProject = state.projects?.activeProject;
+  const activeConversationProjectId = state.conversationScope.kind === "project"
+    ? state.conversationScope.projectId
+    : null;
+  const activeProject = activeConversationProjectId
+    ? state.projects?.projects.find(
+      (project) => project.id === activeConversationProjectId,
+    ) ?? null
+    : null;
 
   useEffect(() => {
     if (!state.threads) return;

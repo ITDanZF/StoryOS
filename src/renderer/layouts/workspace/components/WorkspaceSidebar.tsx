@@ -1,6 +1,14 @@
 import { ChevronDown, Folder, FolderOpen, FolderPlus, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { CreateProjectRequest, ProjectDto, ProjectSnapshot, RenameProjectRequest, ThreadSnapshot } from "../../../../shared/agent/contracts.ts";
+import type {
+  ConversationScope,
+  CreateProjectRequest,
+  ProjectDto,
+  ProjectNavigationSnapshot,
+  ProjectSnapshot,
+  RenameProjectRequest,
+  ThreadSnapshot,
+} from "../../../../shared/agent/contracts.ts";
 import { cn } from "../../../../lib/utils.ts";
 import StoryLogo from "../../../components/StoryLogo.tsx";
 import CreateProjectDialog from "./CreateProjectDialog.tsx";
@@ -11,7 +19,10 @@ import SettingsLauncher, { type SettingsPage } from "./SettingsLauncher.tsx";
 type WorkspaceSidebarProps = {
   readonly open: boolean;
   readonly projects: ProjectSnapshot | null;
-  readonly threads: ThreadSnapshot | null;
+  readonly activeBookProjectId: string | null;
+  readonly conversationScope: ConversationScope;
+  readonly globalThreads: ThreadSnapshot | null;
+  readonly projectNavigations: Readonly<Record<string, ProjectNavigationSnapshot>>;
   readonly onClose: () => void;
   readonly onCreateProject: (request: CreateProjectRequest) => Promise<void>;
   readonly onOpenProject: (projectPath: string) => Promise<void>;
@@ -19,16 +30,26 @@ type WorkspaceSidebarProps = {
   readonly onRenameProject: (request: RenameProjectRequest) => Promise<void>;
   readonly onDeleteProject: (projectPath: string) => Promise<void>;
   readonly onSwitchProject: (projectPath: string | null) => Promise<void>;
-  readonly onCreateThread: () => Promise<void>;
-  readonly onSwitchThread: (threadId: string) => Promise<void>;
-  readonly onDeleteThread: (threadId: string) => Promise<void>;
+  readonly onOpenBookWorkspace: (project: ProjectDto) => Promise<void>;
+  readonly onCreateConversation: (scope: ConversationScope) => Promise<void>;
+  readonly onSwitchConversation: (
+    scope: ConversationScope,
+    threadId: string,
+  ) => Promise<void>;
+  readonly onDeleteConversation: (
+    scope: ConversationScope,
+    threadId: string,
+  ) => Promise<void>;
   readonly onOpenSettings: (page: SettingsPage) => void;
 };
 
 export default function WorkspaceSidebar({
   open,
   projects,
-  threads,
+  activeBookProjectId,
+  conversationScope,
+  globalThreads,
+  projectNavigations,
   onClose,
   onCreateProject,
   onOpenProject,
@@ -36,9 +57,10 @@ export default function WorkspaceSidebar({
   onRenameProject,
   onDeleteProject,
   onSwitchProject,
-  onCreateThread,
-  onSwitchThread,
-  onDeleteThread,
+  onOpenBookWorkspace,
+  onCreateConversation,
+  onSwitchConversation,
+  onDeleteConversation,
   onOpenSettings,
 }: WorkspaceSidebarProps) {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -88,7 +110,7 @@ export default function WorkspaceSidebar({
           <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent [-webkit-app-region:no-drag] hover:bg-neutral-200 lg:hidden" type="button" aria-label="关闭侧栏" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <button className="my-3 flex h-9 shrink-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void onCreateThread()}>
+        <button className="my-3 flex h-9 shrink-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void onCreateConversation({ kind: "global" })}>
           <Plus size={17} /><span className="flex-1">新建对话</span><kbd className="rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-[10px] font-normal text-neutral-400">Ctrl K</kbd>
         </button>
 
@@ -112,11 +134,15 @@ export default function WorkspaceSidebar({
             <ProjectConversationTree
               projects={projects}
               projectsExpanded={projectsExpanded}
-              threads={threads}
+              activeBookProjectId={activeBookProjectId}
+              conversationScope={conversationScope}
+              globalThreads={globalThreads}
+              projectNavigations={projectNavigations}
               onSwitchProject={async (projectPath) => { await onSwitchProject(projectPath); onClose(); }}
-              onCreateThread={async () => { await onCreateThread(); onClose(); }}
-              onSwitchThread={async (threadId) => { await onSwitchThread(threadId); onClose(); }}
-              onDeleteThread={onDeleteThread}
+              onOpenBookWorkspace={async (project) => { await onOpenBookWorkspace(project); onClose(); }}
+              onCreateConversation={async (scope) => { await onCreateConversation(scope); onClose(); }}
+              onSwitchConversation={async (scope, threadId) => { await onSwitchConversation(scope, threadId); onClose(); }}
+              onDeleteConversation={onDeleteConversation}
               onOpenProjectDirectory={onOpenProjectDirectory}
               onRenameProject={setRenameTarget}
               onDeleteProject={onDeleteProject}
