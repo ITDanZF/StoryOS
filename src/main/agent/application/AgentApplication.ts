@@ -17,7 +17,7 @@ import type {
   StartRunRequest,
 } from "./contracts.ts";
 import type { AgentRunner } from "./ports.ts";
-import type { ApplicationEventRecorder } from "../runtime/RunLogStore.ts";
+import type { ApplicationEventRecorder } from "./runPorts.ts";
 
 type RunRecord = {
   promise: Promise<string> | null;

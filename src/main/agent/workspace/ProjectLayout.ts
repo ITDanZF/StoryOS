@@ -22,9 +22,8 @@ export type WorkspaceLayout = {
   readonly rootPath: string;
   readonly filesRoot: string;
   readonly stateRoot: string;
-  readonly conversationsRoot: string;
+  readonly databasePath: string;
   readonly checkpointPath: string;
-  readonly runsRoot: string;
   readonly skillsRoot: string;
   readonly temporaryRoot: string;
   readonly metadataPath: string;
@@ -45,9 +44,8 @@ export function getWorkspaceLayout(rootPath: string, systemDefault = false): Wor
     rootPath: resolvedRoot,
     filesRoot: systemDefault ? path.join(resolvedRoot, "files") : resolvedRoot,
     stateRoot,
-    conversationsRoot: path.join(stateRoot, "conversations"),
+    databasePath: path.join(stateRoot, "storyos.sqlite"),
     checkpointPath: path.join(stateRoot, "checkpoints", "memory.sqlite"),
-    runsRoot: path.join(stateRoot, "runs"),
     skillsRoot: path.join(stateRoot, "skills"),
     temporaryRoot: path.join(stateRoot, "tmp"),
     metadataPath: path.join(stateRoot, "project.json"),
@@ -83,9 +81,7 @@ export function ensureWorkspaceLayout(input: {
   const layout = getWorkspaceLayout(input.rootPath, input.locationType === "system-default");
   mkdirSync(layout.rootPath, { recursive: true });
   mkdirSync(layout.filesRoot, { recursive: true });
-  mkdirSync(layout.conversationsRoot, { recursive: true });
   mkdirSync(path.dirname(layout.checkpointPath), { recursive: true });
-  mkdirSync(layout.runsRoot, { recursive: true });
   mkdirSync(layout.skillsRoot, { recursive: true });
   mkdirSync(layout.temporaryRoot, { recursive: true });
 

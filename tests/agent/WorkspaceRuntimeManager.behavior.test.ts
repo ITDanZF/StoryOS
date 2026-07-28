@@ -3,10 +3,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ProjectApplication from "../../src/main/agent/application/ProjectApplication.ts";
-import ProjectJsonStore from "../../src/main/agent/Memory/ProjectJsonStore.ts";
 import WorkspaceRuntimeManager from "../../src/main/agent/runtime/WorkspaceRuntimeManager.ts";
-import RunLogStore from "../../src/main/agent/runtime/RunLogStore.ts";
 import { getWorkspaceLayout } from "../../src/main/agent/workspace/ProjectLayout.ts";
+import ProjectDatabase from "../../src/main/agent/storage/project/ProjectDatabase.ts";
+import SqliteRunStore from "../../src/main/agent/storage/project/SqliteRunStore.ts";
+import SqliteThreadStore from "../../src/main/agent/storage/project/SqliteThreadStore.ts";
+import ApplicationDatabase from "../../src/main/agent/storage/global/ApplicationDatabase.ts";
+import SqliteProjectStore from "../../src/main/agent/storage/global/SqliteProjectStore.ts";
 import type { ModelConnectionConfiguration } from "../../src/main/agent/model/ModelConfiguration.ts";
 
 const memoryState = vi.hoisted(() => ({
@@ -30,6 +33,7 @@ vi.mock("../../src/main/agent/Memory/index.ts", () => ({
 }));
 
 const roots: string[] = [];
+const applicationDatabases: ApplicationDatabase[] = [];
 const modelConfiguration: ModelConnectionConfiguration = Object.freeze({
   modelName: "test-model",
   apiKey: "test-key",
@@ -45,7 +49,11 @@ function createHarness() {
   writeFileSync(path.join(agentHome, "config.json"), JSON.stringify({ AGENT_WORKSPACE: "" }), "utf8");
   vi.stubEnv("MINI_AGENT_HOME", agentHome);
   vi.stubEnv("MINI_AGENT_BUNDLED_SKILLS", path.join(process.cwd(), "skills"));
-  const projects = new ProjectApplication(new ProjectJsonStore(path.join(agentHome, "projects.json")));
+  const applicationDatabase = new ApplicationDatabase(agentHome);
+  applicationDatabases.push(applicationDatabase);
+  const projects = new ProjectApplication(
+    new SqliteProjectStore(applicationDatabase.handle),
+  );
   const parentPath = path.join(root, "projects");
   mkdirSync(parentPath);
   const project = projects.createProject({ name: "Stable Story", parentPath });
@@ -55,6 +63,7 @@ function createHarness() {
 afterEach(() => {
   vi.unstubAllEnvs();
   memoryState.close.mockClear();
+  for (const database of applicationDatabases.splice(0)) database.close();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -83,7 +92,12 @@ describe("WorkspaceRuntimeManager behavior", () => {
   });
   it("restores persisted run history when a workspace is activated", async () => {
     const { project, projects } = createHarness();
-    const logs = new RunLogStore(getWorkspaceLayout(project.path).runsRoot);
+    const projectDatabase = new ProjectDatabase(
+      getWorkspaceLayout(project.path).databasePath,
+    );
+    const threadStore = new SqliteThreadStore(projectDatabase.handle);
+    threadStore.createThread("Restored", "thread-restored");
+    const logs = new SqliteRunStore(projectDatabase.handle);
     await logs.record({
       type: "run_started",
       runId: "run-restored",
@@ -97,7 +111,7 @@ describe("WorkspaceRuntimeManager behavior", () => {
       durationMs: 50,
       timestamp: "2026-01-01T00:00:00.050Z",
     });
-    await logs.close();
+    projectDatabase.close();
 
     const manager = await WorkspaceRuntimeManager.create(
       projects,

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import AgentApplication from "../../src/main/agent/application/AgentApplication.ts";
 import type { RunSnapshot } from "../../src/main/agent/application/contracts.ts";
 import type { AgentRunner } from "../../src/main/agent/application/ports.ts";
-import type { ApplicationEventRecorder } from "../../src/main/agent/runtime/RunLogStore.ts";
+import type { ApplicationEventRecorder } from "../../src/main/agent/application/runPorts.ts";
 
 function completedHistory(index: number): RunSnapshot {
   return {
@@ -101,5 +101,4 @@ describe("AgentApplication lifecycle behavior", () => {
     expect(recorder.close).toHaveBeenCalledOnce();
   });
 });
-
 

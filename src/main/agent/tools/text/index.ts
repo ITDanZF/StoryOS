@@ -18,7 +18,7 @@ import { createTransformLinesTool } from "./transformLines.ts";
 import { createValidateTextTool } from "./validateText.ts";
 
 export function createTextTools(context: WorkspaceToolContext) {
-  const textIndex = new TextIndexService(context);
+  const textIndex = new TextIndexService(context, context.textIndexStore);
 
   return [
     createTextStatsTool(context),

@@ -37,7 +37,12 @@ export default class ThreadApplication {
   private activeThreadId: string;
 
   constructor(private readonly store: ThreadPersistence) {
-    this.activeThreadId = store.ensureInitialThread().id;
+    const persistedThreadId = store.getActiveThreadId();
+    const initialThread = persistedThreadId
+      ? store.getThread(persistedThreadId) ?? store.ensureInitialThread()
+      : store.ensureInitialThread();
+    this.activeThreadId = initialThread.id;
+    store.setActiveThreadId(initialThread.id);
   }
 
   getActiveThreadId(): string { return this.activeThreadId; }
@@ -46,6 +51,9 @@ export default class ThreadApplication {
     const threads = this.store.listThreads();
     if (!threads.some((thread) => thread.id === this.activeThreadId)) {
       this.activeThreadId = (threads[0] ?? this.store.createThread("新对话")).id;
+    }
+    if (this.store.getActiveThreadId() !== this.activeThreadId) {
+      this.store.setActiveThreadId(this.activeThreadId);
     }
     const activeThread = this.requireThread(this.activeThreadId);
     return Object.freeze({
@@ -60,6 +68,7 @@ export default class ThreadApplication {
     if (!title) throw new Error("Thread title is required.");
     const thread = this.store.createThread(title, request.id);
     this.activeThreadId = thread.id;
+    this.store.setActiveThreadId(thread.id);
     return toThreadDto(thread);
   }
 
@@ -67,6 +76,7 @@ export default class ThreadApplication {
     const normalizedId = threadId.trim();
     this.requireThread(normalizedId);
     this.activeThreadId = normalizedId;
+    this.store.setActiveThreadId(normalizedId);
     return this.getSnapshot();
   }
 
@@ -85,7 +95,10 @@ export default class ThreadApplication {
     const normalizedId = threadId.trim();
     this.requireThread(normalizedId);
     this.store.deleteThread(normalizedId);
-    if (normalizedId === this.activeThreadId) this.activeThreadId = this.store.ensureInitialThread().id;
+    if (normalizedId === this.activeThreadId) {
+      this.activeThreadId = this.store.ensureInitialThread().id;
+      this.store.setActiveThreadId(this.activeThreadId);
+    }
     return this.getSnapshot();
   }
 

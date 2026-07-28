@@ -9,6 +9,7 @@ export type {
   StartRunRequest,
 } from "./contracts.ts";
 export type { AgentRunner, AgentRunnerRunOptions } from "./ports.ts";
+export type { ApplicationEventRecorder, RunHistoryStore } from "./runPorts.ts";
 export type {
   AppendMessageRequest,
   CreateThreadRequest,

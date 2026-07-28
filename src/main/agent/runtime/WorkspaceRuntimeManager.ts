@@ -5,7 +5,6 @@ import type { ApplicationEventHandler } from "../application/contracts.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ThreadApplication from "../application/ThreadApplication.ts";
 import Memory from "../Memory/index.ts";
-import JsonStore from "../Memory/JsonStore.ts";
 import type { ModelConnectionConfiguration } from "../model/ModelConfiguration.ts";
 import Model from "../model/Model.ts";
 import SkillApplication from "../skills/SkillApplication.ts";
@@ -15,11 +14,14 @@ import SkillInstallService from "../skills/SkillInstallService.ts";
 import SkillLoader from "../skills/SkillLoader.ts";
 import SkillScaffoldService from "../skills/SkillScaffoldService.ts";
 import WorkspaceToolContext from "../tools/WorkspaceToolContext.ts";
+import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
+import SqliteRunStore from "../storage/project/SqliteRunStore.ts";
+import SqliteThreadStore from "../storage/project/SqliteThreadStore.ts";
+import SqliteTextIndexStore from "../storage/project/SqliteTextIndexStore.ts";
 import {
   getWorkspaceLayout,
   type WorkspaceLayout,
 } from "../workspace/ProjectLayout.ts";
-import RunLogStore from "./RunLogStore.ts";
 
 export type ActiveWorkspaceRuntime = {
   readonly projectPath: string | null;
@@ -34,8 +36,8 @@ export type ActiveWorkspaceRuntime = {
 };
 
 type RuntimeResourceScope = {
+  projectDatabase: ProjectDatabase | null;
   modelSessions: Memory | null;
-  runLogs: RunLogStore | null;
   agent: AgentApplication | null;
   unsubscribe: (() => void) | null;
   closePromise: Promise<void> | null;
@@ -99,8 +101,8 @@ export default class WorkspaceRuntimeManager {
     projectPath: string | null,
   ): Promise<ActiveWorkspaceRuntime> {
     const resources: RuntimeResourceScope = {
+      projectDatabase: null,
       modelSessions: null,
-      runLogs: null,
       agent: null,
       unsubscribe: null,
       closePromise: null,
@@ -118,8 +120,10 @@ export default class WorkspaceRuntimeManager {
         ? getWorkspaceLayout(project.path)
         : getWorkspaceLayout(snapshot.systemWorkspace.path, true);
 
+      const projectDatabase = new ProjectDatabase(layout.databasePath);
+      resources.projectDatabase = projectDatabase;
       const threads = new ThreadApplication(
-        new JsonStore(layout.conversationsRoot),
+        new SqliteThreadStore(projectDatabase.handle),
       );
       const modelSessions = new Memory({
         checkpointBackend: "sqlite",
@@ -144,10 +148,10 @@ export default class WorkspaceRuntimeManager {
       const workspaceContext = new WorkspaceToolContext(
         layout.filesRoot,
         path.join(layout.stateRoot, "text-index"),
+        new SqliteTextIndexStore(projectDatabase.handle),
       );
-      const runLogs = new RunLogStore(layout.runsRoot);
-      resources.runLogs = runLogs;
-      const initialRuns = await runLogs.loadRunSnapshots(100);
+      const runStore = new SqliteRunStore(projectDatabase.handle);
+      const initialRuns = await runStore.loadRunSnapshots(100);
       const agent = new AgentApplication(
         createAgentOrchestrator({
           model,
@@ -159,7 +163,7 @@ export default class WorkspaceRuntimeManager {
         }),
         {
           checkpointPath: layout.checkpointPath,
-          eventRecorder: runLogs,
+          eventRecorder: runStore,
           initialRuns,
           maxRetainedRuns: 100,
         },
@@ -255,14 +259,16 @@ export default class WorkspaceRuntimeManager {
       try {
         if (resources.agent) {
           await resources.agent.shutdown();
-        } else {
-          await resources.runLogs?.close();
         }
       } finally {
         try {
           resources.unsubscribe?.();
         } finally {
-          resources.modelSessions?.close();
+          try {
+            resources.modelSessions?.close();
+          } finally {
+            resources.projectDatabase?.close();
+          }
         }
       }
     })();

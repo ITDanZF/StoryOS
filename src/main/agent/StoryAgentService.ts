@@ -2,13 +2,13 @@ import type { ApplicationEventHandler } from "./application/contracts.ts";
 import ProjectApplication from "./application/ProjectApplication.ts";
 import Configuration from "./config/index.ts";
 import DesktopController from "./electron/DesktopController.ts";
-import ProjectJsonStore from "./Memory/ProjectJsonStore.ts";
+import ApplicationDatabase from "./storage/global/ApplicationDatabase.ts";
+import SqliteProjectStore from "./storage/global/SqliteProjectStore.ts";
 import {
   createModelConnectionConfiguration,
   type ModelConnectionConfiguration,
 } from "./model/ModelConfiguration.ts";
 import WorkSpace from "./workspace/index.ts";
-import LegacyWorkspaceMigrator from "./runtime/LegacyWorkspaceMigrator.ts";
 import WorkspaceRuntimeManager from "./runtime/WorkspaceRuntimeManager.ts";
 
 export type AgentConfigurationRequest = {
@@ -39,6 +39,7 @@ export default class StoryAgentService {
     private readonly subscribers = new Set<ApplicationEventHandler>();
     private readonly controllerUnsubscribers = new Map<ApplicationEventHandler, () => void>();
     private controller: DesktopController | null = null;
+    private applicationDatabase: ApplicationDatabase | null = null;
     private configured = false;
     private runtimeInitialization: Promise<void> | null = null;
     private shutdownPromise: Promise<void> | null = null;
@@ -146,7 +147,12 @@ export default class StoryAgentService {
         try {
             await controller?.shutdown();
         } finally {
-            this.subscribers.clear();
+            try {
+                this.applicationDatabase?.close();
+                this.applicationDatabase = null;
+            } finally {
+                this.subscribers.clear();
+            }
         }
     }
 
@@ -173,14 +179,28 @@ export default class StoryAgentService {
         modelConfiguration: ModelConnectionConfiguration,
     ): Promise<void> {
         await this.workspace.createAgentWorkSpace();
-        const projects = new ProjectApplication(new ProjectJsonStore());
-        new LegacyWorkspaceMigrator(projects).migrate();
-        const runtime = await WorkspaceRuntimeManager.create(projects, modelConfiguration);
-        const controller = new DesktopController({ projects, runtime });
-        for (const subscriber of this.subscribers) {
-            this.controllerUnsubscribers.set(subscriber, controller.subscribe(subscriber));
+        const applicationDatabase = new ApplicationDatabase(this.options.agentHome);
+        try {
+            const projects = new ProjectApplication(
+                new SqliteProjectStore(applicationDatabase.handle),
+            );
+            const runtime = await WorkspaceRuntimeManager.create(
+                projects,
+                modelConfiguration,
+            );
+            const controller = new DesktopController({ projects, runtime });
+            for (const subscriber of this.subscribers) {
+                this.controllerUnsubscribers.set(
+                    subscriber,
+                    controller.subscribe(subscriber),
+                );
+            }
+            this.applicationDatabase = applicationDatabase;
+            this.controller = controller;
+        } catch (error) {
+            applicationDatabase.close();
+            throw error;
         }
-        this.controller = controller;
     }
 
     private requireValue(value: string, label: string): string {

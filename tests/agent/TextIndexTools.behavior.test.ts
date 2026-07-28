@@ -14,17 +14,26 @@ import { createRankedSearchTextTool } from "../../src/main/agent/tools/text/inde
 import { createSelectTextContextTool } from "../../src/main/agent/tools/text/indexing/selectTextContext.ts";
 import TextIndexService from "../../src/main/agent/tools/text/indexing/TextIndexService.ts";
 import { createSplitTextTool } from "../../src/main/agent/tools/text/splitText.ts";
+import ProjectDatabase from "../../src/main/agent/storage/project/ProjectDatabase.ts";
+import SqliteTextIndexStore from "../../src/main/agent/storage/project/SqliteTextIndexStore.ts";
 
 const roots: string[] = [];
+const databases: ProjectDatabase[] = [];
 
 function createFixture() {
   const root = mkdtempSync(path.join(tmpdir(), "storyos-text-index-"));
   const stateRoot = path.join(root, ".storyos", "text-index");
+  const database = new ProjectDatabase(
+    path.join(root, ".storyos", "storyos.sqlite"),
+  );
+  databases.push(database);
+  const textIndexStore = new SqliteTextIndexStore(database.handle);
   roots.push(root);
   return {
     root,
     stateRoot,
-    context: new WorkspaceToolContext(root, stateRoot),
+    database,
+    context: new WorkspaceToolContext(root, stateRoot, textIndexStore),
   };
 }
 
@@ -33,6 +42,7 @@ function parseResult<T>(value: unknown): T {
 }
 
 afterEach(() => {
+  for (const database of databases.splice(0)) database.close();
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
@@ -40,7 +50,7 @@ afterEach(() => {
 
 describe("local text index tools", () => {
   it("persists a structural index and refreshes changed files", async () => {
-    const { root, stateRoot, context } = createFixture();
+    const { root, stateRoot, database, context } = createFixture();
     writeFileSync(
       path.join(root, "chapter-one.md"),
       "# Opening\n\nLin Xia begins to doubt the original decision.",
@@ -56,7 +66,10 @@ describe("local text index tools", () => {
 
     const first = await index.search("doubt decision");
     expect(first[0]?.chunk.path).toBe("chapter-one.md");
-    expect(existsSync(path.join(stateRoot, "index.json"))).toBe(true);
+    expect(existsSync(path.join(stateRoot, "index.json"))).toBe(false);
+    expect(database.handle.prepare(
+      "SELECT count(*) AS count FROM indexed_files",
+    ).get()).toEqual({ count: 1 });
     expect(
       (await index.getChunks()).some((chunk) =>
         chunk.path.includes(".storyos"),
@@ -149,6 +162,26 @@ describe("local text index tools", () => {
       similarity: 1,
       candidate: { path: "draft.md" },
     });
+  });
+
+  it("searches Chinese text with FTS5 and removes deleted files", async () => {
+    const { root, database, context } = createFixture();
+    const chapterPath = path.join(root, "chapter-cn.md");
+    writeFileSync(
+      chapterPath,
+      "# 第十章\n\n林夏最终选择沿着灯塔路线前进。",
+      "utf8",
+    );
+    const index = new TextIndexService(context);
+
+    expect((await index.search("灯塔路线"))[0]?.chunk.path).toBe(
+      "chapter-cn.md",
+    );
+    rmSync(chapterPath);
+    expect(await index.search("灯塔路线")).toHaveLength(0);
+    expect(database.handle.prepare(
+      "SELECT count(*) AS count FROM text_chunks",
+    ).get()).toEqual({ count: 0 });
   });
 
   it("assembles relevant context within the requested token budget", async () => {

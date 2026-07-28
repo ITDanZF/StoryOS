@@ -9,8 +9,6 @@ export default class WorkSpace {
     const configPath = path.join(agentHome, "config.json");
     await mkdir(agentHome, { recursive: true });
     await mkdir(path.join(agentHome, "logs"), { recursive: true });
-    await mkdir(path.join(agentHome, "sessions"), { recursive: true });
-
     if (!existsSync(configPath)) {
       await writeFile(configPath, JSON.stringify({
         MODEL_PROVIDER: "",

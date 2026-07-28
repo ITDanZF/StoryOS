@@ -3,9 +3,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ProjectApplication from '../../src/main/agent/application/ProjectApplication.ts';
-import ProjectJsonStore from '../../src/main/agent/Memory/ProjectJsonStore.ts';
+import ApplicationDatabase from '../../src/main/agent/storage/global/ApplicationDatabase.ts';
+import SqliteProjectStore from '../../src/main/agent/storage/global/SqliteProjectStore.ts';
 
 const temporaryRoots: string[] = [];
+const databases: ApplicationDatabase[] = [];
 
 function createHarness() {
   const root = mkdtempSync(path.join(tmpdir(), 'storyos-projects-'));
@@ -15,12 +17,15 @@ function createHarness() {
   mkdirSync(defaultParentPath, { recursive: true });
   writeFileSync(path.join(agentHome, 'config.json'), JSON.stringify({ AGENT_WORKSPACE: '' }), 'utf8');
   vi.stubEnv('MINI_AGENT_HOME', agentHome);
-  const store = new ProjectJsonStore(path.join(root, 'projects.json'));
+  const database = new ApplicationDatabase(agentHome);
+  databases.push(database);
+  const store = new SqliteProjectStore(database.handle);
   return { app: new ProjectApplication(store), defaultParentPath, root };
 }
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  for (const database of databases.splice(0)) database.close();
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
