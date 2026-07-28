@@ -41,10 +41,14 @@ export function useAgentWorkspace() {
   }, []);
 
   const applyWorkspaceSnapshot = useCallback(async (snapshot: WorkspaceSnapshot) => {
-    activeThreadIdRef.current = snapshot.threads.activeThreadId;
+    activeThreadIdRef.current = snapshot.threads.activeThreadId ?? "";
     setProjects(snapshot.projects);
     setThreads(snapshot.threads);
-    await loadMessages(snapshot.threads.activeThreadId);
+    if (snapshot.threads.activeThreadId) {
+      await loadMessages(snapshot.threads.activeThreadId);
+    } else {
+      setMessages([]);
+    }
   }, [loadMessages]);
 
   const loadChat = useCallback(async () => {
@@ -230,9 +234,13 @@ export function useAgentWorkspace() {
     setError(null);
     await window.storyOSAgent.deleteThread(threadId);
     const snapshot = await window.storyOSAgent.getThreadSnapshot();
-    activeThreadIdRef.current = snapshot.activeThreadId;
+    activeThreadIdRef.current = snapshot.activeThreadId ?? "";
     setThreads(snapshot);
-    await loadMessages(snapshot.activeThreadId);
+    if (snapshot.activeThreadId) {
+      await loadMessages(snapshot.activeThreadId);
+    } else {
+      setMessages([]);
+    }
     return snapshot;
   }, [loadMessages]);
 

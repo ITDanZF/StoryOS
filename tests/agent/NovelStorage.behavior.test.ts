@@ -96,22 +96,12 @@ describe("novel SQLite storage", () => {
     reopened.close();
   });
 
-  it("rejects stale saves and cross-novel volume assignments", () => {
+  it("enforces one book per project and rejects stale saves", () => {
     const fixture = createDatabase();
     const firstNovel = fixture.novels.createNovel({ title: "甲" });
-    const secondNovel = fixture.novels.createNovel({ title: "乙" });
-    const foreignVolume = fixture.novels.createVolume({
-      novelId: secondNovel.id,
-      title: "异卷",
-      sortOrder: 0,
-    });
-
-    expect(() => fixture.novels.createChapter({
-      novelId: firstNovel.id,
-      volumeId: foreignVolume.id,
-      title: "错误章节",
-      sortOrder: 0,
-    })).toThrow("Volume does not belong to novel");
+    expect(fixture.novels.ensureProjectBook("不会覆盖")).toEqual(firstNovel);
+    expect(() => fixture.novels.createNovel({ title: "乙" }))
+      .toThrow("Each project can contain only one book");
 
     const chapter = fixture.novels.createChapter({
       novelId: firstNovel.id,
@@ -131,6 +121,17 @@ describe("novel SQLite storage", () => {
     expect(fixture.novels.listRevisions(chapter.id)).toHaveLength(1);
     expect(fixture.novels.getChapter(chapter.id).currentRevisionId)
       .toBe(revision.id);
+    fixture.database.close();
+  });
+
+  it("enforces the singleton invariant at the SQLite boundary", () => {
+    const fixture = createDatabase();
+    fixture.novels.createNovel({ title: "唯一书籍" });
+
+    expect(() => fixture.database.handle.prepare(`
+      INSERT INTO novels(id, title, synopsis, status, created_at, updated_at)
+      VALUES ('novel-direct', '第二本', '', 'planning', 0, 0)
+    `).run()).toThrow();
     fixture.database.close();
   });
 

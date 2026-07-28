@@ -27,9 +27,8 @@ export type MessageRecord = {
 };
 
 export interface ThreadStore {
-  ensureInitialThread(): ThreadRecord;
   getActiveThreadId(): string | null;
-  setActiveThreadId(threadId: string): void;
+  setActiveThreadId(threadId: string | null): void;
   createThread(title: string, id?: string, metadata?: ThreadMetadata): ThreadRecord;
   getThread(threadId: string): ThreadRecord | null;
   listThreads(): ThreadRecord[];

@@ -24,6 +24,38 @@ afterEach(() => {
 });
 
 describe("SQLite storage", () => {
+  it("preserves an empty conversation workspace without creating a placeholder thread", () => {
+    const root = createRoot();
+    const databasePath = path.join(root, ".storyos", "storyos.sqlite");
+    const database = new ProjectDatabase(databasePath);
+    const threads = new ThreadApplication(
+      new SqliteThreadStore(database.handle),
+    );
+
+    expect(threads.getSnapshot()).toEqual({
+      activeThreadId: null,
+      activeThread: null,
+      threads: [],
+    });
+    const created = threads.createThread({ title: "Temporary" });
+    expect(threads.deleteThread(created.id)).toEqual({
+      activeThreadId: null,
+      activeThread: null,
+      threads: [],
+    });
+    database.close();
+
+    const reopened = new ProjectDatabase(databasePath);
+    expect(new ThreadApplication(
+      new SqliteThreadStore(reopened.handle),
+    ).getSnapshot()).toEqual({
+      activeThreadId: null,
+      activeThread: null,
+      threads: [],
+    });
+    reopened.close();
+  });
+
   it("persists the global project registry and active project", () => {
     const root = createRoot();
     const database = new ApplicationDatabase(root);

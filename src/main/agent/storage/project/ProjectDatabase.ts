@@ -214,6 +214,15 @@ const migrations: readonly SqliteMigration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    up(database) {
+      database.exec(`
+        CREATE UNIQUE INDEX idx_novels_project_singleton
+          ON novels((1));
+      `);
+    },
+  },
 ];
 
 export default class ProjectDatabase extends SqliteDatabase {

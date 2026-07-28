@@ -1,6 +1,8 @@
 import type {
   AgentDesktopApi,
   ApplicationEvent,
+  ConversationApplicationEvent,
+  ConversationScope,
   MessageDto,
   ProjectDto,
   ProjectSnapshot,
@@ -11,14 +13,23 @@ import type {
 const previewEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
 
 if (previewEnabled && !window.storyOSAgent) {
-  const handlers = new Set<(event: ApplicationEvent) => void>();
+  const handlers =
+    new Set<(event: ConversationApplicationEvent) => void>();
   const now = new Date().toISOString();
   let activeProjectId: string | null = null;
   let projects: ProjectDto[] = [];
+  const projectBooks = new Map<string, {
+    id: string;
+    title: string;
+    createdAt: string;
+    updatedAt: string;
+  }>();
   const threadsByScope = new Map<string, ThreadDto[]>();
   const activeThreads = new Map<string, string>();
   const messages = new Map<string, MessageDto[]>();
   const scopeId = () => activeProjectId ?? "system-default";
+  const keyForScope = (scope: ConversationScope) =>
+    scope.kind === "global" ? "system-default" : scope.projectId;
 
   const ensureThread = (): ThreadDto => {
     const scope = scopeId();
@@ -36,6 +47,19 @@ if (previewEnabled && !window.storyOSAgent) {
     const activeThread = ensureThread();
     return { activeThreadId: activeThread.id, activeThread, threads: threadsByScope.get(scopeId()) ?? [activeThread] };
   };
+  const threadSnapshotFor = (scope: ConversationScope): ThreadSnapshot => {
+    const key = keyForScope(scope);
+    const existing = threadsByScope.get(key) ?? [];
+    const activeThread =
+      existing.find((thread) => thread.id === activeThreads.get(key)) ??
+      existing[0] ??
+      null;
+    return {
+      activeThreadId: activeThread?.id ?? null,
+      activeThread,
+      threads: existing,
+    };
+  };
 
   const projectSnapshot = (): ProjectSnapshot => {
     const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
@@ -49,14 +73,40 @@ if (previewEnabled && !window.storyOSAgent) {
     };
   };
   const workspaceSnapshot = () => ({ projects: projectSnapshot(), threads: threadSnapshot() });
-  const emit = (event: ApplicationEvent) => handlers.forEach((handler) => handler(event));
+  const activeScope = (): ConversationScope => activeProjectId
+    ? { kind: "project", projectId: activeProjectId }
+    : { kind: "global" };
+  const emit = (
+    event: ApplicationEvent,
+    conversationScope: ConversationScope = activeScope(),
+  ) => handlers.forEach((handler) => handler({
+    ...event,
+    conversationScope,
+  }));
+  const sendPreviewMessage = async (
+    request: { readonly threadId: string; readonly content: string },
+    scope: ConversationScope,
+  ) => {
+    const { threadId, content } = request;
+    const runId = `preview-${crypto.randomUUID()}`;
+    messages.set(threadId, [...(messages.get(threadId) ?? []), { id: crypto.randomUUID(), threadId, role: "user", content, createdAt: new Date().toISOString() }]);
+    queueMicrotask(() => emit({ type: "run_started", runId, threadId, timestamp: new Date().toISOString() }, scope));
+    window.setTimeout(() => emit({ type: "text_delta", runId, content: "这是一个基础的流式回复预览。", timestamp: new Date().toISOString() }, scope), 250);
+    window.setTimeout(() => emit({ type: "run_completed", runId, content: "这是一个基础的流式回复预览。", durationMs: 650, timestamp: new Date().toISOString() }, scope), 650);
+    return { runId };
+  };
 
   ensureThread();
   const api: AgentDesktopApi = {
     getStatus: async () => ({ configured: true, initialized: true, provider: "deepseek", modelName: "deepseek-chat", baseUrl: "https://api.deepseek.com" }),
     configure: async () => ({ configured: true, initialized: true }),
     getThreadSnapshot: async () => threadSnapshot(),
+    getConversationSnapshot: async (scope) => ({
+      scope,
+      threads: threadSnapshotFor(scope),
+    }),
     listMessages: async (threadId = ensureThread().id) => messages.get(threadId) ?? [],
+    listConversationMessages: async ({ threadId }) => messages.get(threadId) ?? [],
     createThread: async (title) => {
       const thread: ThreadDto = { id: crypto.randomUUID(), title, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), metadata: {} };
       threadsByScope.set(scopeId(), [thread, ...(threadsByScope.get(scopeId()) ?? [])]);
@@ -64,16 +114,71 @@ if (previewEnabled && !window.storyOSAgent) {
       messages.set(thread.id, []);
       return thread;
     },
+    createConversation: async ({ scope, title }) => {
+      const key = keyForScope(scope);
+      const thread: ThreadDto = {
+        id: crypto.randomUUID(),
+        title,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        metadata: {},
+      };
+      threadsByScope.set(key, [thread, ...(threadsByScope.get(key) ?? [])]);
+      activeThreads.set(key, thread.id);
+      messages.set(thread.id, []);
+      return thread;
+    },
     switchThread: async (threadId) => {
       activeThreads.set(scopeId(), threadId);
       return threadSnapshot();
+    },
+    switchConversation: async ({ scope, threadId }) => {
+      activeThreads.set(keyForScope(scope), threadId);
+      return { scope, threads: threadSnapshotFor(scope) };
     },
     deleteThread: async (threadId) => {
       threadsByScope.set(scopeId(), (threadsByScope.get(scopeId()) ?? []).filter((thread) => thread.id !== threadId));
       activeThreads.delete(scopeId());
       return threadSnapshot();
     },
+    deleteConversation: async ({ scope, threadId }) => {
+      const key = keyForScope(scope);
+      threadsByScope.set(
+        key,
+        (threadsByScope.get(key) ?? []).filter(
+          (thread) => thread.id !== threadId,
+        ),
+      );
+      if (activeThreads.get(key) === threadId) activeThreads.delete(key);
+      return { scope, threads: threadSnapshotFor(scope) };
+    },
     getProjectSnapshot: async () => projectSnapshot(),
+    getProjectNavigation: async (projectId) => {
+      const project = projects.find((item) => item.id === projectId);
+      if (!project) throw new Error(`Project not found: ${projectId}`);
+      const book = projectBooks.get(projectId) ?? {
+        id: `novel_${crypto.randomUUID()}`,
+        title: project.name,
+        createdAt: now,
+        updatedAt: now,
+      };
+      projectBooks.set(projectId, book);
+      return {
+        project,
+        book: {
+          id: book.id,
+          title: book.title,
+          status: "planning",
+          volumeCount: 0,
+          chapterCount: 0,
+          updatedAt: book.updatedAt,
+        },
+        conversations: threadSnapshotFor({
+          kind: "project",
+          projectId,
+        }),
+      };
+    },
     getWorkspaceSnapshot: async () => workspaceSnapshot(),
     createProject: async ({ name, parentPath }) => {
       const createdAt = new Date().toISOString();
@@ -88,6 +193,12 @@ if (previewEnabled && !window.storyOSAgent) {
         lastOpenedAt: createdAt,
       };
       projects = [project, ...projects];
+      projectBooks.set(project.id, {
+        id: `novel_${crypto.randomUUID()}`,
+        title: project.name,
+        createdAt,
+        updatedAt: createdAt,
+      });
       activeProjectId = project.id;
       ensureThread();
       return workspaceSnapshot();
@@ -105,6 +216,12 @@ if (previewEnabled && !window.storyOSAgent) {
         lastOpenedAt: createdAt,
       };
       projects = [project, ...projects.filter((item) => item.path !== projectPath)];
+      projectBooks.set(project.id, {
+        id: `novel_${crypto.randomUUID()}`,
+        title: project.name,
+        createdAt,
+        updatedAt: createdAt,
+      });
       activeProjectId = project.id;
       ensureThread();
       return workspaceSnapshot();
@@ -129,23 +246,22 @@ if (previewEnabled && !window.storyOSAgent) {
       const removed = projects.find((project) => project.path === projectPath);
       projects = projects.filter((project) => project.path !== projectPath);
       if (removed?.id === activeProjectId) activeProjectId = null;
+      if (removed) projectBooks.delete(removed.id);
       ensureThread();
       return workspaceSnapshot();
     },
     listRuns: async () => [],
-    sendMessage: async ({ threadId, content }) => {
-      const runId = `preview-${crypto.randomUUID()}`;
-      messages.set(threadId, [...(messages.get(threadId) ?? []), { id: crypto.randomUUID(), threadId, role: "user", content, createdAt: new Date().toISOString() }]);
-      queueMicrotask(() => emit({ type: "run_started", runId, threadId, timestamp: new Date().toISOString() }));
-      window.setTimeout(() => emit({ type: "text_delta", runId, content: "这是一个基础的流式回复预览。", timestamp: new Date().toISOString() }), 250);
-      window.setTimeout(() => emit({ type: "run_completed", runId, content: "这是一个基础的流式回复预览。", durationMs: 650, timestamp: new Date().toISOString() }), 650);
-      return { runId };
-    },
+    sendMessage: async (request) => sendPreviewMessage(request, activeScope()),
+    sendConversationMessage: async ({ scope, threadId, content }) =>
+      sendPreviewMessage({ threadId, content }, scope),
     cancelRun: async (runId) => {
       emit({ type: "run_aborted", runId, error: { name: "Cancelled", message: "回复已停止" }, durationMs: 0, timestamp: new Date().toISOString() });
       return true;
     },
+    cancelConversationRun: async (_scope, runId) => api.cancelRun(runId),
+    listConversationRuns: async () => [],
     resolveApproval: async () => false,
+    resolveConversationApproval: async () => false,
     getSkillSnapshot: async () => ({ loadedAt: now, issues: [], skills: [] }),
     getSkill: async () => null,
     useSkill: async () => ({ activeSkillIds: [], disabledSkillIds: [] }),

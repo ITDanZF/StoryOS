@@ -22,7 +22,12 @@ export default function ConversationPage() {
     }
     if (threadId === state.threads.activeThreadId) return;
     if (!state.threads.threads.some((thread) => thread.id === threadId)) {
-      navigate(`/conversations/${state.threads.activeThreadId}`, { replace: true });
+      navigate(
+        state.threads.activeThreadId
+          ? `/conversations/${state.threads.activeThreadId}`
+          : "/conversations",
+        { replace: true },
+      );
       return;
     }
     void switchThread(threadId);

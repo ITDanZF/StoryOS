@@ -76,7 +76,14 @@ describe("WorkspaceRuntimeManager behavior", () => {
       .rejects.toThrow("Project not found");
 
     expect(manager.activeProjectPath).toBe(project.path);
-    expect(manager.threads.getSnapshot().activeThreadId).toBeTruthy();
+    expect(manager.threads.getSnapshot()).toMatchObject({
+      activeThreadId: null,
+      activeThread: null,
+      threads: [],
+    });
+    expect(manager.novels.getProjectBook()).toMatchObject({
+      title: "Stable Story",
+    });
     await manager.close();
   });
 
@@ -139,7 +146,39 @@ describe("WorkspaceRuntimeManager behavior", () => {
     await manager.shutdown();
     await manager.shutdown();
 
-    expect(memoryState.close).toHaveBeenCalledTimes(1);
+    expect(memoryState.close).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps global and project conversations in independent runtimes", async () => {
+    const { project, projects } = createHarness();
+    const manager = await WorkspaceRuntimeManager.create(
+      projects,
+      modelConfiguration,
+    );
+
+    const globalRuntime = await manager.resolve({ kind: "global" });
+    const globalThread = globalRuntime.threads.createThread({
+      title: "Global ideas",
+    });
+    expect(manager.activeProjectPath).toBe(project.path);
+
+    const projectRuntime = await manager.resolve({
+      kind: "project",
+      projectId: project.id,
+    });
+    expect(projectRuntime.novels.getProjectBook()).toMatchObject({
+      title: "Stable Story",
+    });
+    const projectThread = projectRuntime.threads.createThread({
+      title: "Book discussion",
+    });
+
+    expect(globalRuntime.threads.getSnapshot().threads.map((thread) => thread.id))
+      .toEqual([globalThread.id]);
+    expect(projectRuntime.threads.getSnapshot().threads.map((thread) => thread.id))
+      .toEqual([projectThread.id]);
+    expect(globalRuntime).not.toBe(projectRuntime);
+    await manager.close();
   });
 
 });

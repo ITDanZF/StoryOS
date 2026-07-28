@@ -25,11 +25,33 @@ const CHAPTER_STATUSES = new Set<ChapterStatus>([
 export default class NovelApplication {
   constructor(private readonly persistence: NovelPersistence) {}
 
+  ensureProjectBook(title: string): NovelDto {
+    const books = this.persistence.listNovels();
+    if (books.length > 1) {
+      throw new Error("Project storage contains more than one book.");
+    }
+    const existing = books[0];
+    return existing
+      ? this.toNovelDto(existing)
+      : this.createNovel({ title });
+  }
+
+  getProjectBook(): NovelDto | null {
+    const books = this.persistence.listNovels();
+    if (books.length > 1) {
+      throw new Error("Project storage contains more than one book.");
+    }
+    return books[0] ? this.toNovelDto(books[0]) : null;
+  }
+
   createNovel(input: {
     readonly title: string;
     readonly synopsis?: string;
     readonly status?: NovelStatus;
   }): NovelDto {
+    if (this.persistence.listNovels().length > 0) {
+      throw new Error("Each project can contain only one book.");
+    }
     return this.toNovelDto(this.persistence.createNovel({
       id: `novel_${crypto.randomUUID()}`,
       title: this.requireTitle(input.title),

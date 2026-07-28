@@ -9,6 +9,15 @@ export type {
   SerializableError,
   StartRunRequest,
 } from "./contracts.ts";
+export type {
+  ConversationApplicationEvent,
+  ConversationApplicationEventHandler,
+  ConversationRef,
+  ConversationScope,
+  ConversationSnapshot,
+  CreateConversationRequest,
+  SendConversationMessageRequest,
+} from "./conversationContracts.ts";
 export type { AgentRunner, AgentRunnerRunOptions } from "./ports.ts";
 export type { ApplicationEventRecorder, RunHistoryStore } from "./runPorts.ts";
 export type {
@@ -26,6 +35,10 @@ export type {
   NovelStatus,
   VolumeRecord,
 } from "./novelPorts.ts";
+export type {
+  ProjectBookSummary,
+  ProjectNavigationSnapshot,
+} from "./projectNavigationContracts.ts";
 export type {
   AppendMessageRequest,
   CreateThreadRequest,

@@ -17,8 +17,8 @@ export type MessageDto = {
 };
 
 export type ThreadSnapshot = {
-  readonly activeThreadId: string;
-  readonly activeThread: ThreadDto;
+  readonly activeThreadId: string | null;
+  readonly activeThread: ThreadDto | null;
   readonly threads: readonly ThreadDto[];
 };
 

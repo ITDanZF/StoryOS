@@ -1,7 +1,11 @@
 import path from "node:path";
 import { createAgentOrchestrator } from "../Agent/orchestration/index.ts";
 import AgentApplication from "../application/AgentApplication.ts";
-import type { ApplicationEventHandler } from "../application/contracts.ts";
+import type {
+  ConversationApplicationEvent,
+  ConversationApplicationEventHandler,
+  ConversationScope,
+} from "../application/conversationContracts.ts";
 import NovelApplication from "../application/NovelApplication.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ThreadApplication from "../application/ThreadApplication.ts";
@@ -26,6 +30,7 @@ import {
 } from "../workspace/ProjectLayout.ts";
 
 export type ActiveWorkspaceRuntime = {
+  readonly conversationScope: ConversationScope;
   readonly projectPath: string | null;
   readonly layout: WorkspaceLayout;
   readonly threads: ThreadApplication;
@@ -55,8 +60,10 @@ function samePath(first: string, second: string): boolean {
 }
 
 export default class WorkspaceRuntimeManager {
-  private readonly subscribers = new Set<ApplicationEventHandler>();
-  private current: ActiveWorkspaceRuntime | null = null;
+  private readonly subscribers =
+    new Set<ConversationApplicationEventHandler>();
+  private globalRuntime: ActiveWorkspaceRuntime | null = null;
+  private projectRuntime: ActiveWorkspaceRuntime | null = null;
 
   private constructor(
     private readonly projects: ProjectApplication,
@@ -68,11 +75,21 @@ export default class WorkspaceRuntimeManager {
     modelConfiguration: ModelConnectionConfiguration,
   ): Promise<WorkspaceRuntimeManager> {
     const manager = new WorkspaceRuntimeManager(projects, modelConfiguration);
-    await manager.activate(projects.getSnapshot().activeProjectPath);
-    return manager;
+    try {
+      manager.globalRuntime = await manager.createRuntime(null);
+      const activeProjectPath = projects.getSnapshot().activeProjectPath;
+      if (activeProjectPath) {
+        manager.projectRuntime =
+          await manager.createRuntime(activeProjectPath);
+      }
+      return manager;
+    } catch (error) {
+      await manager.shutdown();
+      throw error;
+    }
   }
 
-  subscribe(handler: ApplicationEventHandler): () => void {
+  subscribe(handler: ConversationApplicationEventHandler): () => void {
     this.subscribers.add(handler);
     return () => this.subscribers.delete(handler);
   }
@@ -90,17 +107,47 @@ export default class WorkspaceRuntimeManager {
     return this.requireCurrent().skills;
   }
   get activeProjectPath(): string | null {
-    return this.requireCurrent().projectPath;
+    return this.projectRuntime?.projectPath ?? null;
   }
 
   async activate(projectPath: string | null): Promise<void> {
-    if (this.current && this.matchesCurrent(projectPath)) return;
-    this.assertCanLeaveCurrent();
+    if (projectPath === null) {
+      if (!this.projectRuntime) return;
+      this.assertCanLeaveProjectRuntime();
+      const previous = this.projectRuntime;
+      this.projectRuntime = null;
+      await this.closeRuntime(previous);
+      return;
+    }
+    if (this.matchesProjectRuntime(projectPath)) return;
+    this.assertCanLeaveProjectRuntime();
 
     const next = await this.createRuntime(projectPath);
-    const previous = this.current;
-    this.current = next;
+    const previous = this.projectRuntime;
+    this.projectRuntime = next;
     await this.closeRuntime(previous);
+  }
+
+  async resolve(
+    scope: ConversationScope,
+  ): Promise<ActiveWorkspaceRuntime> {
+    if (scope.kind === "global") return this.requireGlobalRuntime();
+    const snapshot = this.projects.getSnapshot();
+    const project = snapshot.projects.find(
+      (item) => item.id === scope.projectId,
+    );
+    if (!project) throw new Error(`Project not found: ${scope.projectId}`);
+    const previousPath = snapshot.activeProjectPath;
+    await this.activate(project.path);
+    try {
+      if (this.projects.getSnapshot().activeProjectId !== project.id) {
+        this.projects.switchProject(project.path);
+      }
+      return this.requireProjectRuntime(scope.projectId);
+    } catch (error) {
+      await this.activate(previousPath);
+      throw error;
+    }
   }
 
   private async createRuntime(
@@ -125,6 +172,9 @@ export default class WorkspaceRuntimeManager {
       const layout = project
         ? getWorkspaceLayout(project.path)
         : getWorkspaceLayout(snapshot.systemWorkspace.path, true);
+      const conversationScope: ConversationScope = project
+        ? Object.freeze({ kind: "project", projectId: project.id })
+        : Object.freeze({ kind: "global" });
 
       const projectDatabase = new ProjectDatabase(layout.databasePath);
       resources.projectDatabase = projectDatabase;
@@ -134,6 +184,7 @@ export default class WorkspaceRuntimeManager {
       const novels = new NovelApplication(
         new SqliteNovelStore(projectDatabase.handle),
       );
+      if (project) novels.ensureProjectBook(project.name);
       const modelSessions = new Memory({
         checkpointBackend: "sqlite",
         checkpointPath: layout.checkpointPath,
@@ -178,15 +229,21 @@ export default class WorkspaceRuntimeManager {
         },
       );
       resources.agent = agent;
-      const unsubscribe = agent.subscribe((event) =>
-        Promise.allSettled(
-          [...this.subscribers].map((subscriber) => subscriber(event)),
+      const unsubscribe = agent.subscribe((event) => {
+        const scopedEvent = Object.freeze({
+          ...event,
+          conversationScope,
+        }) as ConversationApplicationEvent;
+        return Promise.allSettled(
+          [...this.subscribers].map((subscriber) =>
+            subscriber(scopedEvent)),
         ).then(() => {
           // Subscriber failures are isolated from the active agent run.
-        }),
-      );
+        });
+      });
       resources.unsubscribe = unsubscribe;
       return Object.freeze({
+        conversationScope,
         projectPath: project?.path ?? null,
         layout,
         threads,
@@ -206,54 +263,82 @@ export default class WorkspaceRuntimeManager {
 
   async closeForProjectMutation(projectPath: string): Promise<void> {
     if (
-      !this.current?.projectPath ||
-      !samePath(this.current.projectPath, projectPath)
+      !this.projectRuntime?.projectPath ||
+      !samePath(this.projectRuntime.projectPath, projectPath)
     )
       return;
-    this.assertCanLeaveCurrent();
-    await this.closeCurrent();
+    this.assertCanLeaveProjectRuntime();
+    const runtime = this.projectRuntime;
+    this.projectRuntime = null;
+    await this.closeRuntime(runtime);
   }
 
   hasActiveRun(): boolean {
-    return this.current?.agent.hasActiveRuns() ?? false;
+    return Boolean(
+      this.globalRuntime?.agent.hasActiveRuns() ||
+      this.projectRuntime?.agent.hasActiveRuns(),
+    );
   }
 
   async close(): Promise<void> {
-    this.assertCanLeaveCurrent();
-    await this.closeCurrent();
+    this.assertCanLeaveProjectRuntime();
+    if (this.globalRuntime?.agent.hasActiveRuns()) {
+      throw new Error("全局对话仍有 AI 任务运行，请先停止任务后再关闭工作区。");
+    }
+    await this.shutdown();
   }
 
   async shutdown(): Promise<void> {
-    await this.closeCurrent();
+    const projectRuntime = this.projectRuntime;
+    const globalRuntime = this.globalRuntime;
+    this.projectRuntime = null;
+    this.globalRuntime = null;
+    await Promise.allSettled([
+      this.closeRuntime(projectRuntime),
+      this.closeRuntime(globalRuntime),
+    ]);
     this.subscribers.clear();
   }
 
   private requireCurrent(): ActiveWorkspaceRuntime {
-    if (!this.current)
+    const runtime = this.projectRuntime ?? this.globalRuntime;
+    if (!runtime)
       throw new Error("StoryOS workspace runtime is not initialized.");
-    return this.current;
+    return runtime;
   }
 
-  private matchesCurrent(projectPath: string | null): boolean {
-    if (!this.current) return false;
-    if (this.current.projectPath === null || projectPath === null) {
-      return this.current.projectPath === projectPath;
+  private requireGlobalRuntime(): ActiveWorkspaceRuntime {
+    if (!this.globalRuntime) {
+      throw new Error("StoryOS global conversation runtime is not initialized.");
     }
-    return samePath(this.current.projectPath, projectPath);
+    return this.globalRuntime;
   }
 
-  private assertCanLeaveCurrent(): void {
-    if (this.current?.agent.hasActiveRuns()) {
+  private requireProjectRuntime(projectId: string): ActiveWorkspaceRuntime {
+    const runtime = this.projectRuntime;
+    if (
+      !runtime ||
+      runtime.conversationScope.kind !== "project" ||
+      runtime.conversationScope.projectId !== projectId
+    ) {
+      throw new Error(`Project runtime is not active: ${projectId}`);
+    }
+    return runtime;
+  }
+
+  private matchesProjectRuntime(projectPath: string): boolean {
+    return Boolean(
+      this.projectRuntime?.projectPath &&
+      samePath(this.projectRuntime.projectPath, projectPath),
+    );
+  }
+
+  private assertCanLeaveProjectRuntime(): void {
+    if (this.projectRuntime?.agent.hasActiveRuns()) {
       throw new Error(
         "当前项目仍有 AI 任务运行，请先停止任务后再切换、重命名或删除项目。",
       );
     }
-  }
-
-  private async closeCurrent(): Promise<void> {
-    const current = this.current;
-    this.current = null;
-    await this.closeRuntime(current);
   }
 
   private async closeRuntime(

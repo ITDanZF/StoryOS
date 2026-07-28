@@ -1,4 +1,6 @@
-import type { ApplicationEventHandler } from "./application/contracts.ts";
+import type {
+    ConversationApplicationEventHandler,
+} from "./application/conversationContracts.ts";
 import ProjectApplication from "./application/ProjectApplication.ts";
 import Configuration from "./config/index.ts";
 import DesktopController from "./electron/DesktopController.ts";
@@ -36,8 +38,10 @@ export type StoryAgentServiceOptions = {
 export default class StoryAgentService {
     private readonly configuration = new Configuration();
     private readonly workspace = new WorkSpace();
-    private readonly subscribers = new Set<ApplicationEventHandler>();
-    private readonly controllerUnsubscribers = new Map<ApplicationEventHandler, () => void>();
+    private readonly subscribers =
+        new Set<ConversationApplicationEventHandler>();
+    private readonly controllerUnsubscribers =
+        new Map<ConversationApplicationEventHandler, () => void>();
     private controller: DesktopController | null = null;
     private applicationDatabase: ApplicationDatabase | null = null;
     private configured = false;
@@ -112,7 +116,7 @@ export default class StoryAgentService {
         return this.controller;
     }
 
-    subscribe(handler: ApplicationEventHandler): () => void {
+    subscribe(handler: ConversationApplicationEventHandler): () => void {
         this.subscribers.add(handler);
         if (this.controller) {
             this.controllerUnsubscribers.set(handler, this.controller.subscribe(handler));

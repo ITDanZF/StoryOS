@@ -30,11 +30,6 @@ type SkillRow = {
 export default class SqliteThreadStore implements ThreadPersistence {
   constructor(private readonly database: BetterSqliteDatabase) {}
 
-  ensureInitialThread(): ThreadRecord {
-    const [existing] = this.listThreads();
-    return existing ?? this.createThread("新对话");
-  }
-
   createThread(
     title: string,
     id: string = crypto.randomUUID(),
@@ -150,8 +145,8 @@ export default class SqliteThreadStore implements ThreadPersistence {
     return row.active_thread_id;
   }
 
-  setActiveThreadId(threadId: string): void {
-    this.requireThreadRow(threadId);
+  setActiveThreadId(threadId: string | null): void {
+    if (threadId !== null) this.requireThreadRow(threadId);
     this.database.prepare(`
       UPDATE workspace_state
       SET active_thread_id = ?, updated_at = ?

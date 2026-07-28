@@ -1,5 +1,14 @@
 import type { ApplicationEvent, RunSnapshot } from "../../main/agent/application/contracts.ts";
+import type {
+    ConversationApplicationEvent,
+    ConversationRef,
+    ConversationScope,
+    ConversationSnapshot,
+    CreateConversationRequest,
+    SendConversationMessageRequest,
+} from "../../main/agent/application/conversationContracts.ts";
 import type { CreateProjectRequest, ProjectDto, ProjectSnapshot, RenameProjectRequest } from "../../main/agent/application/projectContracts.ts";
+import type { ProjectNavigationSnapshot } from "../../main/agent/application/projectNavigationContracts.ts";
 import type { MessageDto, ThreadDto, ThreadSnapshot } from "../../main/agent/application/threadContracts.ts";
 import type { ThreadSkillState } from "../../main/agent/application/threadPorts.ts";
 import type { ToolApprovalDecision } from "../../main/agent/security/ToolPolicy.ts";
@@ -11,15 +20,25 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     status: "agent:status",
     configure: "agent:configure",
     sendMessage: "agent:send-message",
+    sendConversationMessage: "agent:conversation-send-message",
     cancelRun: "agent:cancel-run",
+    cancelConversationRun: "agent:conversation-cancel-run",
     listRuns: "agent:list-runs",
+    listConversationRuns: "agent:conversation-list-runs",
     resolveApproval: "agent:resolve-approval",
+    resolveConversationApproval: "agent:conversation-resolve-approval",
     threadSnapshot: "agent:thread-snapshot",
+    conversationSnapshot: "agent:conversation-snapshot",
     listMessages: "agent:list-messages",
+    listConversationMessages: "agent:conversation-list-messages",
     createThread: "agent:create-thread",
+    createConversation: "agent:conversation-create",
     switchThread: "agent:switch-thread",
+    switchConversation: "agent:conversation-switch",
     deleteThread: "agent:delete-thread",
+    deleteConversation: "agent:conversation-delete",
     projectSnapshot: "agent:project-snapshot",
+    projectNavigation: "agent:project-navigation",
     workspaceSnapshot: "agent:workspace-snapshot",
     createProject: "agent:create-project",
     openProject: "agent:open-project",
@@ -45,15 +64,25 @@ export type AgentDesktopApi = {
     getStatus(): Promise<AgentServiceStatus>;
     configure(request: AgentConfigurationRequest): Promise<AgentServiceStatus>;
     sendMessage(request: { threadId: string; content: string }): Promise<{ runId: string }>;
+    sendConversationMessage(request: SendConversationMessageRequest): Promise<{ runId: string }>;
     cancelRun(runId: string): Promise<boolean>;
+    cancelConversationRun(scope: ConversationScope, runId: string): Promise<boolean>;
     listRuns(): Promise<readonly RunSnapshot[]>;
+    listConversationRuns(scope: ConversationScope): Promise<readonly RunSnapshot[]>;
     resolveApproval(approvalId: string, decision: ToolApprovalDecision): Promise<boolean>;
+    resolveConversationApproval(scope: ConversationScope, approvalId: string, decision: ToolApprovalDecision): Promise<boolean>;
     getThreadSnapshot(): Promise<ThreadSnapshot>;
+    getConversationSnapshot(scope: ConversationScope): Promise<ConversationSnapshot>;
     listMessages(threadId?: string): Promise<readonly MessageDto[]>;
+    listConversationMessages(request: ConversationRef): Promise<readonly MessageDto[]>;
     createThread(title: string): Promise<ThreadDto>;
+    createConversation(request: CreateConversationRequest): Promise<ThreadDto>;
     switchThread(threadId: string): Promise<ThreadSnapshot>;
+    switchConversation(request: ConversationRef): Promise<ConversationSnapshot>;
     deleteThread(threadId: string): Promise<ThreadSnapshot>;
+    deleteConversation(request: ConversationRef): Promise<ConversationSnapshot>;
     getProjectSnapshot(): Promise<ProjectSnapshot>;
+    getProjectNavigation(projectId: string): Promise<ProjectNavigationSnapshot>;
     getWorkspaceSnapshot(): Promise<WorkspaceSnapshot>;
     createProject(request: CreateProjectRequest): Promise<WorkspaceSnapshot>;
     openProject(projectPath: string): Promise<WorkspaceSnapshot>;
@@ -67,19 +96,26 @@ export type AgentDesktopApi = {
     useSkill(skillId: string, threadId?: string): Promise<ThreadSkillState>;
     disableSkill(skillId: string, threadId?: string): Promise<ThreadSkillState>;
     clearSkillState(threadId?: string): Promise<ThreadSkillState>;
-    onEvent(handler: (event: ApplicationEvent) => void): () => void;
+    onEvent(handler: (event: ConversationApplicationEvent) => void): () => void;
 };
 
 export type {
     AgentConfigurationRequest,
     AgentServiceStatus,
     ApplicationEvent,
+    ConversationApplicationEvent,
+    ConversationRef,
+    ConversationScope,
+    ConversationSnapshot,
+    CreateConversationRequest,
     MessageDto,
     CreateProjectRequest,
     ProjectDto,
     ProjectSnapshot,
+    ProjectNavigationSnapshot,
     RenameProjectRequest,
     RunSnapshot,
+    SendConversationMessageRequest,
     SkillDetail,
     SkillSnapshot,
     ThreadDto,

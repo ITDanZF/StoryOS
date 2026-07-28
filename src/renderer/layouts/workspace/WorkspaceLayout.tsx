@@ -82,7 +82,11 @@ export default function WorkspaceLayout() {
         }}
         onDeleteThread={async (threadId) => {
           const snapshot = await deleteThread(threadId);
-          navigate(`/conversations/${snapshot.activeThreadId}`);
+          navigate(
+            snapshot.activeThreadId
+              ? `/conversations/${snapshot.activeThreadId}`
+              : "/conversations",
+          );
         }}
         onOpenSettings={(page) => {
           setSidebarOpen(false);

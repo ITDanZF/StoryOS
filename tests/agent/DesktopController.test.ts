@@ -67,6 +67,19 @@ function createHarness() {
     disableSkill: vi.fn(() => skillState),
     clearSkillState: vi.fn(() => skillState),
   };
+  const book = {
+    id: "novel-story",
+    title: "Story",
+    synopsis: "",
+    status: "planning" as const,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+  };
+  const novels = {
+    getProjectBook: vi.fn(() => book),
+    listVolumes: vi.fn(() => []),
+    listChapters: vi.fn(() => []),
+  };
   const projects = {
     getSnapshot: vi.fn(() => snapshot()),
     getProject: vi.fn(() => project),
@@ -83,11 +96,17 @@ function createHarness() {
     activate: vi.fn(async () => undefined),
     closeForProjectMutation: vi.fn(async () => undefined),
     shutdown: vi.fn(async () => undefined),
+    resolve: vi.fn(async (scope) => ({
+      conversationScope: scope,
+      threads,
+      agent,
+      novels,
+    })),
   };
   const dependencies = { projects, runtime } as unknown as DesktopControllerDependencies;
   vi.mocked(shell.openPath).mockClear();
   vi.mocked(shell.trashItem).mockClear();
-  return { agent, completion, controller: new DesktopController(dependencies), messages, projects, runtime, threads };
+  return { agent, completion, controller: new DesktopController(dependencies), messages, novels, projects, runtime, threads };
 }
 
 describe("DesktopController", () => {
@@ -114,6 +133,40 @@ describe("DesktopController", () => {
     const harness = createHarness();
     expect(() => harness.controller.sendMessage({ threadId: "thread-1", content: "  " })).toThrow("Message content is required.");
     expect(harness.messages).toEqual([]);
+  });
+
+  it("resolves an explicit scope before creating a conversation", async () => {
+    const harness = createHarness();
+    const scope = { kind: "global" } as const;
+
+    await harness.controller.createConversation({
+      scope,
+      title: "Global ideas",
+    });
+
+    expect(harness.runtime.resolve).toHaveBeenCalledWith(scope);
+    expect(harness.threads.createThread).toHaveBeenCalledWith({
+      title: "Global ideas",
+    });
+  });
+
+  it("returns the project tree navigation snapshot", async () => {
+    const harness = createHarness();
+
+    await expect(harness.controller.getProjectNavigation("prj-story"))
+      .resolves.toMatchObject({
+        project: { id: "prj-story" },
+        book: {
+          id: "novel-story",
+          volumeCount: 0,
+          chapterCount: 0,
+        },
+        conversations: { activeThreadId: "thread-1" },
+      });
+    expect(harness.runtime.resolve).toHaveBeenCalledWith({
+      kind: "project",
+      projectId: "prj-story",
+    });
   });
 
   it("opens a registered project directory through the operating system", async () => {

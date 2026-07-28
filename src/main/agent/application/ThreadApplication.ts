@@ -34,31 +34,36 @@ function toMessageDto(message: MessageRecord): MessageDto {
 }
 
 export default class ThreadApplication {
-  private activeThreadId: string;
+  private activeThreadId: string | null;
 
   constructor(private readonly store: ThreadPersistence) {
     const persistedThreadId = store.getActiveThreadId();
-    const initialThread = persistedThreadId
-      ? store.getThread(persistedThreadId) ?? store.ensureInitialThread()
-      : store.ensureInitialThread();
-    this.activeThreadId = initialThread.id;
-    store.setActiveThreadId(initialThread.id);
+    this.activeThreadId =
+      persistedThreadId && store.getThread(persistedThreadId)
+        ? persistedThreadId
+        : store.listThreads()[0]?.id ?? null;
+    store.setActiveThreadId(this.activeThreadId);
   }
 
-  getActiveThreadId(): string { return this.activeThreadId; }
+  getActiveThreadId(): string | null { return this.activeThreadId; }
 
   getSnapshot(): ThreadSnapshot {
     const threads = this.store.listThreads();
-    if (!threads.some((thread) => thread.id === this.activeThreadId)) {
-      this.activeThreadId = (threads[0] ?? this.store.createThread("新对话")).id;
+    if (
+      this.activeThreadId !== null &&
+      !threads.some((thread) => thread.id === this.activeThreadId)
+    ) {
+      this.activeThreadId = threads[0]?.id ?? null;
     }
     if (this.store.getActiveThreadId() !== this.activeThreadId) {
       this.store.setActiveThreadId(this.activeThreadId);
     }
-    const activeThread = this.requireThread(this.activeThreadId);
+    const activeThread = this.activeThreadId
+      ? this.requireThread(this.activeThreadId)
+      : null;
     return Object.freeze({
       activeThreadId: this.activeThreadId,
-      activeThread: toThreadDto(activeThread),
+      activeThread: activeThread ? toThreadDto(activeThread) : null,
       threads: Object.freeze(this.store.listThreads().map(toThreadDto)),
     });
   }
@@ -81,14 +86,19 @@ export default class ThreadApplication {
   }
 
   appendMessage(request: AppendMessageRequest): MessageDto {
-    const threadId = request.threadId?.trim() ?? this.activeThreadId;
+    const threadId = request.threadId === undefined
+      ? this.requireActiveThreadId()
+      : request.threadId.trim();
     this.requireThread(threadId);
     return toMessageDto(this.store.appendMessage({ threadId, role: request.role, content: request.content }));
   }
 
-  listMessages(threadId = this.activeThreadId): readonly MessageDto[] {
-    this.requireThread(threadId);
-    return Object.freeze(this.store.listMessages(threadId).map(toMessageDto));
+  listMessages(threadId?: string): readonly MessageDto[] {
+    const resolvedThreadId = threadId === undefined
+      ? this.requireActiveThreadId()
+      : threadId.trim();
+    this.requireThread(resolvedThreadId);
+    return Object.freeze(this.store.listMessages(resolvedThreadId).map(toMessageDto));
   }
 
   deleteThread(threadId: string): ThreadSnapshot {
@@ -96,19 +106,19 @@ export default class ThreadApplication {
     this.requireThread(normalizedId);
     this.store.deleteThread(normalizedId);
     if (normalizedId === this.activeThreadId) {
-      this.activeThreadId = this.store.ensureInitialThread().id;
+      this.activeThreadId = this.store.listThreads()[0]?.id ?? null;
       this.store.setActiveThreadId(this.activeThreadId);
     }
     return this.getSnapshot();
   }
 
-  getThreadSkillState(threadId = this.activeThreadId): ThreadSkillState {
-    return normalizeSkillState(this.requireThread(threadId));
+  getThreadSkillState(threadId?: string): ThreadSkillState {
+    return normalizeSkillState(this.requireThread(this.resolveThreadId(threadId)));
   }
 
-  useSkill(skillId: string, threadId = this.activeThreadId): ThreadSkillState {
+  useSkill(skillId: string, threadId?: string): ThreadSkillState {
     const normalizedSkillId = this.normalizeSkillId(skillId);
-    const thread = this.requireThread(threadId);
+    const thread = this.requireThread(this.resolveThreadId(threadId));
     const state = normalizeSkillState(thread);
     const updated = this.store.updateThreadMetadata(thread.id, {
       ...thread.metadata,
@@ -118,9 +128,9 @@ export default class ThreadApplication {
     return normalizeSkillState(updated);
   }
 
-  disableSkill(skillId: string, threadId = this.activeThreadId): ThreadSkillState {
+  disableSkill(skillId: string, threadId?: string): ThreadSkillState {
     const normalizedSkillId = this.normalizeSkillId(skillId);
-    const thread = this.requireThread(threadId);
+    const thread = this.requireThread(this.resolveThreadId(threadId));
     const state = normalizeSkillState(thread);
     const updated = this.store.updateThreadMetadata(thread.id, {
       ...thread.metadata,
@@ -130,8 +140,8 @@ export default class ThreadApplication {
     return normalizeSkillState(updated);
   }
 
-  clearSkillState(threadId = this.activeThreadId): ThreadSkillState {
-    const thread = this.requireThread(threadId);
+  clearSkillState(threadId?: string): ThreadSkillState {
+    const thread = this.requireThread(this.resolveThreadId(threadId));
     return normalizeSkillState(this.store.updateThreadMetadata(thread.id, {
       ...thread.metadata,
       activeSkillIds: Object.freeze([]),
@@ -144,6 +154,17 @@ export default class ThreadApplication {
     const thread = this.store.getThread(threadId);
     if (!thread) throw new Error(`Thread not found: ${threadId}`);
     return thread;
+  }
+
+  private requireActiveThreadId(): string {
+    if (!this.activeThreadId) throw new Error("No active thread.");
+    return this.activeThreadId;
+  }
+
+  private resolveThreadId(threadId: string | undefined): string {
+    return threadId === undefined
+      ? this.requireActiveThreadId()
+      : threadId.trim();
   }
 
   private normalizeSkillId(skillId: string): string {
