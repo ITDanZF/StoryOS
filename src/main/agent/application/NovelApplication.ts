@@ -25,17 +25,6 @@ const CHAPTER_STATUSES = new Set<ChapterStatus>([
 export default class NovelApplication {
   constructor(private readonly persistence: NovelPersistence) {}
 
-  ensureProjectBook(title: string): NovelDto {
-    const books = this.persistence.listNovels();
-    if (books.length > 1) {
-      throw new Error("Project storage contains more than one book.");
-    }
-    const existing = books[0];
-    return existing
-      ? this.toNovelDto(existing)
-      : this.createNovel({ title });
-  }
-
   getProjectBook(): NovelDto | null {
     const books = this.persistence.listNovels();
     if (books.length > 1) {
@@ -114,6 +103,10 @@ export default class NovelApplication {
     );
   }
 
+  deleteVolume(volumeId: string): void {
+    this.persistence.deleteVolume(volumeId);
+  }
+
   createChapter(input: {
     readonly novelId: string;
     readonly volumeId?: string | null;
@@ -159,6 +152,11 @@ export default class NovelApplication {
       status: this.requireChapterStatus(input.status),
       sortOrder: this.requireSortOrder(input.sortOrder),
     }));
+  }
+
+  deleteChapter(chapterId: string): void {
+    this.requireChapter(chapterId);
+    this.persistence.deleteChapter(chapterId);
   }
 
   getCurrentRevision(chapterId: string): ChapterRevisionDto | null {

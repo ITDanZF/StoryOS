@@ -1,5 +1,6 @@
 import {
-  BookPlus,
+  BookOpen,
+  Folder,
   Menu,
   PanelLeft,
   PanelRight,
@@ -14,7 +15,11 @@ import { cn } from "../../../lib/utils.ts";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
 import BookAssistantPanel from "./components/BookAssistantPanel.tsx";
 import BookCatalogPanel from "./components/BookCatalogPanel.tsx";
+import BookProfilePanel, {
+  type BookProfileInput,
+} from "./components/BookProfilePanel.tsx";
 import ChapterEditorPanel from "./components/ChapterEditorPanel.tsx";
+import { formatChineseOrdinal } from "./bookWorkspaceModel.ts";
 import useBookWorkspace from "./useBookWorkspace.ts";
 
 const MIN_ASSISTANT_WIDTH = 300;
@@ -39,8 +44,12 @@ export default function BookWorkspacePage() {
     workspace,
     loading: bookLoading,
     error: bookError,
+    createBookProfile,
     createVolume,
     createChapter,
+    deleteVolume,
+    deleteChapter,
+    updateBookProfile,
     updateChapterTitle,
     saveChapterContent,
   } = useBookWorkspace(projectId);
@@ -117,11 +126,15 @@ export default function BookWorkspacePage() {
 
   useEffect(() => {
     if (!workspace) return;
+    if (workspace.state === "uninitialized") {
+      if (activeChapterId !== null) setActiveChapterId(null);
+      return;
+    }
     if (
       activeChapterId &&
       workspace.chapters.some((chapter) => chapter.id === activeChapterId)
     ) return;
-    setActiveChapterId(workspace.chapters[0]?.id ?? null);
+    if (activeChapterId !== null) setActiveChapterId(null);
   }, [activeChapterId, workspace]);
 
   useEffect(() => {
@@ -158,16 +171,30 @@ export default function BookWorkspacePage() {
   }
 
   const scope = { kind: "project", projectId } as const;
-  const activeChapter = workspace.chapters.find(
+  const readyWorkspace = workspace.state === "ready" ? workspace : null;
+  const activeChapter = readyWorkspace?.chapters.find(
     (chapter) => chapter.id === activeChapterId,
   ) ?? null;
-  const chapterNumber = activeChapter
-    ? workspace.chapters.findIndex((chapter) => chapter.id === activeChapter.id) + 1
-    : null;
   const activeVolume = activeChapter?.volumeId
-    ? workspace.volumes.find((volume) => volume.id === activeChapter.volumeId)
+    ? readyWorkspace?.volumes.find(
+        (volume) => volume.id === activeChapter.volumeId,
+      )
     : null;
-  const activeVolumeTitle = activeVolume?.title ?? "未分卷";
+  const chapterNumber = activeChapter && activeVolume && readyWorkspace
+    ? readyWorkspace.chapters
+      .filter((chapter) => chapter.volumeId === activeVolume.id)
+      .findIndex((chapter) => chapter.id === activeChapter.id) + 1
+    : null;
+  const activeVolumeNumber = activeVolume && readyWorkspace
+    ? readyWorkspace.volumes.findIndex(
+        (volume) => volume.id === activeVolume.id,
+      ) + 1
+    : null;
+  const activeVolumeTitle = activeVolume && activeVolumeNumber !== null
+    ? activeVolume.title === `第${activeVolumeNumber}卷`
+      ? `第${activeVolumeNumber}卷`
+      : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
+    : "未分卷";
 
   const ensureProjectConversation = async () => {
     if (!projectConversationActive) {
@@ -196,17 +223,58 @@ export default function BookWorkspacePage() {
   };
 
   const addVolume = async () => {
-    const defaultTitle = `第${workspace.volumes.length + 1}卷`;
-    const title = window.prompt("请输入卷名", defaultTitle)?.trim();
-    if (!title) return;
-    await createVolume(title);
+    const nextNumber = readyWorkspace
+      ? readyWorkspace.volumes.reduce(
+          (maximum, volume) => Math.max(maximum, volume.sortOrder),
+          -1,
+        ) + 2
+      : 1;
+    await createVolume(formatChineseOrdinal(nextNumber, "卷"));
     await loadProjectNavigation(projectId);
   };
 
-  const addChapter = async (volumeId: string | null) => {
-    const created = await createChapter(volumeId);
+  const addChapter = async (volumeId: string) => {
+    if (!readyWorkspace) return;
+    const nextNumber = readyWorkspace.chapters
+      .filter((chapter) => chapter.volumeId === volumeId)
+      .reduce(
+        (maximum, chapter) => Math.max(maximum, chapter.sortOrder),
+        -1,
+      ) + 2;
+    const created = await createChapter(
+      volumeId,
+      formatChineseOrdinal(nextNumber, "章"),
+    );
     if (created) setActiveChapterId(created.id);
     await loadProjectNavigation(projectId);
+  };
+
+  const removeVolume = async (volumeId: string) => {
+    await deleteVolume(volumeId);
+    await loadProjectNavigation(projectId);
+  };
+
+  const removeChapter = async (chapterId: string) => {
+    await deleteChapter(chapterId);
+    if (activeChapterId === chapterId) setActiveChapterId(null);
+    await loadProjectNavigation(projectId);
+  };
+
+  const saveBookProfile = async (input: BookProfileInput) => {
+    if (workspace.state === "uninitialized") {
+      await createBookProfile({
+        ...input,
+        status: "planning",
+      });
+      await loadProjectNavigation(projectId);
+    } else {
+      const titleChanged = input.title !== workspace.book.title;
+      await updateBookProfile({
+        ...input,
+        status: workspace.book.status,
+      });
+      if (titleChanged) await loadProjectNavigation(projectId);
+    }
   };
 
   const clampAssistantWidth = (width: number): number => {
@@ -251,10 +319,46 @@ export default function BookWorkspacePage() {
       <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-2 sm:px-4 lg:px-5">
         <div className="flex min-w-0 items-center gap-1">
           <button className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100 lg:hidden" type="button" aria-label="打开侧栏" onClick={openSidebar}><Menu size={19} /></button>
-          <div className="flex min-w-0 items-center gap-2 text-xs sm:text-[13px]">
-            <strong className="truncate">{project.name}</strong>
+          <div className="flex min-w-0 items-center gap-1.5 text-xs">
+            <span
+              className="inline-flex h-7 min-w-0 items-center gap-1.5 rounded-lg bg-neutral-100 px-2 text-neutral-500"
+              title={`项目名称：${project.name}`}
+            >
+              <Folder className="shrink-0" size={12} />
+              <span className="hidden text-[9px] text-neutral-400 sm:inline">
+                项目
+              </span>
+              <strong className="truncate text-[11px] font-semibold text-neutral-700">
+                {project.name}
+              </strong>
+            </span>
             <span className="text-neutral-300">/</span>
-            <span className="text-neutral-400">{activeChapter ? activeVolumeTitle : workspace.book.title}</span>
+            <button
+              className={cn(
+                "inline-flex min-w-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-1.5 py-1 text-left transition",
+                workspace.state === "ready"
+                  ? "max-w-44 font-medium text-neutral-700 hover:bg-violet-50 hover:text-violet-700"
+                  : "text-neutral-400",
+              )}
+              type="button"
+              title={readyWorkspace ? "查看书籍概览" : "请先设置书名"}
+              disabled={!readyWorkspace}
+              aria-current={readyWorkspace && !activeChapter ? "page" : undefined}
+              onClick={() => setActiveChapterId(null)}
+            >
+              <BookOpen className="shrink-0" size={12} />
+              <span className="truncate">
+                {readyWorkspace ? `《${readyWorkspace.book.title}》` : "待命名"}
+              </span>
+            </button>
+            {readyWorkspace && (
+              <>
+                <span className="text-neutral-300">/</span>
+                <span className="text-neutral-400">
+                  {activeChapter ? activeVolumeTitle : "书籍概览"}
+                </span>
+              </>
+            )}
             {chapterNumber !== null && (
               <>
                 <span className="text-neutral-300">/</span>
@@ -279,18 +383,32 @@ export default function BookWorkspacePage() {
       <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[#f6f6f4]">
         {catalogVisible && !assistantFocused && (
           <BookCatalogPanel
-            bookTitle={workspace.book.title}
-            volumes={workspace.volumes}
-            chapters={workspace.chapters}
+            bookTitle={readyWorkspace?.book.title ?? null}
+            volumes={readyWorkspace?.volumes ?? []}
+            chapters={readyWorkspace?.chapters ?? []}
             activeChapterId={activeChapter?.id ?? null}
             onSelectChapter={setActiveChapterId}
-            onCreateVolume={addVolume}
+            onCreateVolume={readyWorkspace ? addVolume : null}
             onCreateChapter={addChapter}
+            onShowOverview={() => setActiveChapterId(null)}
+            onDeleteVolume={removeVolume}
+            onDeleteChapter={removeChapter}
             onClose={() => setCatalogVisible(false)}
           />
         )}
 
-        {!assistantFocused && activeChapter && chapterNumber !== null && (
+        {!assistantFocused && workspace.state === "uninitialized" && (
+          <BookProfilePanel
+            book={null}
+            volumeCount={0}
+            chapterCount={0}
+            characterCount={0}
+            onSave={saveBookProfile}
+          />
+        )}
+
+        {!assistantFocused && readyWorkspace &&
+          activeChapter && chapterNumber !== null && (
           <ChapterEditorPanel
             chapter={activeChapter}
             chapterNumber={chapterNumber}
@@ -306,18 +424,17 @@ export default function BookWorkspacePage() {
           />
         )}
 
-        {!assistantFocused && !activeChapter && (
-          <div className="grid min-h-0 min-w-0 flex-1 place-items-center bg-[#f6f6f4] p-6 text-center">
-            <div>
-              <span className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-white text-violet-600 shadow-sm ring-1 ring-neutral-200"><BookPlus size={22} /></span>
-              <h2 className="m-0 text-base font-semibold text-neutral-800">开始你的第一章</h2>
-              <p className="mt-2 text-xs leading-5 text-neutral-400">当前书籍还没有章节，正文和修订记录会保存在项目 SQLite 中。</p>
-              <div className="mt-5 flex justify-center gap-2">
-                <button className="h-9 rounded-lg border border-neutral-300 bg-white px-4 text-xs font-medium text-neutral-700 hover:bg-neutral-50" type="button" onClick={() => void addVolume()}>新建第一卷</button>
-                <button className="h-9 rounded-lg border-0 bg-neutral-900 px-4 text-xs font-medium text-white hover:bg-violet-700" type="button" onClick={() => void addChapter(null)}>新建第一章</button>
-              </div>
-            </div>
-          </div>
+        {!assistantFocused && readyWorkspace && !activeChapter && (
+          <BookProfilePanel
+            book={readyWorkspace.book}
+            volumeCount={readyWorkspace.volumes.length}
+            chapterCount={readyWorkspace.chapters.length}
+            characterCount={readyWorkspace.chapters.reduce(
+              (total, chapter) => total + chapter.characterCount,
+              0,
+            )}
+            onSave={saveBookProfile}
+          />
         )}
 
         {assistantVisible && (
@@ -338,6 +455,7 @@ export default function BookWorkspacePage() {
             )}
             <BookAssistantPanel
               projectName={project.name}
+              bookTitle={readyWorkspace?.book.title ?? null}
               chapterNumber={chapterNumber}
               chapterTitle={activeChapter?.title ?? null}
               conversationTitle={projectConversationActive

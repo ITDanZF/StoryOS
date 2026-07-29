@@ -13,6 +13,6 @@ export type ProjectBookSummary = {
 
 export type ProjectNavigationSnapshot = {
   readonly project: ProjectDto;
-  readonly book: ProjectBookSummary;
+  readonly book: ProjectBookSummary | null;
   readonly conversations: ThreadSnapshot;
 };

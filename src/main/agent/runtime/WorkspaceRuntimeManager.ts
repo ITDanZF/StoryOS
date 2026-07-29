@@ -184,7 +184,6 @@ export default class WorkspaceRuntimeManager {
       const novels = new NovelApplication(
         new SqliteNovelStore(projectDatabase.handle),
       );
-      if (project) novels.ensureProjectBook(project.name);
       const modelSessions = new Memory({
         checkpointBackend: "sqlite",
         checkpointPath: layout.checkpointPath,

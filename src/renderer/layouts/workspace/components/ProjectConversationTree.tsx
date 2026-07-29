@@ -239,7 +239,9 @@ export default function ProjectConversationTree({
                       <span className="min-w-0 flex-1 truncate">书籍工作区</span>
                       {navigation && (
                         <span className="text-[10px] text-neutral-400">
-                          {navigation.book.chapterCount}章
+                          {navigation.book
+                            ? `${navigation.book.chapterCount}章`
+                            : "待命名"}
                         </span>
                       )}
                     </button>

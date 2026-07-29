@@ -123,6 +123,24 @@ export default class SqliteNovelStore implements NovelPersistence {
     `).all(novelId) as VolumeRow[]).map((row) => this.toVolume(row));
   }
 
+  deleteVolume(volumeId: string): void {
+    this.database.transaction(() => {
+      this.requireVolume(volumeId);
+      const now = Date.now();
+      this.database.prepare(`
+        UPDATE chapters
+        SET volume_id = NULL, updated_at = ?
+        WHERE volume_id = ?
+      `).run(now, volumeId);
+      const result = this.database.prepare(
+        "DELETE FROM volumes WHERE id = ?",
+      ).run(volumeId);
+      if (result.changes === 0) {
+        throw new Error(`Volume not found: ${volumeId}`);
+      }
+    })();
+  }
+
   createChapter(
     input: Omit<
       ChapterRecord,
@@ -191,6 +209,15 @@ export default class SqliteNovelStore implements NovelPersistence {
     );
     if (result.changes === 0) throw new Error(`Chapter not found: ${input.id}`);
     return this.requireChapter(input.id);
+  }
+
+  deleteChapter(chapterId: string): void {
+    const result = this.database.prepare(
+      "DELETE FROM chapters WHERE id = ?",
+    ).run(chapterId);
+    if (result.changes === 0) {
+      throw new Error(`Chapter not found: ${chapterId}`);
+    }
   }
 
   saveRevision(

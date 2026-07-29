@@ -15,6 +15,7 @@ import type { MessageView } from "../../../features/agent/types.ts";
 
 type BookAssistantPanelProps = {
   readonly projectName: string;
+  readonly bookTitle: string | null;
   readonly chapterNumber: number | null;
   readonly chapterTitle: string | null;
   readonly conversationTitle: string;
@@ -33,6 +34,7 @@ type BookAssistantPanelProps = {
 
 export default function BookAssistantPanel({
   projectName,
+  bookTitle,
   chapterNumber,
   chapterTitle,
   conversationTitle,
@@ -163,8 +165,15 @@ export default function BookAssistantPanel({
         <div className="flex items-center gap-1.5 text-[9px] text-neutral-400">
           <span className="flex items-center gap-1"><Folder size={11} />项目 / <b>{projectName}</b></span>
           <span>·</span>
+          <span className="flex items-center gap-1">
+            <BookOpen size={11} />
+                  {bookTitle ? <>书籍 / <b>{bookTitle}</b></> : "书籍 / 待命名"}
+          </span>
+          <span>·</span>
           <strong>
-            {chapterNumber === null ? "整本书" : `第${chapterNumber}章`}
+            {bookTitle
+              ? chapterNumber === null ? "整本书" : `第${chapterNumber}章`
+              : "项目对话"}
           </strong>
         </div>
         <textarea

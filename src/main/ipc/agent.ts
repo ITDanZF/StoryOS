@@ -12,10 +12,15 @@ import type { AgentConfigurationRequest } from "../agent/StoryAgentService.ts";
 import type { ToolApprovalDecision } from "../agent/security/ToolPolicy.ts";
 import type {
     CreateBookChapterRequest,
+    CreateBookRequest,
     CreateBookVolumeRequest,
+    DeleteBookChapterRequest,
+    DeleteBookVolumeRequest,
     SaveBookChapterContentRequest,
+    UpdateBookRequest,
     UpdateBookChapterRequest,
 } from "../agent/application/bookWorkspaceContracts.ts";
+import type { NovelStatus } from "../agent/application/novelPorts.ts";
 
 function requireApprovalDecision(decision: ToolApprovalDecision): ToolApprovalDecision {
     if (!["allow_once", "allow_session", "deny"].includes(decision)) {
@@ -50,19 +55,20 @@ function requireConversationRef(request: ConversationRef): ConversationRef {
     });
 }
 
-function requireNullableText(
-    value: unknown,
-    label: string,
-): string | null {
-    if (value === null) return null;
-    return requireText(value as string, label);
-}
-
 function requireContent(value: unknown): string {
     if (typeof value !== "string") {
         throw new Error("Chapter content must be a string.");
     }
     return value;
+}
+
+function requireNovelStatus(value: unknown): NovelStatus {
+    if (!["planning", "writing", "completed", "archived"].includes(
+        value as string,
+    )) {
+        throw new Error("Invalid book status.");
+    }
+    return value as NovelStatus;
 }
 
 export function registerAgentIpc(service: StoryAgentService): () => void {
@@ -129,11 +135,19 @@ export function registerAgentIpc(service: StoryAgentService): () => void {
         service.requireController().getBookWorkspace(
             requireText(projectId, "Project id"),
         ));
+    handle(AGENT_IPC_CHANNELS.createBook, (
+        request: CreateBookRequest,
+    ) => service.requireController().createBook({
+        projectId: requireText(request?.projectId, "Project id"),
+        title: requireText(request?.title, "Book title"),
+        synopsis: requireContent(request?.synopsis),
+        status: requireNovelStatus(request?.status),
+    }));
     handle(AGENT_IPC_CHANNELS.createBookChapter, (
         request: CreateBookChapterRequest,
     ) => service.requireController().createBookChapter({
         projectId: requireText(request?.projectId, "Project id"),
-        volumeId: requireNullableText(request?.volumeId, "Volume id"),
+        volumeId: requireText(request?.volumeId, "Volume id"),
         title: requireText(request?.title, "Chapter title"),
     }));
     handle(AGENT_IPC_CHANNELS.createBookVolume, (
@@ -141,6 +155,26 @@ export function registerAgentIpc(service: StoryAgentService): () => void {
     ) => service.requireController().createBookVolume({
         projectId: requireText(request?.projectId, "Project id"),
         title: requireText(request?.title, "Volume title"),
+    }));
+    handle(AGENT_IPC_CHANNELS.deleteBookVolume, (
+        request: DeleteBookVolumeRequest,
+    ) => service.requireController().deleteBookVolume({
+        projectId: requireText(request?.projectId, "Project id"),
+        volumeId: requireText(request?.volumeId, "Volume id"),
+    }));
+    handle(AGENT_IPC_CHANNELS.deleteBookChapter, (
+        request: DeleteBookChapterRequest,
+    ) => service.requireController().deleteBookChapter({
+        projectId: requireText(request?.projectId, "Project id"),
+        chapterId: requireText(request?.chapterId, "Chapter id"),
+    }));
+    handle(AGENT_IPC_CHANNELS.updateBook, (
+        request: UpdateBookRequest,
+    ) => service.requireController().updateBook({
+        projectId: requireText(request?.projectId, "Project id"),
+        title: requireText(request?.title, "Book title"),
+        synopsis: requireContent(request?.synopsis),
+        status: requireNovelStatus(request?.status),
     }));
     handle(AGENT_IPC_CHANNELS.updateBookChapter, (
         request: UpdateBookChapterRequest,

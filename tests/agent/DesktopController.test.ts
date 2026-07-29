@@ -75,10 +75,19 @@ function createHarness() {
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
   };
+  const volume = {
+    id: "volume-1",
+    novelId: book.id,
+    title: "第一卷",
+    summary: "",
+    sortOrder: 0,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+  };
   const chapter = {
     id: "chapter-1",
     novelId: book.id,
-    volumeId: null as string | null,
+    volumeId: volume.id as string | null,
     title: "第一章",
     status: "draft" as const,
     sortOrder: 0,
@@ -88,11 +97,15 @@ function createHarness() {
   };
   const novels = {
     getProjectBook: vi.fn(() => book),
+    createNovel: vi.fn(),
+    updateNovel: vi.fn(),
     listVolumes: vi.fn(() => []),
     listChapters: vi.fn(() => []),
     getCurrentRevision: vi.fn(() => null),
     createVolume: vi.fn(),
     createChapter: vi.fn(),
+    deleteVolume: vi.fn(),
+    deleteChapter: vi.fn(),
     getChapter: vi.fn(() => chapter),
     saveRevision: vi.fn((input) => ({
       id: "revision-rich-text",
@@ -131,7 +144,7 @@ function createHarness() {
   const dependencies = { projects, runtime } as unknown as DesktopControllerDependencies;
   vi.mocked(shell.openPath).mockClear();
   vi.mocked(shell.trashItem).mockClear();
-  return { agent, completion, controller: new DesktopController(dependencies), messages, novels, projects, runtime, threads };
+  return { agent, book, completion, controller: new DesktopController(dependencies), messages, novels, projects, runtime, threads, volume };
 }
 
 describe("DesktopController", () => {
@@ -194,6 +207,39 @@ describe("DesktopController", () => {
     });
   });
 
+  it("returns explicit uninitialized book state without using project name", async () => {
+    const harness = createHarness();
+    harness.novels.getProjectBook.mockReturnValue(null);
+
+    await expect(harness.controller.getProjectNavigation("prj-story"))
+      .resolves.toMatchObject({ book: null });
+    await expect(harness.controller.getBookWorkspace("prj-story"))
+      .resolves.toEqual({
+        state: "uninitialized",
+        projectId: "prj-story",
+      });
+  });
+
+  it("creates a project book only from user-provided profile data", async () => {
+    const harness = createHarness();
+    harness.novels.getProjectBook
+      .mockReturnValueOnce(null)
+      .mockReturnValue(harness.book);
+
+    await harness.controller.createBook({
+      projectId: "prj-story",
+      title: "Long Night",
+      synopsis: "A city mystery.",
+      status: "planning",
+    });
+
+    expect(harness.novels.createNovel).toHaveBeenCalledWith({
+      title: "Long Night",
+      synopsis: "A city mystery.",
+      status: "planning",
+    });
+  });
+
   it("returns persisted chapter content in the book workspace", async () => {
     const harness = createHarness();
     harness.novels.listChapters.mockReturnValue([{
@@ -236,9 +282,10 @@ describe("DesktopController", () => {
       projectId: "prj-story",
       title: "第一卷",
     });
+    harness.novels.listVolumes.mockReturnValue([harness.volume]);
     await harness.controller.createBookChapter({
       projectId: "prj-story",
-      volumeId: null,
+      volumeId: "volume-1",
       title: "第一章",
     });
 
@@ -249,11 +296,95 @@ describe("DesktopController", () => {
     });
     expect(harness.novels.createChapter).toHaveBeenCalledWith({
       novelId: "novel-story",
-      volumeId: null,
+      volumeId: "volume-1",
       title: "第一章",
       status: "outline",
       sortOrder: 0,
     });
+  });
+
+  it("appends new book items after the highest existing sort order", async () => {
+    const harness = createHarness();
+    harness.novels.listVolumes.mockReturnValue([{
+      id: "volume-1",
+      novelId: "novel-story",
+      title: "Existing volume",
+      summary: "",
+      sortOrder: 4,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    }]);
+    harness.novels.listChapters.mockReturnValue([{
+      ...harness.novels.getChapter(),
+      sortOrder: 7,
+    }]);
+
+    await harness.controller.createBookVolume({
+      projectId: "prj-story",
+      title: "Next volume",
+    });
+    await harness.controller.createBookChapter({
+      projectId: "prj-story",
+      volumeId: "volume-1",
+      title: "Next chapter",
+    });
+
+    expect(harness.novels.createVolume).toHaveBeenCalledWith(
+      expect.objectContaining({ sortOrder: 5 }),
+    );
+    expect(harness.novels.createChapter).toHaveBeenCalledWith(
+      expect.objectContaining({ sortOrder: 8 }),
+    );
+  });
+
+  it("rejects chapters that are not assigned to an existing volume", async () => {
+    const harness = createHarness();
+
+    await expect(harness.controller.createBookChapter({
+      projectId: "prj-story",
+      volumeId: "missing-volume",
+      title: "第一章",
+    })).rejects.toThrow("must belong to an existing book volume");
+
+    expect(harness.novels.createChapter).not.toHaveBeenCalled();
+  });
+
+  it("updates the project book title without changing book metadata", async () => {
+    const harness = createHarness();
+
+    await harness.controller.updateBook({
+      projectId: "prj-story",
+      title: "A new title",
+      synopsis: "Updated synopsis",
+      status: "writing",
+    });
+
+    expect(harness.novels.updateNovel).toHaveBeenCalledWith({
+      id: "novel-story",
+      title: "A new title",
+      synopsis: "Updated synopsis",
+      status: "writing",
+    });
+  });
+
+  it("deletes volumes and chapters inside the requested project", async () => {
+    const harness = createHarness();
+
+    await harness.controller.deleteBookVolume({
+      projectId: "prj-story",
+      volumeId: "volume-1",
+    });
+    await harness.controller.deleteBookChapter({
+      projectId: "prj-story",
+      chapterId: "chapter-1",
+    });
+
+    expect(harness.runtime.resolve).toHaveBeenCalledWith({
+      kind: "project",
+      projectId: "prj-story",
+    });
+    expect(harness.novels.deleteVolume).toHaveBeenCalledWith("volume-1");
+    expect(harness.novels.deleteChapter).toHaveBeenCalledWith("chapter-1");
   });
 
   it("validates and saves Tiptap JSON with visible character count", async () => {

@@ -111,7 +111,7 @@ describe("novel SQLite storage", () => {
   it("enforces one book per project and rejects stale saves", () => {
     const fixture = createDatabase();
     const firstNovel = fixture.novels.createNovel({ title: "甲" });
-    expect(fixture.novels.ensureProjectBook("不会覆盖")).toEqual(firstNovel);
+    expect(fixture.novels.getProjectBook()).toEqual(firstNovel);
     expect(() => fixture.novels.createNovel({ title: "乙" }))
       .toThrow("Each project can contain only one book");
 
@@ -169,6 +169,39 @@ describe("novel SQLite storage", () => {
         (SELECT COUNT(*) FROM chapter_revisions) AS revisions
     `).get() as { novels: number; chapters: number; revisions: number };
     expect(counts).toEqual({ novels: 0, chapters: 0, revisions: 0 });
+    fixture.database.close();
+  });
+
+  it("keeps chapters when deleting a volume and cascades chapter revisions", () => {
+    const fixture = createDatabase();
+    const novel = fixture.novels.createNovel({ title: "Deletion semantics" });
+    const volume = fixture.novels.createVolume({
+      novelId: novel.id,
+      title: "Volume one",
+      sortOrder: 0,
+    });
+    const chapter = fixture.novels.createChapter({
+      novelId: novel.id,
+      volumeId: volume.id,
+      title: "Chapter one",
+      sortOrder: 0,
+    });
+    fixture.novels.saveRevision({
+      chapterId: chapter.id,
+      content: "Chapter body",
+      expectedCurrentRevisionId: null,
+    });
+
+    fixture.novels.deleteVolume(volume.id);
+    expect(fixture.novels.listVolumes(novel.id)).toEqual([]);
+    expect(fixture.novels.getChapter(chapter.id).volumeId).toBeNull();
+
+    fixture.novels.deleteChapter(chapter.id);
+    expect(fixture.novels.listChapters(novel.id)).toEqual([]);
+    const revisionCount = fixture.database.handle.prepare(
+      "SELECT COUNT(*) AS count FROM chapter_revisions",
+    ).get() as { count: number };
+    expect(revisionCount.count).toBe(0);
     fixture.database.close();
   });
 });

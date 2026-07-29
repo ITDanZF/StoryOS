@@ -17,9 +17,13 @@ import type {
   BookChapterRevisionResult,
   BookWorkspaceChapterDto,
   BookWorkspaceSnapshot,
+  CreateBookRequest,
   CreateBookChapterRequest,
   CreateBookVolumeRequest,
+  DeleteBookChapterRequest,
+  DeleteBookVolumeRequest,
   SaveBookChapterContentRequest,
+  UpdateBookRequest,
   UpdateBookChapterRequest,
 } from "../application/bookWorkspaceContracts.ts";
 import {
@@ -112,17 +116,16 @@ export default class DesktopController {
       projectId,
     });
     const book = runtime.novels.getProjectBook();
-    if (!book) throw new Error(`Project book not found: ${projectId}`);
     return Object.freeze({
       project,
-      book: Object.freeze({
+      book: book ? Object.freeze({
         id: book.id,
         title: book.title,
         status: book.status,
         volumeCount: runtime.novels.listVolumes(book.id).length,
         chapterCount: runtime.novels.listChapters(book.id).length,
         updatedAt: book.updatedAt,
-      }),
+      }) : null,
       conversations: runtime.threads.getSnapshot(),
     });
   }
@@ -135,6 +138,24 @@ export default class DesktopController {
     return this.createBookWorkspaceSnapshot(runtime, projectId);
   }
 
+  async createBook(
+    request: CreateBookRequest,
+  ): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    if (runtime.novels.getProjectBook()) {
+      throw new Error("This project already contains a book.");
+    }
+    runtime.novels.createNovel({
+      title: request.title,
+      synopsis: request.synopsis,
+      status: request.status,
+    });
+    return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
   async createBookChapter(
     request: CreateBookChapterRequest,
   ): Promise<BookWorkspaceSnapshot> {
@@ -144,14 +165,24 @@ export default class DesktopController {
     });
     const book = runtime.novels.getProjectBook();
     if (!book) throw new Error(`Project book not found: ${request.projectId}`);
+    const volume = runtime.novels.listVolumes(book.id).find(
+      (item) => item.id === request.volumeId,
+    );
+    if (!volume) {
+      throw new Error("The chapter must belong to an existing book volume.");
+    }
     const siblings = runtime.novels.listChapters(book.id)
-      .filter((chapter) => chapter.volumeId === request.volumeId);
+      .filter((chapter) => chapter.volumeId === volume.id);
+    const nextSortOrder = siblings.reduce(
+      (maximum, chapter) => Math.max(maximum, chapter.sortOrder),
+      -1,
+    ) + 1;
     runtime.novels.createChapter({
       novelId: book.id,
-      volumeId: request.volumeId,
+      volumeId: volume.id,
       title: request.title,
       status: "outline",
-      sortOrder: siblings.length,
+      sortOrder: nextSortOrder,
     });
     return this.createBookWorkspaceSnapshot(runtime, request.projectId);
   }
@@ -165,10 +196,54 @@ export default class DesktopController {
     });
     const book = runtime.novels.getProjectBook();
     if (!book) throw new Error(`Project book not found: ${request.projectId}`);
+    const nextSortOrder = runtime.novels.listVolumes(book.id).reduce(
+      (maximum, volume) => Math.max(maximum, volume.sortOrder),
+      -1,
+    ) + 1;
     runtime.novels.createVolume({
       novelId: book.id,
       title: request.title,
-      sortOrder: runtime.novels.listVolumes(book.id).length,
+      sortOrder: nextSortOrder,
+    });
+    return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
+  async deleteBookVolume(
+    request: DeleteBookVolumeRequest,
+  ): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    runtime.novels.deleteVolume(request.volumeId);
+    return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
+  async deleteBookChapter(
+    request: DeleteBookChapterRequest,
+  ): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    runtime.novels.deleteChapter(request.chapterId);
+    return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
+  async updateBook(
+    request: UpdateBookRequest,
+  ): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    const book = runtime.novels.getProjectBook();
+    if (!book) throw new Error("Project book not found.");
+    runtime.novels.updateNovel({
+      id: book.id,
+      title: request.title,
+      synopsis: request.synopsis,
+      status: request.status,
     });
     return this.createBookWorkspaceSnapshot(runtime, request.projectId);
   }
@@ -220,8 +295,14 @@ export default class DesktopController {
     projectId: string,
   ): BookWorkspaceSnapshot {
     const book = runtime.novels.getProjectBook();
-    if (!book) throw new Error(`Project book not found: ${projectId}`);
+    if (!book) {
+      return Object.freeze({
+        state: "uninitialized",
+        projectId,
+      });
+    }
     return Object.freeze({
+      state: "ready",
       book,
       volumes: runtime.novels.listVolumes(book.id),
       chapters: Object.freeze(

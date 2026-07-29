@@ -3,6 +3,7 @@ import type {
   ApplicationEvent,
   BookWorkspaceChapterDto,
   BookWorkspaceSnapshot,
+  ReadyBookWorkspaceSnapshot,
   ConversationApplicationEvent,
   ConversationScope,
   MessageDto,
@@ -24,12 +25,6 @@ if (previewEnabled && !window.storyOSAgent) {
   const now = new Date().toISOString();
   let activeProjectId: string | null = null;
   let projects: ProjectDto[] = [];
-  const projectBooks = new Map<string, {
-    id: string;
-    title: string;
-    createdAt: string;
-    updatedAt: string;
-  }>();
   const bookWorkspaces = new Map<string, BookWorkspaceSnapshot>();
   const threadsByScope = new Map<string, ThreadDto[]>();
   const activeThreads = new Map<string, string>();
@@ -70,22 +65,20 @@ if (previewEnabled && !window.storyOSAgent) {
     if (!project) throw new Error(`Project not found: ${projectId}`);
     const stored = bookWorkspaces.get(projectId);
     if (stored) return stored;
-    const source = projectBooks.get(projectId) ?? {
-      id: `novel_${crypto.randomUUID()}`,
-      title: project.name,
-      createdAt: now,
-      updatedAt: now,
-    };
     const snapshot: BookWorkspaceSnapshot = {
-      book: {
-        ...source,
-        synopsis: "",
-        status: "planning",
-      },
-      volumes: [],
-      chapters: [],
+      state: "uninitialized",
+      projectId,
     };
     bookWorkspaces.set(projectId, snapshot);
+    return snapshot;
+  };
+  const readyBookWorkspace = (
+    projectId: string,
+  ): ReadyBookWorkspaceSnapshot => {
+    const snapshot = bookWorkspace(projectId);
+    if (snapshot.state !== "ready") {
+      throw new Error("Project book has not been created.");
+    }
     return snapshot;
   };
   const activeScope = (): ConversationScope => activeProjectId
@@ -170,23 +163,17 @@ if (previewEnabled && !window.storyOSAgent) {
     getProjectNavigation: async (projectId) => {
       const project = projects.find((item) => item.id === projectId);
       if (!project) throw new Error(`Project not found: ${projectId}`);
-      const book = projectBooks.get(projectId) ?? {
-        id: `novel_${crypto.randomUUID()}`,
-        title: project.name,
-        createdAt: now,
-        updatedAt: now,
-      };
-      projectBooks.set(projectId, book);
+      const workspace = bookWorkspace(projectId);
       return {
         project,
-        book: {
-          id: book.id,
-          title: book.title,
-          status: "planning",
-          volumeCount: 0,
-          chapterCount: 0,
-          updatedAt: book.updatedAt,
-        },
+        book: workspace.state === "ready" ? {
+          id: workspace.book.id,
+          title: workspace.book.title,
+          status: workspace.book.status,
+          volumeCount: workspace.volumes.length,
+          chapterCount: workspace.chapters.length,
+          updatedAt: workspace.book.updatedAt,
+        } : null,
         conversations: threadSnapshotFor({
           kind: "project",
           projectId,
@@ -194,8 +181,33 @@ if (previewEnabled && !window.storyOSAgent) {
       };
     },
     getBookWorkspace: async (projectId) => bookWorkspace(projectId),
-    createBookChapter: async ({ projectId, volumeId, title }) => {
+    createBook: async ({ projectId, title, synopsis, status }) => {
       const current = bookWorkspace(projectId);
+      if (current.state === "ready") {
+        throw new Error("This project already contains a book.");
+      }
+      const createdAt = new Date().toISOString();
+      const next: ReadyBookWorkspaceSnapshot = {
+        state: "ready",
+        book: {
+          id: `novel_${crypto.randomUUID()}`,
+          title,
+          synopsis,
+          status,
+          createdAt,
+          updatedAt: createdAt,
+        },
+        volumes: [],
+        chapters: [],
+      };
+      bookWorkspaces.set(projectId, next);
+      return next;
+    },
+    createBookChapter: async ({ projectId, volumeId, title }) => {
+      const current = readyBookWorkspace(projectId);
+      if (!current.volumes.some((volume) => volume.id === volumeId)) {
+        throw new Error("章节必须属于已有分卷。");
+      }
       const createdAt = new Date().toISOString();
       const chapter: BookWorkspaceChapterDto = {
         id: `chapter_${crypto.randomUUID()}`,
@@ -203,9 +215,12 @@ if (previewEnabled && !window.storyOSAgent) {
         volumeId,
         title,
         status: "outline" as const,
-        sortOrder: current.chapters.filter(
-          (item) => item.volumeId === volumeId,
-        ).length,
+        sortOrder: current.chapters
+          .filter((item) => item.volumeId === volumeId)
+          .reduce(
+            (maximum, item) => Math.max(maximum, item.sortOrder),
+            -1,
+          ) + 1,
         currentRevisionId: null,
         content: "",
         characterCount: 0,
@@ -221,7 +236,7 @@ if (previewEnabled && !window.storyOSAgent) {
       return next;
     },
     createBookVolume: async ({ projectId, title }) => {
-      const current = bookWorkspace(projectId);
+      const current = readyBookWorkspace(projectId);
       const createdAt = new Date().toISOString();
       const next = {
         ...current,
@@ -232,7 +247,10 @@ if (previewEnabled && !window.storyOSAgent) {
             novelId: current.book.id,
             title,
             summary: "",
-            sortOrder: current.volumes.length,
+            sortOrder: current.volumes.reduce(
+              (maximum, volume) => Math.max(maximum, volume.sortOrder),
+              -1,
+            ) + 1,
             createdAt,
             updatedAt: createdAt,
           },
@@ -241,8 +259,47 @@ if (previewEnabled && !window.storyOSAgent) {
       bookWorkspaces.set(projectId, next);
       return next;
     },
+    deleteBookVolume: async ({ projectId, volumeId }) => {
+      const current = readyBookWorkspace(projectId);
+      const next = {
+        ...current,
+        volumes: current.volumes.filter((volume) => volume.id !== volumeId),
+        chapters: current.chapters.map((chapter) =>
+          chapter.volumeId === volumeId
+            ? { ...chapter, volumeId: null }
+            : chapter),
+      };
+      bookWorkspaces.set(projectId, next);
+      return next;
+    },
+    deleteBookChapter: async ({ projectId, chapterId }) => {
+      const current = readyBookWorkspace(projectId);
+      const next = {
+        ...current,
+        chapters: current.chapters.filter(
+          (chapter) => chapter.id !== chapterId,
+        ),
+      };
+      bookWorkspaces.set(projectId, next);
+      return next;
+    },
+    updateBook: async ({ projectId, title, synopsis, status }) => {
+      const current = readyBookWorkspace(projectId);
+      const next = {
+        ...current,
+        book: {
+          ...current.book,
+          title,
+          synopsis,
+          status,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      bookWorkspaces.set(projectId, next);
+      return next;
+    },
     updateBookChapter: async ({ projectId, chapterId, title }) => {
-      const current = bookWorkspace(projectId);
+      const current = readyBookWorkspace(projectId);
       const next = {
         ...current,
         chapters: current.chapters.map((chapter) =>
@@ -254,7 +311,7 @@ if (previewEnabled && !window.storyOSAgent) {
       return next;
     },
     saveBookChapterContent: async ({ projectId, chapterId, content }) => {
-      const current = bookWorkspace(projectId);
+      const current = readyBookWorkspace(projectId);
       const source = current.chapters.find(
         (chapter) => chapter.id === chapterId,
       );
@@ -301,12 +358,6 @@ if (previewEnabled && !window.storyOSAgent) {
         lastOpenedAt: createdAt,
       };
       projects = [project, ...projects];
-      projectBooks.set(project.id, {
-        id: `novel_${crypto.randomUUID()}`,
-        title: project.name,
-        createdAt,
-        updatedAt: createdAt,
-      });
       activeProjectId = project.id;
       return workspaceSnapshot();
     },
@@ -323,12 +374,6 @@ if (previewEnabled && !window.storyOSAgent) {
         lastOpenedAt: createdAt,
       };
       projects = [project, ...projects.filter((item) => item.path !== projectPath)];
-      projectBooks.set(project.id, {
-        id: `novel_${crypto.randomUUID()}`,
-        title: project.name,
-        createdAt,
-        updatedAt: createdAt,
-      });
       activeProjectId = project.id;
       return workspaceSnapshot();
     },
@@ -351,7 +396,7 @@ if (previewEnabled && !window.storyOSAgent) {
       const removed = projects.find((project) => project.path === projectPath);
       projects = projects.filter((project) => project.path !== projectPath);
       if (removed?.id === activeProjectId) activeProjectId = null;
-      if (removed) projectBooks.delete(removed.id);
+      if (removed) bookWorkspaces.delete(removed.id);
       return workspaceSnapshot();
     },
     listRuns: async () => [],

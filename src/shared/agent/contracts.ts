@@ -19,12 +19,21 @@ import type {
     BookChapterRevisionResult,
     BookWorkspaceChapterDto,
     BookWorkspaceSnapshot,
+    CreateBookRequest,
     CreateBookChapterRequest,
     CreateBookVolumeRequest,
+    DeleteBookChapterRequest,
+    DeleteBookVolumeRequest,
     SaveBookChapterContentRequest,
+    ReadyBookWorkspaceSnapshot,
+    UninitializedBookWorkspaceSnapshot,
+    UpdateBookRequest,
     UpdateBookChapterRequest,
 } from "../../main/agent/application/bookWorkspaceContracts.ts";
-import type { VolumeDto } from "../../main/agent/application/novelContracts.ts";
+import type {
+    NovelDto,
+    VolumeDto,
+} from "../../main/agent/application/novelContracts.ts";
 
 export const AGENT_IPC_CHANNELS = Object.freeze({
     status: "agent:status",
@@ -50,8 +59,12 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     projectSnapshot: "agent:project-snapshot",
     projectNavigation: "agent:project-navigation",
     bookWorkspace: "agent:book-workspace",
+    createBook: "agent:book-create",
     createBookChapter: "agent:book-chapter-create",
     createBookVolume: "agent:book-volume-create",
+    deleteBookVolume: "agent:book-volume-delete",
+    deleteBookChapter: "agent:book-chapter-delete",
+    updateBook: "agent:book-update",
     updateBookChapter: "agent:book-chapter-update",
     saveBookChapterContent: "agent:book-chapter-save-content",
     workspaceSnapshot: "agent:workspace-snapshot",
@@ -99,8 +112,12 @@ export type AgentDesktopApi = {
     getProjectSnapshot(): Promise<ProjectSnapshot>;
     getProjectNavigation(projectId: string): Promise<ProjectNavigationSnapshot>;
     getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot>;
+    createBook(request: CreateBookRequest): Promise<BookWorkspaceSnapshot>;
     createBookChapter(request: CreateBookChapterRequest): Promise<BookWorkspaceSnapshot>;
     createBookVolume(request: CreateBookVolumeRequest): Promise<BookWorkspaceSnapshot>;
+    deleteBookVolume(request: DeleteBookVolumeRequest): Promise<BookWorkspaceSnapshot>;
+    deleteBookChapter(request: DeleteBookChapterRequest): Promise<BookWorkspaceSnapshot>;
+    updateBook(request: UpdateBookRequest): Promise<BookWorkspaceSnapshot>;
     updateBookChapter(request: UpdateBookChapterRequest): Promise<BookWorkspaceSnapshot>;
     saveBookChapterContent(request: SaveBookChapterContentRequest): Promise<BookChapterRevisionResult>;
     getWorkspaceSnapshot(): Promise<WorkspaceSnapshot>;
@@ -126,6 +143,7 @@ export type {
     BookChapterRevisionResult,
     BookWorkspaceChapterDto,
     BookWorkspaceSnapshot,
+    CreateBookRequest,
     ConversationApplicationEvent,
     ConversationRef,
     ConversationScope,
@@ -133,11 +151,15 @@ export type {
     CreateConversationRequest,
     CreateBookChapterRequest,
     CreateBookVolumeRequest,
+    DeleteBookChapterRequest,
+    DeleteBookVolumeRequest,
     MessageDto,
+    NovelDto,
     CreateProjectRequest,
     ProjectDto,
     ProjectSnapshot,
     ProjectNavigationSnapshot,
+    ReadyBookWorkspaceSnapshot,
     RenameProjectRequest,
     RunSnapshot,
     SaveBookChapterContentRequest,
@@ -148,6 +170,8 @@ export type {
     ThreadSkillState,
     ThreadSnapshot,
     ToolApprovalDecision,
+    UpdateBookRequest,
     UpdateBookChapterRequest,
+    UninitializedBookWorkspaceSnapshot,
     VolumeDto,
 };
