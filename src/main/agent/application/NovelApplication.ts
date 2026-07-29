@@ -144,6 +144,35 @@ export default class NovelApplication {
     );
   }
 
+  updateChapter(input: {
+    readonly id: string;
+    readonly volumeId: string | null;
+    readonly title: string;
+    readonly status: ChapterStatus;
+    readonly sortOrder: number;
+  }): ChapterDto {
+    this.requireChapter(input.id);
+    return this.toChapterDto(this.persistence.updateChapter({
+      id: input.id,
+      volumeId: input.volumeId,
+      title: this.requireTitle(input.title),
+      status: this.requireChapterStatus(input.status),
+      sortOrder: this.requireSortOrder(input.sortOrder),
+    }));
+  }
+
+  getCurrentRevision(chapterId: string): ChapterRevisionDto | null {
+    const chapter = this.requireChapter(chapterId);
+    if (!chapter.currentRevisionId) return null;
+    const revision = this.persistence.getRevision(chapter.currentRevisionId);
+    if (!revision) {
+      throw new Error(
+        `Current chapter revision not found: ${chapter.currentRevisionId}`,
+      );
+    }
+    return this.toRevisionDto(revision);
+  }
+
   saveRevision(input: {
     readonly chapterId: string;
     readonly content: string;

@@ -10,6 +10,12 @@ import type {
 } from "../agent/application/conversationContracts.ts";
 import type { AgentConfigurationRequest } from "../agent/StoryAgentService.ts";
 import type { ToolApprovalDecision } from "../agent/security/ToolPolicy.ts";
+import type {
+    CreateBookChapterRequest,
+    CreateBookVolumeRequest,
+    SaveBookChapterContentRequest,
+    UpdateBookChapterRequest,
+} from "../agent/application/bookWorkspaceContracts.ts";
 
 function requireApprovalDecision(decision: ToolApprovalDecision): ToolApprovalDecision {
     if (!["allow_once", "allow_session", "deny"].includes(decision)) {
@@ -42,6 +48,21 @@ function requireConversationRef(request: ConversationRef): ConversationRef {
         scope: requireConversationScope(request.scope),
         threadId,
     });
+}
+
+function requireNullableText(
+    value: unknown,
+    label: string,
+): string | null {
+    if (value === null) return null;
+    return requireText(value as string, label);
+}
+
+function requireContent(value: unknown): string {
+    if (typeof value !== "string") {
+        throw new Error("Chapter content must be a string.");
+    }
+    return value;
 }
 
 export function registerAgentIpc(service: StoryAgentService): () => void {
@@ -104,6 +125,37 @@ export function registerAgentIpc(service: StoryAgentService): () => void {
         service.requireController().getProjectNavigation(
             requireText(projectId, "Project id"),
         ));
+    handle(AGENT_IPC_CHANNELS.bookWorkspace, (projectId: string) =>
+        service.requireController().getBookWorkspace(
+            requireText(projectId, "Project id"),
+        ));
+    handle(AGENT_IPC_CHANNELS.createBookChapter, (
+        request: CreateBookChapterRequest,
+    ) => service.requireController().createBookChapter({
+        projectId: requireText(request?.projectId, "Project id"),
+        volumeId: requireNullableText(request?.volumeId, "Volume id"),
+        title: requireText(request?.title, "Chapter title"),
+    }));
+    handle(AGENT_IPC_CHANNELS.createBookVolume, (
+        request: CreateBookVolumeRequest,
+    ) => service.requireController().createBookVolume({
+        projectId: requireText(request?.projectId, "Project id"),
+        title: requireText(request?.title, "Volume title"),
+    }));
+    handle(AGENT_IPC_CHANNELS.updateBookChapter, (
+        request: UpdateBookChapterRequest,
+    ) => service.requireController().updateBookChapter({
+        projectId: requireText(request?.projectId, "Project id"),
+        chapterId: requireText(request?.chapterId, "Chapter id"),
+        title: requireText(request?.title, "Chapter title"),
+    }));
+    handle(AGENT_IPC_CHANNELS.saveBookChapterContent, (
+        request: SaveBookChapterContentRequest,
+    ) => service.requireController().saveBookChapterContent({
+        projectId: requireText(request?.projectId, "Project id"),
+        chapterId: requireText(request?.chapterId, "Chapter id"),
+        content: requireContent(request?.content),
+    }));
     handle(AGENT_IPC_CHANNELS.workspaceSnapshot, () => service.requireController().getWorkspaceSnapshot());
     handle(AGENT_IPC_CHANNELS.createProject, (request: CreateProjectRequest) => service.requireController().createProject(request));
     handle(AGENT_IPC_CHANNELS.openProject, (projectPath: string) => service.requireController().openProject(projectPath));

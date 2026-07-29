@@ -82,6 +82,18 @@ describe("novel SQLite storage", () => {
       .toEqual([second.id, first.id]);
     expect(fixture.novels.getChapter(chapter.id).currentRevisionId)
       .toBe(second.id);
+    expect(fixture.novels.getCurrentRevision(chapter.id)?.content)
+      .toBe("夜色降临，城市仍未入睡。");
+    expect(fixture.novels.updateChapter({
+      id: chapter.id,
+      volumeId: volume.id,
+      title: "雨夜",
+      status: "revising",
+      sortOrder: 0,
+    })).toMatchObject({
+      title: "雨夜",
+      status: "revising",
+    });
 
     fixture.database.close();
     const reopened = new ProjectDatabase(fixture.path);

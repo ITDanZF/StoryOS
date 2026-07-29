@@ -13,6 +13,15 @@ import type WorkspaceRuntimeManager from "../runtime/WorkspaceRuntimeManager.ts"
 import type {
   ActiveWorkspaceRuntime,
 } from "../runtime/WorkspaceRuntimeManager.ts";
+import type {
+  BookChapterRevisionResult,
+  BookWorkspaceChapterDto,
+  BookWorkspaceSnapshot,
+  CreateBookChapterRequest,
+  CreateBookVolumeRequest,
+  SaveBookChapterContentRequest,
+  UpdateBookChapterRequest,
+} from "../application/bookWorkspaceContracts.ts";
 
 export type DesktopControllerDependencies = {
   readonly projects: ProjectApplication;
@@ -110,6 +119,120 @@ export default class DesktopController {
         updatedAt: book.updatedAt,
       }),
       conversations: runtime.threads.getSnapshot(),
+    });
+  }
+
+  async getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId,
+    });
+    return this.createBookWorkspaceSnapshot(runtime, projectId);
+  }
+
+  async createBookChapter(
+    request: CreateBookChapterRequest,
+  ): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    const book = runtime.novels.getProjectBook();
+    if (!book) throw new Error(`Project book not found: ${request.projectId}`);
+    const siblings = runtime.novels.listChapters(book.id)
+      .filter((chapter) => chapter.volumeId === request.volumeId);
+    runtime.novels.createChapter({
+      novelId: book.id,
+      volumeId: request.volumeId,
+      title: request.title,
+      status: "outline",
+      sortOrder: siblings.length,
+    });
+    return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
+  async createBookVolume(
+    request: CreateBookVolumeRequest,
+  ): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    const book = runtime.novels.getProjectBook();
+    if (!book) throw new Error(`Project book not found: ${request.projectId}`);
+    runtime.novels.createVolume({
+      novelId: book.id,
+      title: request.title,
+      sortOrder: runtime.novels.listVolumes(book.id).length,
+    });
+    return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
+  async updateBookChapter(
+    request: UpdateBookChapterRequest,
+  ): Promise<BookWorkspaceSnapshot> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    const chapter = runtime.novels.getChapter(request.chapterId);
+    runtime.novels.updateChapter({
+      id: chapter.id,
+      volumeId: chapter.volumeId,
+      title: request.title,
+      status: chapter.status,
+      sortOrder: chapter.sortOrder,
+    });
+    return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
+  async saveBookChapterContent(
+    request: SaveBookChapterContentRequest,
+  ): Promise<BookChapterRevisionResult> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    const chapter = runtime.novels.getChapter(request.chapterId);
+    const revision = runtime.novels.saveRevision({
+      chapterId: chapter.id,
+      content: request.content,
+      changeSummary: "自动保存",
+      expectedCurrentRevisionId: chapter.currentRevisionId,
+    });
+    const updated = runtime.novels.getChapter(chapter.id);
+    return Object.freeze({
+      chapter: this.toBookWorkspaceChapter(runtime, updated),
+      revision,
+    });
+  }
+
+  private createBookWorkspaceSnapshot(
+    runtime: ActiveWorkspaceRuntime,
+    projectId: string,
+  ): BookWorkspaceSnapshot {
+    const book = runtime.novels.getProjectBook();
+    if (!book) throw new Error(`Project book not found: ${projectId}`);
+    return Object.freeze({
+      book,
+      volumes: runtime.novels.listVolumes(book.id),
+      chapters: Object.freeze(
+        runtime.novels.listChapters(book.id)
+          .map((chapter) => this.toBookWorkspaceChapter(runtime, chapter)),
+      ),
+    });
+  }
+
+  private toBookWorkspaceChapter(
+    runtime: ActiveWorkspaceRuntime,
+    chapter: ReturnType<ActiveWorkspaceRuntime["novels"]["getChapter"]>,
+  ): BookWorkspaceChapterDto {
+    const revision = runtime.novels.getCurrentRevision(chapter.id);
+    return Object.freeze({
+      ...chapter,
+      content: revision?.content ?? "",
+      characterCount: revision?.characterCount ?? 0,
+      revisionNumber: revision?.revisionNumber ?? null,
     });
   }
 

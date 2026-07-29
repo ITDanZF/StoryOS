@@ -335,6 +335,24 @@ export function useAgentWorkspace() {
     setProjects(await window.storyOSAgent.getProjectSnapshot());
   }, [applyConversationSnapshot]);
 
+  const openConversationScope = useCallback(async (
+    scope: ConversationScope,
+  ) => {
+    setError(null);
+    const [snapshot, runSnapshots, projectSnapshot] = await Promise.all([
+      window.storyOSAgent.getConversationSnapshot(scope),
+      window.storyOSAgent.listConversationRuns(scope),
+      window.storyOSAgent.getProjectSnapshot(),
+    ]);
+    setRuns(runSnapshots);
+    runThreadIdsRef.current.clear();
+    runSnapshots.forEach((run) =>
+      runThreadIdsRef.current.set(run.runId, run.threadId));
+    setProjects(projectSnapshot);
+    await applyConversationSnapshot(scope, snapshot.threads);
+    return snapshot.threads;
+  }, [applyConversationSnapshot]);
+
   const deleteThread = useCallback(async (
     threadId: string,
     scope: ConversationScope = activeScopeRef.current,
@@ -421,6 +439,7 @@ export function useAgentWorkspace() {
     loadProjectNavigation,
     removeProject,
     createThread,
+    openConversationScope,
     switchThread,
     deleteThread,
     sendMessage,

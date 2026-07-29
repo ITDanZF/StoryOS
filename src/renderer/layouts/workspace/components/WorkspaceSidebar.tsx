@@ -29,7 +29,7 @@ type WorkspaceSidebarProps = {
   readonly onOpenProjectDirectory: (projectPath: string) => Promise<void>;
   readonly onRenameProject: (request: RenameProjectRequest) => Promise<void>;
   readonly onDeleteProject: (projectPath: string) => Promise<void>;
-  readonly onSwitchProject: (projectPath: string | null) => Promise<void>;
+  readonly onLoadProjectNavigation: (projectId: string) => Promise<void>;
   readonly onOpenBookWorkspace: (project: ProjectDto) => Promise<void>;
   readonly onCreateConversation: (scope: ConversationScope) => Promise<void>;
   readonly onSwitchConversation: (
@@ -56,7 +56,7 @@ export default function WorkspaceSidebar({
   onOpenProjectDirectory,
   onRenameProject,
   onDeleteProject,
-  onSwitchProject,
+  onLoadProjectNavigation,
   onOpenBookWorkspace,
   onCreateConversation,
   onSwitchConversation,
@@ -138,7 +138,7 @@ export default function WorkspaceSidebar({
               conversationScope={conversationScope}
               globalThreads={globalThreads}
               projectNavigations={projectNavigations}
-              onSwitchProject={async (projectPath) => { await onSwitchProject(projectPath); onClose(); }}
+              onLoadProjectNavigation={onLoadProjectNavigation}
               onOpenBookWorkspace={async (project) => { await onOpenBookWorkspace(project); onClose(); }}
               onCreateConversation={async (scope) => { await onCreateConversation(scope); onClose(); }}
               onSwitchConversation={async (scope, threadId) => { await onSwitchConversation(scope, threadId); onClose(); }}

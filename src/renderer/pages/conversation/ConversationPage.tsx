@@ -6,21 +6,31 @@ import ConversationView from "./components/ConversationView.tsx";
 import MessageComposer from "./components/MessageComposer.tsx";
 
 export default function ConversationPage() {
-  const { state, activeRun, switchThread, sendMessage, cancelRun, openSidebar } = useWorkspaceOutlet();
+  const {
+    state,
+    activeRun,
+    openConversationScope,
+    switchThread,
+    sendMessage,
+    cancelRun,
+    openSidebar,
+  } = useWorkspaceOutlet();
   const { threadId } = useParams();
   const navigate = useNavigate();
-  const activeThread = state.threads?.activeThread;
-  const activeConversationProjectId = state.conversationScope.kind === "project"
-    ? state.conversationScope.projectId
+  const globalConversationActive = state.conversationScope.kind === "global";
+  const activeThread = globalConversationActive
+    ? state.threads?.activeThread
     : null;
-  const activeProject = activeConversationProjectId
-    ? state.projects?.projects.find(
-      (project) => project.id === activeConversationProjectId,
-    ) ?? null
-    : null;
+  const globalActiveRun = globalConversationActive ? activeRun : undefined;
 
   useEffect(() => {
-    if (!state.threads) return;
+    if (state.conversationScope.kind !== "global") {
+      void openConversationScope({ kind: "global" });
+    }
+  }, [openConversationScope, state.conversationScope.kind]);
+
+  useEffect(() => {
+    if (!state.threads || state.conversationScope.kind !== "global") return;
     if (!threadId) {
       if (state.threads.activeThreadId) {
         navigate(`/conversations/${state.threads.activeThreadId}`, { replace: true });
@@ -38,7 +48,13 @@ export default function ConversationPage() {
       return;
     }
     void switchThread(threadId);
-  }, [navigate, state.threads, switchThread, threadId]);
+  }, [
+    navigate,
+    state.conversationScope.kind,
+    state.threads,
+    switchThread,
+    threadId,
+  ]);
 
   return (
     <section className="m-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 border-border bg-white sm:m-1.5 sm:rounded-xl sm:border lg:ml-2 2xl:mr-3">
@@ -48,12 +64,12 @@ export default function ConversationPage() {
             <Menu size={19} />
           </button>
           <button className="flex min-w-0 max-w-[52vw] items-center gap-1.5 rounded-lg border-0 bg-transparent px-1.5 py-1.5 text-xs font-semibold sm:text-[13px] lg:max-w-lg" type="button">
-            <span className="truncate">{activeProject ? `${activeProject.name} / ` : ""}{activeThread?.title ?? "新对话"}</span>
+            <span className="truncate">{activeThread?.title ?? "新对话"}</span>
             <ChevronDown className="shrink-0 text-neutral-400" size={15} />
           </button>
         </div>
         <div className="flex items-center gap-1.5 [-webkit-app-region:no-drag]">
-          {activeRun && <span className="hidden h-7 items-center gap-1.5 rounded-full bg-violet-50 px-2.5 text-[10px] text-violet-700 sm:flex"><Sparkles size={14} />AI 正在回复</span>}
+          {globalActiveRun && <span className="hidden h-7 items-center gap-1.5 rounded-full bg-violet-50 px-2.5 text-[10px] text-violet-700 sm:flex"><Sparkles size={14} />AI 正在回复</span>}
           <span className="hidden h-7 items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 text-[10px] text-neutral-500 md:flex">
             <span className={`size-1.5 rounded-full ${state.status?.initialized ? "bg-emerald-500" : "bg-neutral-400"}`} />
             {state.status?.initialized ? "已连接" : "未配置"}
@@ -65,11 +81,17 @@ export default function ConversationPage() {
       </header>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <ConversationView messages={state.messages} loading={state.loading} />
+        <ConversationView
+          messages={globalConversationActive ? state.messages : []}
+          loading={state.loading || !globalConversationActive}
+        />
         <MessageComposer
-          disabled={!state.status?.initialized || !activeThread}
-          activeRunId={activeRun?.runId}
-          projectName={activeProject?.name}
+          disabled={
+            !globalConversationActive ||
+            !state.status?.initialized ||
+            !activeThread
+          }
+          activeRunId={globalActiveRun?.runId}
           onSend={sendMessage}
           onCancel={cancelRun}
         />

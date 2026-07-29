@@ -79,6 +79,9 @@ function createHarness() {
     getProjectBook: vi.fn(() => book),
     listVolumes: vi.fn(() => []),
     listChapters: vi.fn(() => []),
+    getCurrentRevision: vi.fn(() => null),
+    createVolume: vi.fn(),
+    createChapter: vi.fn(),
   };
   const projects = {
     getSnapshot: vi.fn(() => snapshot()),
@@ -166,6 +169,68 @@ describe("DesktopController", () => {
     expect(harness.runtime.resolve).toHaveBeenCalledWith({
       kind: "project",
       projectId: "prj-story",
+    });
+  });
+
+  it("returns persisted chapter content in the book workspace", async () => {
+    const harness = createHarness();
+    harness.novels.listChapters.mockReturnValue([{
+      id: "chapter-1",
+      novelId: "novel-story",
+      volumeId: null,
+      title: "雨夜",
+      status: "draft",
+      sortOrder: 0,
+      currentRevisionId: "revision-1",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    }]);
+    harness.novels.getCurrentRevision.mockReturnValue({
+      id: "revision-1",
+      chapterId: "chapter-1",
+      revisionNumber: 1,
+      content: "雨落在旧城。",
+      contentHash: "hash",
+      characterCount: 6,
+      changeSummary: "初稿",
+      createdAt: new Date(0).toISOString(),
+    });
+
+    await expect(harness.controller.getBookWorkspace("prj-story"))
+      .resolves.toMatchObject({
+        book: { id: "novel-story" },
+        chapters: [{
+          id: "chapter-1",
+          content: "雨落在旧城。",
+          revisionNumber: 1,
+        }],
+      });
+  });
+
+  it("creates volumes and chapters inside the requested project book", async () => {
+    const harness = createHarness();
+
+    await harness.controller.createBookVolume({
+      projectId: "prj-story",
+      title: "第一卷",
+    });
+    await harness.controller.createBookChapter({
+      projectId: "prj-story",
+      volumeId: null,
+      title: "第一章",
+    });
+
+    expect(harness.novels.createVolume).toHaveBeenCalledWith({
+      novelId: "novel-story",
+      title: "第一卷",
+      sortOrder: 0,
+    });
+    expect(harness.novels.createChapter).toHaveBeenCalledWith({
+      novelId: "novel-story",
+      volumeId: null,
+      title: "第一章",
+      status: "outline",
+      sortOrder: 0,
     });
   });
 

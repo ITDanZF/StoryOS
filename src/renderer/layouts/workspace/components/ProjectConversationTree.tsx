@@ -25,7 +25,7 @@ type ProjectConversationTreeProps = {
   readonly conversationScope: ConversationScope;
   readonly globalThreads: ThreadSnapshot | null;
   readonly projectNavigations: Readonly<Record<string, ProjectNavigationSnapshot>>;
-  readonly onSwitchProject: (projectPath: string | null) => Promise<void>;
+  readonly onLoadProjectNavigation: (projectId: string) => Promise<void>;
   readonly onOpenBookWorkspace: (project: ProjectDto) => Promise<void>;
   readonly onCreateConversation: (scope: ConversationScope) => Promise<void>;
   readonly onSwitchConversation: (
@@ -52,7 +52,7 @@ export default function ProjectConversationTree({
   conversationScope,
   globalThreads,
   projectNavigations,
-  onSwitchProject,
+  onLoadProjectNavigation,
   onOpenBookWorkspace,
   onCreateConversation,
   onSwitchConversation,
@@ -96,8 +96,8 @@ export default function ProjectConversationTree({
   const toggleProject = async (project: ProjectDto) => {
     const expanded = expandedProjectIds.has(project.id);
     setProjectExpanded(project.id, !expanded);
-    if (!expanded && projects.activeProjectId !== project.id) {
-      await onSwitchProject(project.path);
+    if (!expanded && !projectNavigations[project.id]) {
+      await onLoadProjectNavigation(project.id);
     }
   };
 

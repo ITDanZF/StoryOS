@@ -17,6 +17,7 @@ export default function WorkspaceLayout() {
     renameProject,
     deleteProject,
     switchProject,
+    loadProjectNavigation,
     createThread,
     switchThread,
     deleteThread,
@@ -30,7 +31,13 @@ export default function WorkspaceLayout() {
     scope: ConversationScope = { kind: "global" },
   ) => {
     const thread = await createThread(scope);
-    navigate(`/conversations/${thread.id}`);
+    if (scope.kind === "global") {
+      navigate(`/conversations/${thread.id}`);
+    } else {
+      navigate(
+        `/projects/${scope.projectId}/book?conversation=${thread.id}`,
+      );
+    }
   }, [createThread, navigate]);
 
   useEffect(() => {
@@ -75,9 +82,8 @@ export default function WorkspaceLayout() {
         onOpenProjectDirectory={openProjectDirectory}
         onRenameProject={renameProject}
         onDeleteProject={deleteProject}
-        onSwitchProject={async (projectPath) => {
-          await switchProject(projectPath);
-          navigate("/conversations");
+        onLoadProjectNavigation={async (projectId) => {
+          await loadProjectNavigation(projectId);
         }}
         onOpenBookWorkspace={async (project) => {
           if (state.projects?.activeProjectId !== project.id) {
@@ -91,16 +97,22 @@ export default function WorkspaceLayout() {
         }}
         onSwitchConversation={async (scope, threadId) => {
           await switchThread(threadId, scope);
-          navigate(`/conversations/${threadId}`);
+          navigate(scope.kind === "global"
+            ? `/conversations/${threadId}`
+            : `/projects/${scope.projectId}/book?conversation=${threadId}`);
           setSidebarOpen(false);
         }}
         onDeleteConversation={async (scope, threadId) => {
           const snapshot = await deleteThread(threadId, scope);
-          navigate(
-            snapshot.activeThreadId
+          if (scope.kind === "project") {
+            navigate(snapshot.activeThreadId
+              ? `/projects/${scope.projectId}/book?conversation=${snapshot.activeThreadId}`
+              : `/projects/${scope.projectId}/book`);
+          } else {
+            navigate(snapshot.activeThreadId
               ? `/conversations/${snapshot.activeThreadId}`
-              : "/conversations",
-          );
+              : "/conversations");
+          }
         }}
         onOpenSettings={(page) => {
           setSidebarOpen(false);
