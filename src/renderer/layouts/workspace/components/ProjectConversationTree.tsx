@@ -246,9 +246,19 @@ export default function ProjectConversationTree({
                       )}
                     </button>
 
-                    <div className="group ml-5 flex h-8 items-center rounded-lg">
+                    <div
+                      className={cn(
+                        "group ml-5 flex h-9 items-center rounded-lg transition hover:bg-neutral-200/70",
+                        sameConversationScope(scope, conversationScope) &&
+                          "bg-neutral-200 text-neutral-900",
+                      )}
+                    >
                       <button
-                        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[11px] text-neutral-500 transition hover:bg-neutral-200/70 hover:text-neutral-800"
+                        className={cn(
+                          "flex min-w-0 flex-1 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-xs text-neutral-600 transition group-hover:text-neutral-900",
+                          sameConversationScope(scope, conversationScope) &&
+                            "text-neutral-900",
+                        )}
                         type="button"
                         aria-expanded={conversationsExpanded}
                         onClick={() => {
@@ -267,11 +277,11 @@ export default function ProjectConversationTree({
                           )}
                           size={12}
                         />
-                        <MessageSquareText size={13} />
-                        <span>项目对话</span>
+                        <MessageSquareText size={14} />
+                        <span className="min-w-0 flex-1 truncate">项目对话</span>
                       </button>
                       <button
-                        className="grid size-7 place-items-center rounded-md border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-neutral-800"
+                        className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-neutral-800"
                         type="button"
                         title={`在 ${project.name} 中新建项目对话`}
                         aria-label={`在 ${project.name} 中新建项目对话`}

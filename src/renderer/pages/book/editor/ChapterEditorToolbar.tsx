@@ -54,6 +54,22 @@ type ToolbarMenuProps = {
   readonly onSelect: (value: string) => void;
 };
 
+type ToolbarState = {
+  readonly block: string;
+  readonly fontFamily: string;
+  readonly fontSize: string;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly underline: boolean;
+  readonly strike: boolean;
+  readonly blockquote: boolean;
+  readonly bulletList: boolean;
+  readonly orderedList: boolean;
+  readonly textAlign: string;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+};
+
 const BLOCK_STYLES: readonly ToolbarOption[] = [
   { label: "正文", value: "paragraph" },
   { label: "小标题", value: "heading-2" },
@@ -78,6 +94,22 @@ const FONT_SIZES: readonly ToolbarOption[] = [
   { label: "18 px", value: "18px" },
   { label: "20 px", value: "20px" },
 ];
+
+const DEFAULT_TOOLBAR_STATE: ToolbarState = {
+  block: "paragraph",
+  fontFamily: "",
+  fontSize: "",
+  bold: false,
+  italic: false,
+  underline: false,
+  strike: false,
+  blockquote: false,
+  bulletList: false,
+  orderedList: false,
+  textAlign: "left",
+  canUndo: false,
+  canRedo: false,
+};
 
 function ToolbarButton({
   active = false,
@@ -237,9 +269,12 @@ export default function ChapterEditorToolbar({
   editor,
   onAskAi,
 }: ChapterEditorToolbarProps) {
+  const activeEditor = editor && !editor.isDestroyed ? editor : null;
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
+      if (!current || current.isDestroyed) return DEFAULT_TOOLBAR_STATE;
+
       const textStyle = current?.getAttributes("textStyle") ?? {};
       const block = current?.isActive("heading", { level: 2 })
         ? "heading-2"
@@ -283,12 +318,12 @@ export default function ChapterEditorToolbar({
         <div className="flex shrink-0 items-center gap-0.5">
           <ToolbarMenu
             ariaLabel="段落样式"
-            disabled={!editor}
+            disabled={!activeEditor}
             options={BLOCK_STYLES}
             value={state?.block ?? "paragraph"}
             widthClassName="w-[78px]"
             onSelect={(value) => {
-              const chain = editor?.chain().focus();
+              const chain = activeEditor?.chain().focus();
               if (value === "heading-2") {
                 chain?.setHeading({ level: 2 }).run();
               } else if (value === "heading-3") {
@@ -300,47 +335,47 @@ export default function ChapterEditorToolbar({
           />
           <ToolbarMenu
             ariaLabel="字体"
-            disabled={!editor}
+            disabled={!activeEditor}
             options={FONT_FAMILIES}
             value={state?.fontFamily ?? ""}
             widthClassName="w-[92px]"
             onSelect={(value) => {
-              if (editor) setEditorFontFamily(editor, value);
+              if (activeEditor) setEditorFontFamily(activeEditor, value);
             }}
           />
           <ToolbarMenu
             ariaLabel="字号"
-            disabled={!editor}
+            disabled={!activeEditor}
             options={FONT_SIZES}
             value={state?.fontSize ?? ""}
             widthClassName="w-[82px]"
             onSelect={(value) => {
-              if (editor) setEditorFontSize(editor, value);
+              if (activeEditor) setEditorFontSize(activeEditor, value);
             }}
           />
         </div>
 
         <div className="chapter-editor-toolbar-scroll ml-1 flex min-w-0 flex-1 items-center overflow-x-auto">
           <ToolbarDivider />
-          <ToolbarButton active={state?.bold} disabled={!editor} icon={<Bold size={15} />} label="加粗 Ctrl+B" onRun={() => editor?.chain().focus().toggleBold().run()} />
-          <ToolbarButton active={state?.italic} disabled={!editor} icon={<Italic size={15} />} label="斜体 Ctrl+I" onRun={() => editor?.chain().focus().toggleItalic().run()} />
-          <ToolbarButton active={state?.underline} disabled={!editor} icon={<Underline size={15} />} label="下划线 Ctrl+U" onRun={() => editor?.chain().focus().toggleUnderline().run()} />
-          <ToolbarButton active={state?.strike} disabled={!editor} icon={<Strikethrough size={15} />} label="删除线" onRun={() => editor?.chain().focus().toggleStrike().run()} />
+          <ToolbarButton active={state?.bold} disabled={!activeEditor} icon={<Bold size={15} />} label="加粗 Ctrl+B" onRun={() => activeEditor?.chain().focus().toggleBold().run()} />
+          <ToolbarButton active={state?.italic} disabled={!activeEditor} icon={<Italic size={15} />} label="斜体 Ctrl+I" onRun={() => activeEditor?.chain().focus().toggleItalic().run()} />
+          <ToolbarButton active={state?.underline} disabled={!activeEditor} icon={<Underline size={15} />} label="下划线 Ctrl+U" onRun={() => activeEditor?.chain().focus().toggleUnderline().run()} />
+          <ToolbarButton active={state?.strike} disabled={!activeEditor} icon={<Strikethrough size={15} />} label="删除线" onRun={() => activeEditor?.chain().focus().toggleStrike().run()} />
 
           <ToolbarDivider />
-          <ToolbarButton active={state?.blockquote} disabled={!editor} icon={<Quote size={15} />} label="引用" onRun={() => editor?.chain().focus().toggleBlockquote().run()} />
-          <ToolbarButton active={state?.bulletList} disabled={!editor} icon={<List size={16} />} label="无序列表" onRun={() => editor?.chain().focus().toggleBulletList().run()} />
-          <ToolbarButton active={state?.orderedList} disabled={!editor} icon={<ListOrdered size={16} />} label="有序列表" onRun={() => editor?.chain().focus().toggleOrderedList().run()} />
+          <ToolbarButton active={state?.blockquote} disabled={!activeEditor} icon={<Quote size={15} />} label="引用" onRun={() => activeEditor?.chain().focus().toggleBlockquote().run()} />
+          <ToolbarButton active={state?.bulletList} disabled={!activeEditor} icon={<List size={16} />} label="无序列表" onRun={() => activeEditor?.chain().focus().toggleBulletList().run()} />
+          <ToolbarButton active={state?.orderedList} disabled={!activeEditor} icon={<ListOrdered size={16} />} label="有序列表" onRun={() => activeEditor?.chain().focus().toggleOrderedList().run()} />
 
           <ToolbarDivider />
-          <ToolbarButton active={state?.textAlign === "left"} disabled={!editor} icon={<AlignLeft size={16} />} label="左对齐" onRun={() => editor?.chain().focus().setTextAlign("left").run()} />
-          <ToolbarButton active={state?.textAlign === "center"} disabled={!editor} icon={<AlignCenter size={16} />} label="居中" onRun={() => editor?.chain().focus().setTextAlign("center").run()} />
-          <ToolbarButton active={state?.textAlign === "right"} disabled={!editor} icon={<AlignRight size={16} />} label="右对齐" onRun={() => editor?.chain().focus().setTextAlign("right").run()} />
+          <ToolbarButton active={state?.textAlign === "left"} disabled={!activeEditor} icon={<AlignLeft size={16} />} label="左对齐" onRun={() => activeEditor?.chain().focus().setTextAlign("left").run()} />
+          <ToolbarButton active={state?.textAlign === "center"} disabled={!activeEditor} icon={<AlignCenter size={16} />} label="居中" onRun={() => activeEditor?.chain().focus().setTextAlign("center").run()} />
+          <ToolbarButton active={state?.textAlign === "right"} disabled={!activeEditor} icon={<AlignRight size={16} />} label="右对齐" onRun={() => activeEditor?.chain().focus().setTextAlign("right").run()} />
 
           <ToolbarDivider />
-          <ToolbarButton disabled={!editor} icon={<RemoveFormatting size={15} />} label="清除格式" onRun={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()} />
-          <ToolbarButton disabled={!state?.canUndo} icon={<RotateCcw size={15} />} label="撤销 Ctrl+Z" onRun={() => editor?.chain().focus().undo().run()} />
-          <ToolbarButton disabled={!state?.canRedo} icon={<Redo2 size={15} />} label="重做 Ctrl+Shift+Z" onRun={() => editor?.chain().focus().redo().run()} />
+          <ToolbarButton disabled={!activeEditor} icon={<RemoveFormatting size={15} />} label="清除格式" onRun={() => activeEditor?.chain().focus().unsetAllMarks().clearNodes().run()} />
+          <ToolbarButton disabled={!activeEditor || !state?.canUndo} icon={<RotateCcw size={15} />} label="撤销 Ctrl+Z" onRun={() => activeEditor?.chain().focus().undo().run()} />
+          <ToolbarButton disabled={!activeEditor || !state?.canRedo} icon={<Redo2 size={15} />} label="重做 Ctrl+Shift+Z" onRun={() => activeEditor?.chain().focus().redo().run()} />
         </div>
       </div>
 
@@ -348,7 +383,7 @@ export default function ChapterEditorToolbar({
       <button
         className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-2 text-[11px] font-medium text-violet-600 transition-colors hover:bg-violet-50 disabled:opacity-40"
         type="button"
-        disabled={!editor}
+        disabled={!activeEditor}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onAskAi}
       >

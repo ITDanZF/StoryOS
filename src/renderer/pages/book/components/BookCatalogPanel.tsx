@@ -1,6 +1,7 @@
 import {
   BookOpen,
   ChevronRight,
+  FileText,
   FolderPlus,
   ListTree,
   Plus,
@@ -140,17 +141,17 @@ export default function BookCatalogPanel({
             </div>
           )}
 
-          {groups.map((group, volumeIndex) => {
+          {groups.map((group) => {
             const expanded = expandedVolumes.has(group.id);
             const visibleChapters = group.chapters.filter((chapter) =>
               !normalizedQuery ||
               chapter.title.toLocaleLowerCase("zh-CN").includes(normalizedQuery));
             if (normalizedQuery && visibleChapters.length === 0) return null;
             return (
-              <section className="mb-1.5" key={group.id}>
+              <section className="mb-3" key={group.id}>
                 <header className="group/volume flex min-w-0 items-center">
                   <button
-                    className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-neutral-700 transition hover:bg-white/80"
+                    className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-neutral-700 transition hover:bg-white/80 hover:text-neutral-950"
                     type="button"
                     aria-expanded={expanded}
                     onClick={() => setExpandedVolumes((current) => {
@@ -167,15 +168,15 @@ export default function BookCatalogPanel({
                       )}
                       size={12}
                     />
-                    <span className="grid size-5 shrink-0 place-items-center rounded-md bg-neutral-200/70 text-[9px] tabular-nums text-neutral-500">
-                      {String(volumeIndex + 1).padStart(2, "0")}
+                    <span className="grid size-5 shrink-0 place-items-center rounded-md bg-neutral-900 text-[9px] font-semibold text-white">
+                      卷
                     </span>
-                    <strong className="truncate text-[11px] font-semibold">
+                    <strong className="truncate text-[12px] font-semibold">
                       {group.title}
                     </strong>
                   </button>
-                  <span className="shrink-0 px-1 text-[9px] tabular-nums text-neutral-400">
-                    {group.chapters.length}
+                  <span className="shrink-0 px-1 text-[10px] tabular-nums text-neutral-400">
+                    {group.chapters.length} 章
                   </span>
                   <button
                     className="grid size-7 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-violet-700"
@@ -203,62 +204,63 @@ export default function BookCatalogPanel({
                 </header>
 
                 {expanded && visibleChapters.length === 0 && !normalizedQuery && (
-                  <div className="ml-12 py-2 text-[10px] text-neutral-400">
+                  <div className="ml-8 border-l border-dashed border-neutral-200 py-2 pl-4 text-[10px] text-neutral-400">
                     暂无章节
                   </div>
                 )}
 
-                {expanded && visibleChapters.map((chapter, chapterIndex) => {
-                  const active = chapter.id === activeChapterId;
-                  return (
-                    <div
-                      className={cn(
-                        "group/chapter relative ml-5 rounded-lg",
-                        active && "bg-violet-50 ring-1 ring-violet-100",
-                      )}
-                      key={chapter.id}
-                    >
-                      <button
-                        className={cn(
-                          "flex h-10 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 pr-9 text-left transition hover:bg-white",
-                          active && "hover:bg-violet-50",
-                        )}
-                        type="button"
-                        aria-current={active ? "page" : undefined}
-                        onClick={() => {
-                          onSelectChapter(chapter.id);
-                          if (window.innerWidth < 1024) onClose();
-                        }}
-                      >
-                        <span className={cn(
-                          "grid size-5 shrink-0 place-items-center rounded-md bg-neutral-100 text-[9px] tabular-nums text-neutral-500",
-                          active && "bg-violet-600 text-white",
-                        )}>
-                          {String(chapterIndex + 1).padStart(2, "0")}
-                        </span>
-                        <strong className="truncate text-[11px] font-medium text-neutral-700">
-                          {chapter.title}
-                        </strong>
-                      </button>
-                      <button
-                        className={cn(
-                          "absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg border-0 bg-transparent text-neutral-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/chapter:opacity-100",
-                          active && "opacity-60",
-                        )}
-                        type="button"
-                        title={`删除章节“${chapter.title}”`}
-                        aria-label={`删除章节“${chapter.title}”`}
-                        onClick={() => setDeleteTarget({
-                          kind: "chapter",
-                          id: chapter.id,
-                          title: chapter.title,
-                        })}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  );
-                })}
+                {expanded && visibleChapters.length > 0 && (
+                  <div className="ml-8 mt-1 space-y-1.5 border-l border-neutral-200 pl-3">
+                    {visibleChapters.map((chapter) => {
+                      const active = chapter.id === activeChapterId;
+                      return (
+                        <div
+                          className="group/chapter relative rounded-xl"
+                          key={chapter.id}
+                        >
+                          <button
+                            className={cn(
+                              "flex h-10 w-full items-center gap-2 rounded-xl border-0 bg-transparent px-2.5 pr-9 text-left text-neutral-600 transition hover:bg-white hover:text-neutral-900",
+                              active && "bg-white text-neutral-950 shadow-sm shadow-violet-100 ring-1 ring-violet-200 hover:bg-white",
+                            )}
+                            type="button"
+                            aria-current={active ? "page" : undefined}
+                            onClick={() => {
+                              onSelectChapter(chapter.id);
+                              if (window.innerWidth < 1024) onClose();
+                            }}
+                          >
+                            <span className={cn(
+                              "grid size-6 shrink-0 place-items-center rounded-lg bg-neutral-100 text-neutral-400 transition",
+                              active && "bg-violet-600 text-white",
+                            )}>
+                              <FileText size={13} />
+                            </span>
+                            <strong className="truncate text-[12px] font-medium">
+                              {chapter.title}
+                            </strong>
+                          </button>
+                          <button
+                            className={cn(
+                              "absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg border-0 bg-transparent text-neutral-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/chapter:opacity-100",
+                              active && "opacity-60",
+                            )}
+                            type="button"
+                            title={`删除章节“${chapter.title}”`}
+                            aria-label={`删除章节“${chapter.title}”`}
+                            onClick={() => setDeleteTarget({
+                              kind: "chapter",
+                              id: chapter.id,
+                              title: chapter.title,
+                            })}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             );
           })}

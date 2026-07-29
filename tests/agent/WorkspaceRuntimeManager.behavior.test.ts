@@ -77,9 +77,8 @@ describe("WorkspaceRuntimeManager behavior", () => {
 
     expect(manager.activeProjectPath).toBe(project.path);
     expect(manager.threads.getSnapshot()).toMatchObject({
-      activeThreadId: null,
-      activeThread: null,
-      threads: [],
+      activeThread: { title: "新对话" },
+      threads: [{ title: "新对话" }],
     });
     expect(manager.novels.getProjectBook()).toMatchObject({
       title: "Stable Story",
@@ -176,7 +175,8 @@ describe("WorkspaceRuntimeManager behavior", () => {
     expect(globalRuntime.threads.getSnapshot().threads.map((thread) => thread.id))
       .toEqual([globalThread.id]);
     expect(projectRuntime.threads.getSnapshot().threads.map((thread) => thread.id))
-      .toEqual([projectThread.id]);
+      .toEqual(expect.arrayContaining([projectThread.id]));
+    expect(projectRuntime.threads.getSnapshot().threads).toHaveLength(2);
     expect(globalRuntime).not.toBe(projectRuntime);
     await manager.close();
   });

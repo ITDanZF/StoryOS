@@ -181,6 +181,9 @@ export default class WorkspaceRuntimeManager {
       const threads = new ThreadApplication(
         new SqliteThreadStore(projectDatabase.handle),
       );
+      if (project && !threads.getActiveThreadId()) {
+        threads.createThread({ title: "新对话" });
+      }
       const novels = new NovelApplication(
         new SqliteNovelStore(projectDatabase.handle),
       );

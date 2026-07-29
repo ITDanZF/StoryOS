@@ -115,7 +115,7 @@ export default function ChapterRichTextEditor({
   }, []);
 
   const askAi = () => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     const { from, to } = editor.state.selection;
     const selection = from === to
       ? null
