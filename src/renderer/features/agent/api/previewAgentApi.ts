@@ -11,6 +11,10 @@ import type {
   ThreadDto,
   ThreadSnapshot,
 } from "../../../../shared/agent/contracts.ts";
+import {
+  countTiptapCharacters,
+  parseTiptapDocument,
+} from "../../../../shared/book/richText.ts";
 
 const previewEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
 
@@ -255,6 +259,7 @@ if (previewEnabled && !window.storyOSAgent) {
         (chapter) => chapter.id === chapterId,
       );
       if (!source) throw new Error(`Chapter not found: ${chapterId}`);
+      const document = parseTiptapDocument(content);
       const createdAt = new Date().toISOString();
       const revisionNumber = (source.revisionNumber ?? 0) + 1;
       const revision = {
@@ -263,7 +268,7 @@ if (previewEnabled && !window.storyOSAgent) {
         revisionNumber,
         content,
         contentHash: "preview",
-        characterCount: Array.from(content).length,
+        characterCount: countTiptapCharacters(document),
         changeSummary: "自动保存",
         createdAt,
       };

@@ -75,6 +75,17 @@ function createHarness() {
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
   };
+  const chapter = {
+    id: "chapter-1",
+    novelId: book.id,
+    volumeId: null as string | null,
+    title: "第一章",
+    status: "draft" as const,
+    sortOrder: 0,
+    currentRevisionId: null as string | null,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+  };
   const novels = {
     getProjectBook: vi.fn(() => book),
     listVolumes: vi.fn(() => []),
@@ -82,6 +93,17 @@ function createHarness() {
     getCurrentRevision: vi.fn(() => null),
     createVolume: vi.fn(),
     createChapter: vi.fn(),
+    getChapter: vi.fn(() => chapter),
+    saveRevision: vi.fn((input) => ({
+      id: "revision-rich-text",
+      chapterId: input.chapterId,
+      revisionNumber: 1,
+      content: input.content,
+      contentHash: "hash",
+      characterCount: input.characterCount,
+      changeSummary: input.changeSummary,
+      createdAt: new Date(0).toISOString(),
+    })),
   };
   const projects = {
     getSnapshot: vi.fn(() => snapshot()),
@@ -232,6 +254,38 @@ describe("DesktopController", () => {
       status: "outline",
       sortOrder: 0,
     });
+  });
+
+  it("validates and saves Tiptap JSON with visible character count", async () => {
+    const harness = createHarness();
+    const content = JSON.stringify({
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [
+          { type: "text", text: "雨 夜", marks: [{ type: "bold" }] },
+        ],
+      }],
+    });
+
+    await harness.controller.saveBookChapterContent({
+      projectId: "prj-story",
+      chapterId: "chapter-1",
+      content,
+    });
+
+    expect(harness.novels.saveRevision).toHaveBeenCalledWith({
+      chapterId: "chapter-1",
+      content,
+      characterCount: 2,
+      changeSummary: "自动保存",
+      expectedCurrentRevisionId: null,
+    });
+    await expect(harness.controller.saveBookChapterContent({
+      projectId: "prj-story",
+      chapterId: "chapter-1",
+      content: "not-json",
+    })).rejects.toThrow("valid Tiptap JSON");
   });
 
   it("opens a registered project directory through the operating system", async () => {

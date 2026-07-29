@@ -176,6 +176,7 @@ export default class NovelApplication {
   saveRevision(input: {
     readonly chapterId: string;
     readonly content: string;
+    readonly characterCount?: number;
     readonly changeSummary?: string;
     readonly expectedCurrentRevisionId: string | null;
   }): ChapterRevisionDto {
@@ -202,7 +203,9 @@ export default class NovelApplication {
       chapterId: input.chapterId,
       content: input.content,
       contentHash,
-      characterCount: Array.from(input.content).length,
+      characterCount: input.characterCount === undefined
+        ? Array.from(input.content).length
+        : this.requireCharacterCount(input.characterCount),
       changeSummary: input.changeSummary?.trim() ?? "",
       expectedCurrentRevisionId: input.expectedCurrentRevisionId,
     }));
@@ -242,6 +245,13 @@ export default class NovelApplication {
       throw new Error("Sort order must be a non-negative integer.");
     }
     return sortOrder;
+  }
+
+  private requireCharacterCount(characterCount: number): number {
+    if (!Number.isSafeInteger(characterCount) || characterCount < 0) {
+      throw new Error("Character count must be a non-negative integer.");
+    }
+    return characterCount;
   }
 
   private requireNovelStatus(status: NovelStatus): NovelStatus {

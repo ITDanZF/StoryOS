@@ -22,6 +22,11 @@ import type {
   SaveBookChapterContentRequest,
   UpdateBookChapterRequest,
 } from "../application/bookWorkspaceContracts.ts";
+import {
+  countTiptapCharacters,
+  parseTiptapDocument,
+  serializeTiptapDocument,
+} from "../../../shared/book/richText.ts";
 
 export type DesktopControllerDependencies = {
   readonly projects: ProjectApplication;
@@ -194,9 +199,12 @@ export default class DesktopController {
       projectId: request.projectId,
     });
     const chapter = runtime.novels.getChapter(request.chapterId);
+    const document = parseTiptapDocument(request.content);
+    const content = serializeTiptapDocument(document);
     const revision = runtime.novels.saveRevision({
       chapterId: chapter.id,
-      content: request.content,
+      content,
+      characterCount: countTiptapCharacters(document),
       changeSummary: "自动保存",
       expectedCurrentRevisionId: chapter.currentRevisionId,
     });

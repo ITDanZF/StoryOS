@@ -1,0 +1,130 @@
+.chapter-editor-canvas {
+  background: #f5f5f2;
+}
+
+.chapter-editor-paper {
+  border-color: #e4e2dd;
+  box-shadow: 0 18px 48px rgb(43 38 30 / 7%);
+}
+
+.chapter-editor-footer {
+  border-color: #eeece7;
+  color: #9a978f;
+}
+
+.chapter-editor-toolbar-scroll {
+  scrollbar-width: none;
+}
+
+.chapter-editor-toolbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chapter-rich-text {
+  min-height: 650px;
+  padding: clamp(48px, 7vw, 88px) clamp(36px, 7vw, 84px);
+  outline: none;
+  color: #292724;
+  caret-color: #7c3aed;
+  font-family: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC",
+    STSong, SimSun, "Times New Roman", serif;
+  font-size: clamp(16px, calc(15px + 0.22vw), 18px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.9;
+  overflow-wrap: break-word;
+  text-rendering: optimizeLegibility;
+}
+
+.chapter-rich-text p {
+  margin: 0 0 0.75em;
+  text-indent: 2em;
+}
+
+.chapter-rich-text h2,
+.chapter-rich-text h3 {
+  color: #211f1c;
+  font-family: "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei",
+    sans-serif;
+  letter-spacing: 0.025em;
+  line-height: 1.5;
+}
+
+.chapter-rich-text h2 {
+  margin: 1.8em 0 0.9em;
+  font-size: 1.35em;
+  font-weight: 700;
+}
+
+.chapter-rich-text h3 {
+  margin: 1.5em 0 0.75em;
+  font-size: 1.12em;
+  font-weight: 650;
+}
+
+.chapter-rich-text > h2:first-child,
+.chapter-rich-text > h3:first-child {
+  margin-top: 0;
+}
+
+.chapter-rich-text blockquote {
+  margin: 1.35em 0;
+  border-left: 3px solid #a78bfa;
+  border-radius: 0 6px 6px 0;
+  background: #faf9ff;
+  padding: 0.75em 1.2em;
+  color: #57534e;
+}
+
+.chapter-rich-text blockquote p {
+  margin: 0.25em 0;
+  text-indent: 0;
+}
+
+.chapter-rich-text ul,
+.chapter-rich-text ol {
+  margin: 0.85em 0;
+  padding-left: 2em;
+}
+
+.chapter-rich-text ul {
+  list-style: disc;
+}
+
+.chapter-rich-text ol {
+  list-style: decimal;
+}
+
+.chapter-rich-text li {
+  margin: 0.28em 0;
+  padding-left: 0.25em;
+}
+
+.chapter-rich-text li p {
+  margin: 0;
+  text-indent: 0;
+}
+
+.chapter-rich-text s {
+  color: #78716c;
+}
+
+.chapter-rich-text p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: #a8a29e;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.chapter-rich-text ::selection {
+  background: #ede9fe;
+}
+
+@media (max-width: 720px) {
+  .chapter-rich-text {
+    padding: 36px 28px 56px;
+    font-size: 16px;
+    line-height: 1.85;
+  }
+}
