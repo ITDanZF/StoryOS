@@ -1,12 +1,25 @@
-import type { Content } from "@tiptap/core";
+import type { Content, Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { useCallback, useEffect, useRef } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   countTiptapCharacters,
   decodeStoredChapterContent,
   serializeTiptapDocument,
 } from "../../../../shared/book/richText.ts";
 import type { BookSaveState } from "../bookWorkspaceModel.ts";
+import {
+  BOOK_PAGE_COLUMN_GAP,
+  BOOK_PAGE_STRIDE,
+  clampChapterEditablePosition,
+  type BookPageNavigationTarget,
+} from "../pagination/bookPagination.ts";
 import "./chapterEditor.css";
 import { createChapterEditorExtensions } from "./chapterEditorExtensions.ts";
 import ChapterEditorToolbar from "./ChapterEditorToolbar.tsx";
@@ -14,6 +27,8 @@ import ChapterEditorToolbar from "./ChapterEditorToolbar.tsx";
 type ChapterRichTextEditorProps = {
   readonly chapterNumber: number;
   readonly content: string;
+  readonly pageTarget: BookPageNavigationTarget | null;
+  readonly onPageChange: (chapterPageNumber: number) => void;
   readonly onSave: (content: string) => Promise<void>;
   readonly onSaveStateChange: (state: BookSaveState) => void;
   readonly onCharacterCountChange: (count: number) => void;
@@ -23,11 +38,18 @@ type ChapterRichTextEditorProps = {
 export default function ChapterRichTextEditor({
   chapterNumber,
   content,
+  pageTarget,
+  onPageChange,
   onSave,
   onSaveStateChange,
   onCharacterCountChange,
   onAskAiSelection,
 }: ChapterRichTextEditorProps) {
+  const [pageCount, setPageCount] = useState(1);
+  const [activePageIndex, setActivePageIndex] = useState(0);
+  const pageCountRef = useRef(1);
+  const activePageIndexRef = useRef(0);
+  const layoutFrame = useRef<number | null>(null);
   const saveTimer = useRef<number | null>(null);
   const pendingContent = useRef<string | null>(null);
   const lastSavedContent = useRef(content);
@@ -35,9 +57,11 @@ export default function ChapterRichTextEditor({
   const onSaveRef = useRef(onSave);
   const onSaveStateChangeRef = useRef(onSaveStateChange);
   const onCharacterCountChangeRef = useRef(onCharacterCountChange);
+  const onPageChangeRef = useRef(onPageChange);
   onSaveRef.current = onSave;
   onSaveStateChangeRef.current = onSaveStateChange;
   onCharacterCountChangeRef.current = onCharacterCountChange;
+  onPageChangeRef.current = onPageChange;
 
   const persist = useCallback((serialized: string) => {
     if (serialized === lastSavedContent.current) {
@@ -71,6 +95,52 @@ export default function ChapterRichTextEditor({
     }
   }, [persist]);
 
+  const activatePage = useCallback((requestedIndex: number) => {
+    const nextIndex = Math.max(
+      0,
+      Math.min(requestedIndex, pageCountRef.current - 1),
+    );
+    activePageIndexRef.current = nextIndex;
+    setActivePageIndex(nextIndex);
+    onPageChangeRef.current(nextIndex + 1);
+  }, []);
+
+  const pageIndexAtPosition = useCallback((
+    current: Editor,
+    requestedPosition: number,
+  ): number => {
+    const position = clampChapterEditablePosition(
+      requestedPosition,
+      current.state.doc.content.size,
+    );
+    const rootLeft = current.view.dom.getBoundingClientRect().left;
+    const positionLeft = current.view.coordsAtPos(position).left;
+    return Math.max(0, Math.floor((positionLeft - rootLeft) / BOOK_PAGE_STRIDE));
+  }, []);
+
+  const schedulePageLayout = useCallback((current: Editor) => {
+    if (layoutFrame.current !== null) {
+      window.cancelAnimationFrame(layoutFrame.current);
+    }
+    layoutFrame.current = window.requestAnimationFrame(() => {
+      layoutFrame.current = null;
+      if (current.isDestroyed) return;
+      const nextPageCount = Math.max(
+        1,
+        Math.round(
+          (current.view.dom.scrollWidth + BOOK_PAGE_COLUMN_GAP) /
+            BOOK_PAGE_STRIDE,
+        ),
+      );
+      pageCountRef.current = nextPageCount;
+      setPageCount(nextPageCount);
+      activatePage(Math.min(
+        pageIndexAtPosition(current, current.state.selection.from),
+        nextPageCount - 1,
+      ));
+    });
+  }, [activatePage, pageIndexAtPosition]);
+
   const editor = useEditor({
     extensions: createChapterEditorExtensions(),
     content: decodeStoredChapterContent(content) as unknown as Content,
@@ -85,6 +155,7 @@ export default function ChapterRichTextEditor({
       onCharacterCountChangeRef.current(
         countTiptapCharacters(current.getJSON()),
       );
+      schedulePageLayout(current);
     },
     onUpdate: ({ editor: current }) => {
       const document = current.getJSON();
@@ -99,11 +170,43 @@ export default function ChapterRichTextEditor({
         saveTimer.current = null;
         persist(serialized);
       }, 800);
+      schedulePageLayout(current);
+    },
+    onSelectionUpdate: ({ editor: current }) => {
+      activatePage(pageIndexAtPosition(
+        current,
+        current.state.selection.from,
+      ));
     },
     onBlur: flush,
   });
 
+  useEffect(() => {
+    if (!editor || !pageTarget) return;
+    if (pageTarget.chapterPageNumber > pageCountRef.current) {
+      pageCountRef.current = pageTarget.chapterPageNumber;
+      setPageCount(pageTarget.chapterPageNumber);
+    }
+    activatePage(pageTarget.chapterPageNumber - 1);
+    const frame = window.requestAnimationFrame(() => {
+      if (editor.isDestroyed) return;
+      const position = clampChapterEditablePosition(
+        pageTarget.position,
+        editor.state.doc.content.size,
+      );
+      editor.chain()
+        .focus()
+        .setTextSelection(position)
+        .run();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activatePage, editor, pageTarget]);
+
   useEffect(() => () => {
+    if (layoutFrame.current !== null) {
+      window.cancelAnimationFrame(layoutFrame.current);
+      layoutFrame.current = null;
+    }
     if (saveTimer.current !== null) {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = null;
@@ -114,6 +217,37 @@ export default function ChapterRichTextEditor({
     }
   }, []);
 
+  const positionForPage = (targetPageIndex: number): number => {
+    if (!editor || targetPageIndex <= 0) return 1;
+    let low = 1;
+    let high = Math.max(1, editor.state.doc.content.size - 1);
+    let result = high;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      if (pageIndexAtPosition(editor, middle) >= targetPageIndex) {
+        result = middle;
+        high = middle - 1;
+      } else {
+        low = middle + 1;
+      }
+    }
+    return result;
+  };
+
+  const goToPage = (targetPageIndex: number) => {
+    if (!editor || editor.isDestroyed) return;
+    const nextPageIndex = Math.max(
+      0,
+      Math.min(targetPageIndex, pageCountRef.current - 1),
+    );
+    activatePage(nextPageIndex);
+    const position = positionForPage(nextPageIndex);
+    window.requestAnimationFrame(() => {
+      if (editor.isDestroyed) return;
+      editor.chain().focus().setTextSelection(position).run();
+    });
+  };
+
   const askAi = () => {
     if (!editor || editor.isDestroyed) return;
     const { from, to } = editor.state.selection;
@@ -123,19 +257,54 @@ export default function ChapterRichTextEditor({
     onAskAiSelection(selection);
   };
 
+  const pageOffsetStyle = {
+    "--chapter-page-offset": `${-activePageIndex * BOOK_PAGE_STRIDE}px`,
+  } as CSSProperties;
+
   return (
     <>
       <ChapterEditorToolbar editor={editor} onAskAi={askAi} />
-      <div className="chapter-editor-canvas min-h-0 flex-1 overflow-y-auto px-[clamp(12px,4vw,56px)] pb-16 pt-[clamp(18px,4vw,40px)]">
-        <div className="chapter-editor-paper mx-auto flex min-h-full w-full max-w-[840px] flex-col overflow-hidden rounded-md border bg-white">
-          <EditorContent
-            className="min-h-[650px] flex-1"
-            editor={editor}
-          />
-          <footer className="chapter-editor-footer flex items-center justify-between border-t px-6 py-4 text-[10px]">
-            <span>第 {chapterNumber} 章</span>
-            <span>StoryOS 自动保存已开启</span>
-          </footer>
+      <div className="chapter-editor-canvas min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-[clamp(12px,4vw,64px)] pb-20 pt-[clamp(18px,4vw,40px)]">
+        <div className="chapter-editor-page-shell relative mx-auto w-[720px] max-w-full">
+          <button
+            className="chapter-page-arrow absolute left-2 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-500 shadow-md transition hover:border-violet-300 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-30 xl:-left-12"
+            type="button"
+            aria-label="上一页"
+            disabled={activePageIndex === 0}
+            onClick={() => goToPage(activePageIndex - 1)}
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          <div className="chapter-editor-paper relative h-[960px] w-[720px] max-w-full overflow-hidden rounded-md border bg-white">
+            <div
+              className="chapter-editor-page-content absolute left-[72px] top-[72px] h-[816px] w-[576px] overflow-hidden"
+              style={pageOffsetStyle}
+            >
+              <EditorContent className="h-full w-full" editor={editor} />
+            </div>
+            <footer className="chapter-editor-footer absolute inset-x-[72px] bottom-0 flex h-[54px] items-center justify-between border-t text-[10px]">
+              <span>第 {chapterNumber} 章</span>
+              <strong className="font-medium tabular-nums text-neutral-500">
+                第 {activePageIndex + 1} / {pageCount} 页
+              </strong>
+              <span>StoryOS 自动保存</span>
+            </footer>
+          </div>
+
+          <button
+            className="chapter-page-arrow absolute right-2 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-500 shadow-md transition hover:border-violet-300 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-30 xl:-right-12"
+            type="button"
+            aria-label="下一页"
+            disabled={activePageIndex >= pageCount - 1}
+            onClick={() => goToPage(activePageIndex + 1)}
+          >
+            <ChevronRight size={18} />
+          </button>
+
+          <div className="pointer-events-none absolute -bottom-9 left-1/2 -translate-x-1/2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-[10px] tabular-nums text-neutral-500 shadow-sm">
+            第 {activePageIndex + 1} 页，共 {pageCount} 页
+          </div>
         </div>
       </div>
     </>

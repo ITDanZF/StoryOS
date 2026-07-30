@@ -3,6 +3,7 @@ import {
   ChevronRight,
   FileText,
   FolderPlus,
+  LayoutGrid,
   ListTree,
   Plus,
   Search,
@@ -14,6 +15,8 @@ import type {
   VolumeDto,
 } from "../../../../shared/agent/contracts.ts";
 import { cn } from "../../../../lib/utils.ts";
+import type { BookPageSlice } from "../pagination/bookPagination.ts";
+import BookPageGrid from "./BookPageGrid.tsx";
 import DeleteBookItemDialog, {
   type DeleteBookItemTarget,
 } from "./DeleteBookItemDialog.tsx";
@@ -23,7 +26,9 @@ type BookCatalogPanelProps = {
   readonly volumes: readonly VolumeDto[];
   readonly chapters: readonly BookWorkspaceChapterDto[];
   readonly activeChapterId: string | null;
+  readonly activeChapterPageNumber: number | null;
   readonly onSelectChapter: (chapterId: string) => void;
+  readonly onSelectPage: (page: BookPageSlice) => void;
   readonly onCreateVolume: (() => Promise<void>) | null;
   readonly onCreateChapter: (volumeId: string) => Promise<void>;
   readonly onShowOverview: () => void;
@@ -37,7 +42,9 @@ export default function BookCatalogPanel({
   volumes,
   chapters,
   activeChapterId,
+  activeChapterPageNumber,
   onSelectChapter,
+  onSelectPage,
   onCreateVolume,
   onCreateChapter,
   onShowOverview,
@@ -45,6 +52,7 @@ export default function BookCatalogPanel({
   onDeleteChapter,
   onClose,
 }: BookCatalogPanelProps) {
+  const [view, setView] = useState<"chapters" | "pages">("chapters");
   const [query, setQuery] = useState("");
   const [expandedVolumes, setExpandedVolumes] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -97,25 +105,55 @@ export default function BookCatalogPanel({
         </button>
 
         <header className="mx-3.5 flex h-14 shrink-0 items-center justify-between border-b border-neutral-200">
-          <span className="flex h-full items-center gap-2 border-b-2 border-neutral-900 px-2 text-xs font-semibold text-neutral-900">
-            <ListTree size={14} />
-            目录
-          </span>
-          <button
-            className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
-            type="button"
-            title={onCreateVolume ? "新建分卷" : "请先填写书籍名称"}
-            aria-label={onCreateVolume ? "新建分卷" : "请先填写书籍名称后新建分卷"}
-            disabled={!onCreateVolume}
-            onClick={() => {
-              if (onCreateVolume) void onCreateVolume();
-            }}
-          >
-            <FolderPlus size={15} />
-          </button>
+          <div className="flex h-full items-stretch" role="tablist" aria-label="书籍导航视图">
+            <button
+              className={cn(
+                "flex h-full items-center gap-1.5 border-0 border-b-2 bg-transparent px-2 text-xs font-medium transition",
+                view === "chapters"
+                  ? "border-neutral-900 font-semibold text-neutral-900"
+                  : "border-transparent text-neutral-400 hover:text-neutral-700",
+              )}
+              type="button"
+              role="tab"
+              aria-selected={view === "chapters"}
+              onClick={() => setView("chapters")}
+            >
+              <ListTree size={13} />
+              目录
+            </button>
+            <button
+              className={cn(
+                "flex h-full items-center gap-1.5 border-0 border-b-2 bg-transparent px-2 text-xs font-medium transition",
+                view === "pages"
+                  ? "border-violet-600 font-semibold text-violet-700"
+                  : "border-transparent text-neutral-400 hover:text-neutral-700",
+              )}
+              type="button"
+              role="tab"
+              aria-selected={view === "pages"}
+              onClick={() => setView("pages")}
+            >
+              <LayoutGrid size={13} />
+              页面
+            </button>
+          </div>
+          {view === "chapters" && (
+            <button
+              className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
+              type="button"
+              title={onCreateVolume ? "新建分卷" : "请先填写书籍名称"}
+              aria-label={onCreateVolume ? "新建分卷" : "请先填写书籍名称后新建分卷"}
+              disabled={!onCreateVolume}
+              onClick={() => {
+                if (onCreateVolume) void onCreateVolume();
+              }}
+            >
+              <FolderPlus size={15} />
+            </button>
+          )}
         </header>
 
-        {chapters.length > 0 && (
+        {view === "chapters" && chapters.length > 0 && (
           <label className="mx-3.5 mt-3 flex h-9 shrink-0 items-center gap-2.5 rounded-lg border border-neutral-200 bg-white px-3 shadow-sm shadow-neutral-100 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
             <Search className="text-neutral-400" size={14} />
             <input
@@ -129,10 +167,11 @@ export default function BookCatalogPanel({
           </label>
         )}
 
-        <nav
-          className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-5 pt-3"
-          aria-label="章节目录"
-        >
+        {view === "chapters" ? (
+          <nav
+            className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-5 pt-3"
+            aria-label="章节目录"
+          >
           {groups.length === 0 && (
             <div className="px-3 py-8 text-center">
               <strong className="block text-[11px] font-medium text-neutral-400">
@@ -272,7 +311,17 @@ export default function BookCatalogPanel({
               没有匹配的章节
             </div>
           )}
-        </nav>
+          </nav>
+        ) : (
+          <BookPageGrid
+            volumes={volumes}
+            chapters={chapters}
+            activeChapterId={activeChapterId}
+            activeChapterPageNumber={activeChapterPageNumber}
+            onSelectPage={onSelectPage}
+            onClose={onClose}
+          />
+        )}
       </aside>
 
       {deleteTarget && (

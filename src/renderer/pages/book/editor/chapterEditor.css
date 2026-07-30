@@ -121,6 +121,49 @@
   background: #ede9fe;
 }
 
+.chapter-editor-page-content .chapter-rich-text {
+  box-sizing: border-box;
+  width: 576px;
+  height: 816px;
+  min-height: 816px;
+  padding: 0;
+  column-width: 576px;
+  column-gap: 144px;
+  column-fill: auto;
+  transform: translate3d(var(--chapter-page-offset, 0), 0, 0);
+  transition: transform 180ms ease;
+  will-change: transform;
+}
+
+.chapter-page-arrow:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 2px;
+}
+
+.book-pagination-measure-host {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  z-index: -1;
+  height: auto;
+  visibility: hidden;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.book-pagination-measure-host .book-pagination-rich-text {
+  box-sizing: border-box;
+  width: 576px;
+  height: 816px;
+  min-height: 816px;
+  padding: 0;
+  column-width: 576px;
+  column-gap: 144px;
+  column-fill: auto;
+  font-size: 17px;
+  line-height: 1.9;
+}
+
 @media (max-width: 720px) {
   .chapter-rich-text {
     padding: 36px 28px 56px;

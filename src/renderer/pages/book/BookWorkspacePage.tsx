@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -20,6 +21,10 @@ import BookProfilePanel, {
 } from "./components/BookProfilePanel.tsx";
 import ChapterEditorPanel from "./components/ChapterEditorPanel.tsx";
 import { formatChineseOrdinal } from "./bookWorkspaceModel.ts";
+import type {
+  BookPageNavigationTarget,
+  BookPageSlice,
+} from "./pagination/bookPagination.ts";
 import useBookWorkspace from "./useBookWorkspace.ts";
 
 const MIN_ASSISTANT_WIDTH = 300;
@@ -63,6 +68,11 @@ export default function BookWorkspacePage() {
     ? state.projectNavigations[projectId] ?? null
     : null;
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
+  const pageRequestId = useRef(0);
+  const [activeChapterPageNumber, setActiveChapterPageNumber] =
+    useState<number | null>(null);
+  const [pageTarget, setPageTarget] =
+    useState<BookPageNavigationTarget | null>(null);
   const [catalogVisible, setCatalogVisible] = useState(true);
   const [assistantVisible, setAssistantVisible] = useState(true);
   const [assistantFocused, setAssistantFocused] = useState(false);
@@ -251,6 +261,30 @@ export default function BookWorkspacePage() {
     setAssistantDraft("");
   };
 
+  const selectChapter = (chapterId: string) => {
+    setActiveChapterId(chapterId);
+    setActiveChapterPageNumber(1);
+    setPageTarget(null);
+  };
+
+  const showBookOverview = () => {
+    setActiveChapterId(null);
+    setActiveChapterPageNumber(null);
+    setPageTarget(null);
+  };
+
+  const selectBookPage = (page: BookPageSlice) => {
+    pageRequestId.current += 1;
+    setActiveChapterId(page.chapterId);
+    setActiveChapterPageNumber(page.chapterPageNumber);
+    setPageTarget({
+      chapterId: page.chapterId,
+      position: page.from,
+      chapterPageNumber: page.chapterPageNumber,
+      requestId: pageRequestId.current,
+    });
+  };
+
   const addVolume = async () => {
     const nextNumber = readyWorkspace
       ? readyWorkspace.volumes.reduce(
@@ -274,7 +308,7 @@ export default function BookWorkspacePage() {
       volumeId,
       formatChineseOrdinal(nextNumber, "章"),
     );
-    if (created) setActiveChapterId(created.id);
+    if (created) selectChapter(created.id);
     await loadProjectNavigation(projectId);
   };
 
@@ -285,7 +319,7 @@ export default function BookWorkspacePage() {
 
   const removeChapter = async (chapterId: string) => {
     await deleteChapter(chapterId);
-    if (activeChapterId === chapterId) setActiveChapterId(null);
+    if (activeChapterId === chapterId) showBookOverview();
     await loadProjectNavigation(projectId);
   };
 
@@ -373,7 +407,7 @@ export default function BookWorkspacePage() {
               title={readyWorkspace ? "查看书籍概览" : "请先设置书名"}
               disabled={!readyWorkspace}
               aria-current={readyWorkspace && !activeChapter ? "page" : undefined}
-              onClick={() => setActiveChapterId(null)}
+              onClick={showBookOverview}
             >
               <BookOpen className="shrink-0" size={12} />
               <span className="truncate">
@@ -416,10 +450,12 @@ export default function BookWorkspacePage() {
             volumes={readyWorkspace?.volumes ?? []}
             chapters={readyWorkspace?.chapters ?? []}
             activeChapterId={activeChapter?.id ?? null}
-            onSelectChapter={setActiveChapterId}
+            activeChapterPageNumber={activeChapterPageNumber}
+            onSelectChapter={selectChapter}
+            onSelectPage={selectBookPage}
             onCreateVolume={readyWorkspace ? addVolume : null}
             onCreateChapter={addChapter}
-            onShowOverview={() => setActiveChapterId(null)}
+            onShowOverview={showBookOverview}
             onDeleteVolume={removeVolume}
             onDeleteChapter={removeChapter}
             onClose={() => setCatalogVisible(false)}
@@ -442,6 +478,10 @@ export default function BookWorkspacePage() {
             chapter={activeChapter}
             chapterNumber={chapterNumber}
             volumeTitle={activeVolumeTitle}
+            pageTarget={pageTarget?.chapterId === activeChapter.id
+              ? pageTarget
+              : null}
+            onPageChange={setActiveChapterPageNumber}
             onSaveTitle={(title) =>
               updateChapterTitle(activeChapter.id, title)}
             onSaveContent={(content) =>
