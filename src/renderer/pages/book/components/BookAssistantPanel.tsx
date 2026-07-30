@@ -11,14 +11,17 @@ import {
 } from "lucide-react";
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { cn } from "../../../../lib/utils.ts";
+import type { ThreadSnapshot } from "../../../../shared/agent/contracts.ts";
 import type { MessageView } from "../../../features/agent/types.ts";
+import ProjectConversationSwitcher from "./ProjectConversationSwitcher.tsx";
 
 type BookAssistantPanelProps = {
   readonly projectName: string;
   readonly bookTitle: string | null;
   readonly chapterNumber: number | null;
   readonly chapterTitle: string | null;
-  readonly conversationTitle: string;
+  readonly conversationSnapshot: ThreadSnapshot | null;
+  readonly runningThreadIds: ReadonlySet<string>;
   readonly messages: readonly MessageView[];
   readonly connected: boolean;
   readonly running: boolean;
@@ -29,6 +32,8 @@ type BookAssistantPanelProps = {
   readonly onSend: (content: string) => Promise<void>;
   readonly onCancel: () => Promise<void>;
   readonly onCreateConversation: () => Promise<void>;
+  readonly onSwitchConversation: (threadId: string) => Promise<void>;
+  readonly onDeleteConversation: (threadId: string) => Promise<void>;
   readonly onToggleFocus: () => void;
 };
 
@@ -37,7 +42,8 @@ export default function BookAssistantPanel({
   bookTitle,
   chapterNumber,
   chapterTitle,
-  conversationTitle,
+  conversationSnapshot,
+  runningThreadIds,
   messages,
   connected,
   running,
@@ -48,6 +54,8 @@ export default function BookAssistantPanel({
   onSend,
   onCancel,
   onCreateConversation,
+  onSwitchConversation,
+  onDeleteConversation,
   onToggleFocus,
 }: BookAssistantPanelProps) {
   const [contextVisible, setContextVisible] = useState(true);
@@ -78,13 +86,14 @@ export default function BookAssistantPanel({
           <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-neutral-900 to-violet-700 text-white shadow-md">
             <Sparkles size={17} />
           </span>
-          <span className="grid min-w-0 gap-0.5">
-            <strong className="truncate text-xs">{conversationTitle}</strong>
-            <small className="flex items-center gap-1.5 text-[10px] text-neutral-400">
-              <i className={`size-[5px] rounded-full ${connected ? "bg-emerald-500" : "bg-neutral-400"}`} />
-              {connected ? "AI 助手在线" : "AI 尚未配置"}
-            </small>
-          </span>
+          <ProjectConversationSwitcher
+            snapshot={conversationSnapshot}
+            connected={connected}
+            runningThreadIds={runningThreadIds}
+            onCreate={onCreateConversation}
+            onSelect={onSwitchConversation}
+            onDelete={onDeleteConversation}
+          />
         </div>
         <div className="flex">
           <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 hover:bg-neutral-100 hover:text-neutral-800" type="button" aria-label="新建项目对话" onClick={() => void onCreateConversation()}>

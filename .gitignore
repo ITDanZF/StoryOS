@@ -92,3 +92,4 @@ typings/
 out/
 .tmp-visual-check
 tests/
+dist/

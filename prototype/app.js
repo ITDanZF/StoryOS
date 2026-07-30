@@ -62,6 +62,27 @@ const projects = {
   mistHarbor: { name: "雾港来信", bookTitle: "潮痕" }
 };
 
+const projectConversations = {
+  myStory: [
+    { id: "chapter", title: "第一章创作助手", updatedAt: "刚刚" },
+    { id: "world", title: "世界观讨论", updatedAt: "昨天" },
+    { id: "outline", title: "情节大纲推演", updatedAt: "周一" }
+  ],
+  starSea: [
+    { id: "character", title: "主角设定讨论", updatedAt: "2 小时前" },
+    { id: "volume", title: "第一卷结构梳理", updatedAt: "周二" }
+  ],
+  mistHarbor: [
+    { id: "clue", title: "线索一致性检查", updatedAt: "周三" }
+  ]
+};
+
+const activeConversationByProject = {
+  myStory: "chapter",
+  starSea: "character",
+  mistHarbor: "clue"
+};
+
 const app = document.querySelector("#app");
 const editor = document.querySelector("#chapter-editor");
 const titleInput = document.querySelector("#chapter-title");
@@ -70,6 +91,9 @@ const saveStatus = document.querySelector("#save-status");
 const messages = document.querySelector("#messages");
 const aiInput = document.querySelector("#ai-input");
 const toast = document.querySelector("#toast");
+const conversationSwitcher = document.querySelector("#conversation-switcher");
+const conversationPopover = document.querySelector("#conversation-popover");
+const projectConversationList = document.querySelector("#project-conversation-list");
 let activeChapterId = null;
 let activeProjectId = "myStory";
 let activeConversationScope = "project";
@@ -150,6 +174,47 @@ function showToast(text) {
   toastTimer = setTimeout(() => toast.classList.remove("visible"), 2200);
 }
 
+function closeConversationPopover() {
+  conversationPopover.hidden = true;
+  conversationSwitcher.setAttribute("aria-expanded", "false");
+}
+
+function renderProjectConversationList() {
+  const conversations = projectConversations[activeProjectId] || [];
+  const activeId = activeConversationByProject[activeProjectId];
+  document.querySelector("#conversation-count").textContent = `${conversations.length} 个对话`;
+  if (conversations.length === 0) {
+    projectConversationList.innerHTML = '<p class="conversation-empty-state">暂无项目对话，点击“新建”开始</p>';
+    document.querySelector("#conversation-title").textContent = "开始新对话";
+    return;
+  }
+  projectConversationList.innerHTML = conversations.map((conversation) => `
+    <div class="project-conversation-row ${conversation.id === activeId ? "active" : ""}" role="listitem" data-conversation="${conversation.id}">
+      ${icon("i-check")}
+      <button class="project-conversation-select" type="button" data-action="select-project-conversation" data-conversation="${conversation.id}" ${conversation.id === activeId ? 'aria-current="true"' : ""}>
+        <span class="project-conversation-copy"><strong>${escapeHtml(conversation.title)}</strong><small>${conversation.updatedAt}</small></span>
+      </button>
+      <button class="conversation-delete" type="button" data-action="delete-project-conversation" data-conversation="${conversation.id}" aria-label="删除对话 ${escapeHtml(conversation.title)}">${icon("i-trash")}</button>
+    </div>
+  `).join("");
+}
+
+function selectProjectConversation(projectId, conversationId, notify = true) {
+  const conversation = projectConversations[projectId]?.find((item) => item.id === conversationId);
+  if (!conversation) return;
+  activeConversationByProject[projectId] = conversationId;
+  activeConversationScope = "project";
+  activateProject(projectId);
+  document.querySelectorAll(".global-conversation-row").forEach((item) => item.classList.remove("active"));
+  document.querySelector("#conversation-title").textContent = conversation.title;
+  document.querySelector("#composer-chapter").textContent = `第${chapters[activeChapterId].number}章`;
+  document.querySelector("#context-chip").hidden = false;
+  renderProjectConversationList();
+  closeConversationPopover();
+  app.classList.remove("ai-collapsed");
+  if (notify) showToast(`已切换到“${conversation.title}”`);
+}
+
 function openProjectNode(projectId) {
   document.querySelectorAll(".project-node").forEach((node) => {
     const isTarget = node.dataset.project === projectId;
@@ -169,38 +234,29 @@ function activateProject(projectId) {
   document.querySelectorAll(".project-book").forEach((button) => button.classList.toggle("active", button.dataset.project === projectId));
   document.querySelector("#current-project-name").textContent = project.name;
   document.querySelector("#current-book-title").textContent = project.bookTitle;
+  document.querySelector("#current-book-title-crumb").textContent = `《${project.bookTitle}》`;
   document.querySelector("#composer-project").textContent = project.name;
-}
-
-function selectConversation(row) {
-  activeConversationScope = "project";
-  activateProject(row.dataset.project);
-  document.querySelectorAll(".conversation-row").forEach((item) => item.classList.toggle("active", item === row));
-  document.querySelectorAll(".global-conversation-row").forEach((item) => item.classList.remove("active"));
-  document.querySelector("#conversation-title").textContent = row.querySelector("span:nth-child(2)").textContent;
-  document.querySelector("#composer-chapter").textContent = `第${chapters[activeChapterId].number}章`;
-  document.querySelector("#context-chip").hidden = false;
-  app.classList.remove("ai-collapsed");
+  const activeConversation = projectConversations[projectId]?.find(
+    (item) => item.id === activeConversationByProject[projectId]
+  );
+  document.querySelector("#conversation-title").textContent = activeConversation?.title || "开始新对话";
+  renderProjectConversationList();
 }
 
 function updateSidebarEmptyStates() {
   document.querySelector("#empty-projects").hidden = document.querySelectorAll(".project-node").length > 0;
-  document.querySelectorAll(".project-node").forEach((node) => {
-    const empty = node.querySelector(".conversation-empty");
-    empty.hidden = node.querySelectorAll(".conversation-row").length > 0;
-  });
   document.querySelector("#empty-global-conversations").hidden =
     document.querySelectorAll(".global-conversation-row").length > 0;
 }
 
 function selectGlobalConversation(row) {
   activeConversationScope = "global";
-  document.querySelectorAll(".conversation-row").forEach((item) => item.classList.remove("active"));
   document.querySelectorAll(".global-conversation-row").forEach((item) => item.classList.toggle("active", item === row));
   document.querySelector("#conversation-title").textContent = row.querySelector("span").textContent;
   document.querySelector("#composer-project").textContent = "全局对话";
   document.querySelector("#composer-chapter").textContent = "无书籍上下文";
   document.querySelector("#context-chip").hidden = true;
+  closeConversationPopover();
   app.classList.remove("ai-collapsed");
 }
 
@@ -221,20 +277,32 @@ function createGlobalConversation() {
 
 function createProjectConversation(projectId) {
   activateProject(projectId);
-  const projectNode = document.querySelector(`.project-node[data-project="${projectId}"]`);
-  const nav = projectNode.querySelector("nav");
-  const row = document.createElement("button");
-  row.className = "conversation-row";
-  row.type = "button";
-  row.dataset.project = projectId;
-  row.dataset.conversation = `new-${Date.now()}`;
-  row.innerHTML = '<span class="tree-rail"></span><span>新对话</span><small>刚刚</small>';
-  nav.prepend(row);
-  row.addEventListener("click", () => selectConversation(row));
-  updateSidebarEmptyStates();
-  selectConversation(row);
+  const conversation = {
+    id: `new-${Date.now()}`,
+    title: "新对话",
+    updatedAt: "刚刚"
+  };
+  projectConversations[projectId].unshift(conversation);
+  selectProjectConversation(projectId, conversation.id, false);
   showToast(`已在「${projects[projectId].name}」中创建对话`);
   aiInput.focus();
+}
+
+function deleteProjectConversation(conversationId) {
+  const conversations = projectConversations[activeProjectId];
+  const index = conversations.findIndex((item) => item.id === conversationId);
+  if (index < 0) return;
+  const [deleted] = conversations.splice(index, 1);
+  if (activeConversationByProject[activeProjectId] === conversationId) {
+    activeConversationByProject[activeProjectId] = conversations[Math.min(index, conversations.length - 1)]?.id || null;
+  }
+  const nextId = activeConversationByProject[activeProjectId];
+  if (nextId) selectProjectConversation(activeProjectId, nextId, false);
+  else {
+    document.querySelector("#conversation-title").textContent = "开始新对话";
+    renderProjectConversationList();
+  }
+  showToast(`已删除“${deleted.title}”`);
 }
 
 function appendMessage(role, text) {
@@ -340,6 +408,18 @@ aiInput.addEventListener("keydown", (event) => {
   }
 });
 
+conversationSwitcher.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (activeConversationScope === "global") {
+    const activeId = activeConversationByProject[activeProjectId];
+    if (activeId) selectProjectConversation(activeProjectId, activeId, false);
+  }
+  const shouldOpen = conversationPopover.hidden;
+  conversationPopover.hidden = !shouldOpen;
+  conversationSwitcher.setAttribute("aria-expanded", String(shouldOpen));
+  if (shouldOpen) renderProjectConversationList();
+});
+
 document.addEventListener("click", (event) => {
   const actionTarget = event.target.closest("[data-action]");
   const action = actionTarget?.dataset.action;
@@ -370,23 +450,27 @@ document.addEventListener("click", (event) => {
     queueSave();
     showToast("修改已应用，并将保存为新的章节版本");
   }
+  if (action === "select-project-conversation") {
+    selectProjectConversation(activeProjectId, actionTarget.dataset.conversation);
+  }
+  if (action === "delete-project-conversation") {
+    event.stopPropagation();
+    deleteProjectConversation(actionTarget.dataset.conversation);
+  }
   if (action === "new-chat") {
-    createProjectConversation(actionTarget.dataset.project || activeProjectId);
+    createProjectConversation(activeProjectId);
   }
   if (action === "new-global-chat") createGlobalConversation();
   if (action === "new-project") showToast("原型演示：创建项目后，将自动生成一本书和独立的项目对话区");
   if (action === "add-chapter") showToast("原型演示：这里将创建新章节并自动打开");
 });
 
-document.querySelectorAll(".conversation-row").forEach((row) => {
-  row.addEventListener("click", () => selectConversation(row));
-});
-
 document.querySelectorAll(".project-book").forEach((button) => {
   button.addEventListener("click", () => {
     activateProject(button.dataset.project);
-    const firstConversation = button.closest(".project-node").querySelector(".conversation-row");
-    if (firstConversation) selectConversation(firstConversation);
+    const activeId = activeConversationByProject[button.dataset.project];
+    if (activeId) selectProjectConversation(button.dataset.project, activeId, false);
+    else createProjectConversation(button.dataset.project);
     showToast(`已切换到「${projects[button.dataset.project].name}」书籍工作区`);
   });
 });
@@ -398,6 +482,7 @@ document.querySelector("#context-chip").addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeConversationPopover();
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
     event.preventDefault();
     togglePanel("toc");
@@ -412,7 +497,18 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+document.addEventListener("pointerdown", (event) => {
+  if (
+    !conversationPopover.hidden &&
+    !conversationPopover.contains(event.target) &&
+    !conversationSwitcher.contains(event.target)
+  ) {
+    closeConversationPopover();
+  }
+});
+
 bindResizer(".toc-resizer", "--toc-width", 190, 330);
 bindResizer(".ai-resizer", "--assistant-width", 310, 520, true);
 updateSidebarEmptyStates();
 renderChapter("chapter-1");
+renderProjectConversationList();

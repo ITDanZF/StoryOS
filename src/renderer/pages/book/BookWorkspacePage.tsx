@@ -37,6 +37,7 @@ export default function BookWorkspacePage() {
     openConversationScope,
     createThread,
     switchThread,
+    deleteThread,
     sendMessage,
     cancelRun,
   } = useWorkspaceOutlet();
@@ -74,6 +75,14 @@ export default function BookWorkspacePage() {
   const projectConversationActive =
     state.conversationScope.kind === "project" &&
     state.conversationScope.projectId === projectId;
+  const projectConversationSnapshot = projectConversationActive
+    ? state.threads
+    : navigation?.conversations ?? null;
+  const runningThreadIds = new Set(
+    state.runs
+      .filter((run) => run.status === "running" || run.status === "cancelling")
+      .map((run) => run.threadId),
+  );
 
   useEffect(() => {
     if (!project || !projectId) return;
@@ -219,7 +228,27 @@ export default function BookWorkspacePage() {
   const createProjectConversation = async () => {
     const thread = await createThread(scope);
     setSearchParams({ conversation: thread.id });
+    setAssistantDraft("");
     setAssistantVisible(true);
+  };
+
+  const switchProjectConversation = async (threadId: string) => {
+    if (threadId === projectConversationSnapshot?.activeThreadId) return;
+    await switchThread(threadId, scope);
+    setSearchParams({ conversation: threadId });
+    setAssistantDraft("");
+    setAssistantVisible(true);
+  };
+
+  const deleteProjectConversation = async (threadId: string) => {
+    const snapshot = await deleteThread(threadId, scope);
+    setSearchParams(
+      snapshot.activeThreadId
+        ? { conversation: snapshot.activeThreadId }
+        : {},
+      { replace: true },
+    );
+    setAssistantDraft("");
   };
 
   const addVolume = async () => {
@@ -458,9 +487,8 @@ export default function BookWorkspacePage() {
               bookTitle={readyWorkspace?.book.title ?? null}
               chapterNumber={chapterNumber}
               chapterTitle={activeChapter?.title ?? null}
-              conversationTitle={projectConversationActive
-                ? state.threads?.activeThread?.title ?? "项目对话"
-                : "正在载入项目对话…"}
+              conversationSnapshot={projectConversationSnapshot}
+              runningThreadIds={runningThreadIds}
               messages={projectConversationActive ? state.messages : []}
               connected={Boolean(state.status?.initialized)}
               running={projectConversationActive && Boolean(activeRun)}
@@ -473,6 +501,8 @@ export default function BookWorkspacePage() {
                 if (activeRun) await cancelRun(activeRun.runId);
               }}
               onCreateConversation={createProjectConversation}
+              onSwitchConversation={switchProjectConversation}
+              onDeleteConversation={deleteProjectConversation}
               onToggleFocus={() => {
                 setAssistantFocused((value) => !value);
                 setAssistantVisible(true);

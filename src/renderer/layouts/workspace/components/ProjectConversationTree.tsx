@@ -41,10 +41,6 @@ type ProjectConversationTreeProps = {
   readonly onDeleteProject: (projectPath: string) => Promise<void>;
 };
 
-function projectScope(projectId: string): ConversationScope {
-  return { kind: "project", projectId };
-}
-
 export default function ProjectConversationTree({
   projects,
   projectsExpanded,
@@ -65,20 +61,12 @@ export default function ProjectConversationTree({
   const [expandedProjectIds, setExpandedProjectIds] = useState<
     ReadonlySet<string>
   >(() => new Set(projects.activeProjectId ? [projects.activeProjectId] : []));
-  const [expandedProjectConversationIds, setExpandedProjectConversationIds] =
-    useState<ReadonlySet<string>>(
-      () => new Set(projects.activeProjectId ? [projects.activeProjectId] : []),
-    );
   const [globalExpanded, setGlobalExpanded] = useState(true);
 
   useEffect(() => {
     const activeProjectId = projects.activeProjectId;
     if (!activeProjectId) return;
     setExpandedProjectIds((current) => {
-      if (current.has(activeProjectId)) return current;
-      return new Set([...current, activeProjectId]);
-    });
-    setExpandedProjectConversationIds((current) => {
       if (current.has(activeProjectId)) return current;
       return new Set([...current, activeProjectId]);
     });
@@ -173,10 +161,7 @@ export default function ProjectConversationTree({
           )}
           {projects.projects.map((project) => {
             const expanded = expandedProjectIds.has(project.id);
-            const conversationsExpanded =
-              expandedProjectConversationIds.has(project.id);
             const navigation = projectNavigations[project.id] ?? null;
-            const scope = projectScope(project.id);
             return (
               <section className="grid gap-0.5" key={project.id}>
                 <div
@@ -245,54 +230,6 @@ export default function ProjectConversationTree({
                         </span>
                       )}
                     </button>
-
-                    <div
-                      className={cn(
-                        "group ml-5 flex h-9 items-center rounded-lg transition hover:bg-neutral-200/70",
-                        sameConversationScope(scope, conversationScope) &&
-                          "bg-neutral-200 text-neutral-900",
-                      )}
-                    >
-                      <button
-                        className={cn(
-                          "flex min-w-0 flex-1 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-xs text-neutral-600 transition group-hover:text-neutral-900",
-                          sameConversationScope(scope, conversationScope) &&
-                            "text-neutral-900",
-                        )}
-                        type="button"
-                        aria-expanded={conversationsExpanded}
-                        onClick={() => {
-                          setExpandedProjectConversationIds((current) => {
-                            const next = new Set(current);
-                            if (next.has(project.id)) next.delete(project.id);
-                            else next.add(project.id);
-                            return next;
-                          });
-                        }}
-                      >
-                        <ChevronRight
-                          className={cn(
-                            "shrink-0 text-neutral-400 transition-transform duration-200 ease-out motion-reduce:transition-none",
-                            conversationsExpanded && "rotate-90",
-                          )}
-                          size={12}
-                        />
-                        <MessageSquareText size={14} />
-                        <span className="min-w-0 flex-1 truncate">项目对话</span>
-                      </button>
-                      <button
-                        className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-neutral-800"
-                        type="button"
-                        title={`在 ${project.name} 中新建项目对话`}
-                        aria-label={`在 ${project.name} 中新建项目对话`}
-                        onClick={() => void onCreateConversation(scope)}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                    <AnimatedCollapse open={conversationsExpanded}>
-                      {renderThreads(scope, navigation?.conversations ?? null)}
-                    </AnimatedCollapse>
                   </div>
                 </AnimatedCollapse>
               </section>

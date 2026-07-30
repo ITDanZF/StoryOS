@@ -24,6 +24,7 @@
     <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></symbol>
   </svg>
 
   <main class="app-shell" id="app">
@@ -52,13 +53,6 @@
             </button>
             <div class="project-children">
               <button class="project-book active" type="button" data-project="myStory"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>12章</small></button>
-              <div class="project-conversations-title"><span><svg><use href="#i-message"/></svg>项目对话</span><button type="button" data-action="new-chat" data-project="myStory" aria-label="在 myStory 中新建对话"><svg><use href="#i-plus"/></svg></button></div>
-              <nav aria-label="myStory 的对话">
-                <button class="conversation-row active" type="button" data-project="myStory" data-conversation="chapter"><span class="tree-rail"></span><span>第一章创作助手</span><small>刚刚</small></button>
-                <button class="conversation-row" type="button" data-project="myStory" data-conversation="world"><span class="tree-rail"></span><span>世界观讨论</span><small>昨天</small></button>
-                <button class="conversation-row" type="button" data-project="myStory" data-conversation="outline"><span class="tree-rail"></span><span>情节大纲推演</span><small>周一</small></button>
-                <p class="sidebar-empty conversation-empty" hidden>暂无对话</p>
-              </nav>
             </div>
           </section>
 
@@ -68,12 +62,6 @@
             </button>
             <div class="project-children">
               <button class="project-book" type="button" data-project="starSea"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>8章</small></button>
-              <div class="project-conversations-title"><span><svg><use href="#i-message"/></svg>项目对话</span><button type="button" data-action="new-chat" data-project="starSea" aria-label="在星海纪元中新建对话"><svg><use href="#i-plus"/></svg></button></div>
-              <nav aria-label="星海纪元的对话">
-                <button class="conversation-row" type="button" data-project="starSea" data-conversation="character"><span class="tree-rail"></span><span>主角设定讨论</span><small>2小时前</small></button>
-                <button class="conversation-row" type="button" data-project="starSea" data-conversation="volume"><span class="tree-rail"></span><span>第一卷结构梳理</span><small>周二</small></button>
-                <p class="sidebar-empty conversation-empty" hidden>暂无对话</p>
-              </nav>
             </div>
           </section>
 
@@ -83,11 +71,6 @@
             </button>
             <div class="project-children">
               <button class="project-book" type="button" data-project="mistHarbor"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>5章</small></button>
-              <div class="project-conversations-title"><span><svg><use href="#i-message"/></svg>项目对话</span><button type="button" data-action="new-chat" data-project="mistHarbor" aria-label="在雾港来信中新建对话"><svg><use href="#i-plus"/></svg></button></div>
-              <nav aria-label="雾港来信的对话">
-                <button class="conversation-row" type="button" data-project="mistHarbor" data-conversation="clue"><span class="tree-rail"></span><span>线索一致性检查</span><small>周三</small></button>
-                <p class="sidebar-empty conversation-empty" hidden>暂无对话</p>
-              </nav>
             </div>
           </section>
         </div>
@@ -105,7 +88,11 @@
 
     <section class="workspace">
       <header class="workspace-header">
-        <div class="breadcrumb"><strong id="current-project-name">myStory</strong><span>/</span><span id="breadcrumb-volume">第一卷</span><span>/</span><span id="breadcrumb-chapter">第一章</span></div>
+        <div class="breadcrumb">
+          <span class="project-crumb"><svg><use href="#i-folder"/></svg><small>项目</small><strong id="current-project-name">myStory</strong></span>
+          <span>/</span><span class="book-crumb"><svg><use href="#i-book"/></svg><strong id="current-book-title-crumb">《长夜》</strong></span>
+          <span>/</span><span id="breadcrumb-volume">第一卷</span><span>/</span><span id="breadcrumb-chapter">第一章</span>
+        </div>
         <div class="workspace-actions">
           <span class="connection"><i></i>已连接</span>
           <button class="icon-button" type="button" data-action="toggle-toc" aria-label="显示或隐藏目录" title="显示或隐藏目录 (Ctrl+B)"><svg><use href="#i-panel-left"/></svg></button>
@@ -116,13 +103,12 @@
       <div class="creation-workspace">
         <aside class="book-panel" aria-label="书籍目录">
           <div class="book-panel-header">
-            <div><span class="eyebrow">当前书籍</span><h1 id="current-book-title">长夜</h1></div>
-            <button class="icon-button subtle" type="button" aria-label="书籍菜单"><svg><use href="#i-more"/></svg></button>
+            <div><h1 id="current-book-title">长夜</h1></div>
           </div>
-          <label class="catalog-search"><svg><use href="#i-search"/></svg><input type="search" placeholder="搜索章节" aria-label="搜索章节"></label>
-          <div class="catalog-tabs" role="tablist"><button class="active" type="button">目录</button><button type="button" disabled title="后续功能">设定</button><button type="button" disabled title="后续功能">关系</button></div>
+          <button class="overview-row active" type="button"><svg><use href="#i-book"/></svg><span>书籍概览</span></button>
+          <div class="catalog-section-header"><span><svg><use href="#i-history"/></svg>目录</span><button type="button" aria-label="新建分卷" title="新建分卷"><svg><use href="#i-plus"/></svg></button></div>
+          <label class="catalog-search"><svg><use href="#i-search"/></svg><input type="search" placeholder="搜索章节标题" aria-label="搜索章节标题"></label>
           <nav class="chapter-tree" id="chapter-tree" aria-label="章节目录">
-            <button class="overview-row" type="button"><svg><use href="#i-book"/></svg><span>书籍概览</span><small>42,680 字</small></button>
             <section class="volume open" data-volume="第一卷">
               <header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>第一卷</strong><small>城市之夜</small></span></button><button class="chapter-add" type="button" aria-label="在第一卷新建章节"><svg><use href="#i-plus"/></svg></button></header>
               <div class="volume-chapters">
@@ -150,7 +136,7 @@
             <div class="editor-meta"><span class="save-status saved" id="save-status"><svg><use href="#i-check"/></svg>已保存</span><span id="word-count">1,248 字</span><button class="icon-button subtle" type="button" aria-label="历史版本"><svg><use href="#i-history"/></svg></button><button class="icon-button subtle" type="button" aria-label="章节菜单"><svg><use href="#i-more"/></svg></button></div>
           </header>
           <div class="editor-toolbar" aria-label="编辑工具栏">
-            <button type="button" title="正文">正文⌄</button><span></span><button type="button"><b>B</b></button><button type="button"><i>I</i></button><button type="button">“</button><span></span><button class="ask-ai" type="button" data-action="ask-selection"><svg><use href="#i-spark"/></svg>询问 AI</button>
+            <button class="toolbar-select" type="button">正文⌄</button><button class="toolbar-select wide" type="button">默认宋体⌄</button><button class="toolbar-select" type="button">默认字号⌄</button><span></span><button type="button"><b>B</b></button><button type="button"><i>I</i></button><button type="button"><u>U</u></button><button type="button"><s>S</s></button><span></span><button type="button">“</button><button type="button">☷</button><button type="button">1.</button><span></span><button type="button">↶</button><button type="button">↷</button><button class="ask-ai" type="button" data-action="ask-selection"><svg><use href="#i-spark"/></svg>询问 AI</button>
           </div>
           <div class="editor-scroll">
             <div class="document-page">
@@ -164,8 +150,12 @@
 
         <aside class="ai-panel" aria-label="AI 对话">
           <header class="ai-header">
-            <div class="ai-title"><span class="ai-avatar"><svg><use href="#i-spark"/></svg></span><span><strong id="conversation-title">第一章创作助手</strong><small><i></i> AI 助手在线</small></span></div>
+            <div class="ai-title"><span class="ai-avatar"><svg><use href="#i-spark"/></svg></span><button class="conversation-switcher" id="conversation-switcher" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="conversation-popover"><span><strong id="conversation-title">第一章创作助手</strong><svg class="conversation-chevron"><use href="#i-chevron"/></svg></span><small><i></i> AI 助手在线</small></button></div>
             <div><button class="icon-button subtle" type="button" data-action="new-chat" aria-label="新建对话"><svg><use href="#i-plus"/></svg></button><button class="icon-button subtle" type="button" data-action="focus-ai" aria-label="展开对话"><svg><use href="#i-expand"/></svg></button><button class="icon-button subtle" type="button" aria-label="对话菜单"><svg><use href="#i-more"/></svg></button></div>
+            <section class="conversation-popover" id="conversation-popover" role="dialog" aria-label="切换项目对话" hidden>
+              <header><span><strong>项目对话</strong><small id="conversation-count">3 个对话</small></span><button type="button" data-action="new-chat"><svg><use href="#i-plus"/></svg><span>新建</span></button></header>
+              <div class="project-conversation-list" id="project-conversation-list" role="list" aria-label="项目对话列表"></div>
+            </section>
           </header>
           <div class="context-bar"><span>上下文</span><button type="button" id="context-chip"><svg><use href="#i-book"/></svg><span>第一章 · 雨夜</span><b>×</b></button><button class="context-add" type="button"><svg><use href="#i-plus"/></svg></button></div>
           <div class="messages" id="messages" aria-live="polite">
