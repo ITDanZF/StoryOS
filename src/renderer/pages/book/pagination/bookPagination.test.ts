@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { BookWorkspaceChapterDto } from "../../../../shared/agent/contracts.ts";
 import {
+  parseTiptapDocument,
+  serializeTiptapDocument,
+} from "../../../../shared/book/richText.ts";
+import {
+  calculateBookPageScale,
   clampChapterEditablePosition,
   createChapterPaginationCacheKey,
   numberBookPages,
@@ -44,6 +49,26 @@ function page(
 }
 
 describe("book pagination", () => {
+  it("fits the logical page to the viewport without crossing scale bounds", () => {
+    expect(calculateBookPageScale(1440, 1200)).toBe(1.15);
+    expect(calculateBookPageScale(600, 800)).toBeCloseTo(5 / 6);
+    expect(calculateBookPageScale(320, 480)).toBe(0.7);
+  });
+
+  it("round-trips a persisted manual page break", () => {
+    const stored = serializeTiptapDocument({
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "第一页" }] },
+        { type: "pageBreak" },
+        { type: "paragraph", content: [{ type: "text", text: "第二页" }] },
+      ],
+    });
+
+    expect(parseTiptapDocument(stored).content?.[1]?.type)
+      .toBe("pageBreak");
+  });
+
   it("keeps the structural document end out of editable page coordinates", () => {
     expect(clampChapterEditablePosition(100, 100)).toBe(99);
     expect(clampChapterEditablePosition(0, 2)).toBe(1);

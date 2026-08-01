@@ -78,7 +78,7 @@ export default function BookCatalogPanel({
 
   return (
     <>
-      <aside className="flex h-full w-[min(272px,86vw)] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50/95 lg:w-[248px] 2xl:w-[270px] max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:shadow-2xl">
+      <aside className="flex h-full w-[min(272px,86vw)] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50/95 lg:w-[clamp(216px,12vw,248px)] 2xl:w-[clamp(232px,11vw,270px)] max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:shadow-2xl">
         <div className="shrink-0 px-5 pb-3 pt-5">
           <strong
             className="block truncate text-base font-semibold tracking-tight text-neutral-900"

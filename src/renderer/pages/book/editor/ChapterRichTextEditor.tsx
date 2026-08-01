@@ -1,9 +1,10 @@
 import type { Content, Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -16,13 +17,18 @@ import {
 import type { BookSaveState } from "../bookWorkspaceModel.ts";
 import {
   BOOK_PAGE_COLUMN_GAP,
+  BOOK_PAGE_LAYOUT,
   BOOK_PAGE_STRIDE,
+  calculateBookPageScale,
   clampChapterEditablePosition,
   type BookPageNavigationTarget,
 } from "../pagination/bookPagination.ts";
 import "./chapterEditor.css";
 import { createChapterEditorExtensions } from "./chapterEditorExtensions.ts";
 import ChapterEditorToolbar from "./ChapterEditorToolbar.tsx";
+
+const PAGE_HORIZONTAL_CONTROL_SPACE = 80;
+const PAGE_VERTICAL_LABEL_SPACE = 34;
 
 type ChapterRichTextEditorProps = {
   readonly chapterNumber: number;
@@ -45,6 +51,8 @@ export default function ChapterRichTextEditor({
   onCharacterCountChange,
   onAskAiSelection,
 }: ChapterRichTextEditorProps) {
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const [pageScale, setPageScale] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const pageCountRef = useRef(1);
@@ -62,6 +70,40 @@ export default function ChapterRichTextEditor({
   onSaveStateChangeRef.current = onSaveStateChange;
   onCharacterCountChangeRef.current = onCharacterCountChange;
   onPageChangeRef.current = onPageChange;
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const updatePageScale = () => {
+      const style = window.getComputedStyle(canvas);
+      const horizontalPadding =
+        Number.parseFloat(style.paddingLeft) +
+        Number.parseFloat(style.paddingRight);
+      const verticalPadding =
+        Number.parseFloat(style.paddingTop) +
+        Number.parseFloat(style.paddingBottom);
+      const availableWidth = Math.max(
+        0,
+        canvas.clientWidth - horizontalPadding - PAGE_HORIZONTAL_CONTROL_SPACE,
+      );
+      const availableHeight = Math.max(
+        0,
+        canvas.clientHeight - verticalPadding - PAGE_VERTICAL_LABEL_SPACE,
+      );
+      const nextScale = calculateBookPageScale(
+        availableWidth,
+        availableHeight,
+      );
+      setPageScale((current) =>
+        Math.abs(current - nextScale) < 0.005 ? current : nextScale);
+    };
+
+    const observer = new ResizeObserver(updatePageScale);
+    observer.observe(canvas);
+    updatePageScale();
+    return () => observer.disconnect();
+  }, []);
 
   const persist = useCallback((serialized: string) => {
     if (serialized === lastSavedContent.current) {
@@ -248,6 +290,23 @@ export default function ChapterRichTextEditor({
     });
   };
 
+  const insertPageBreak = () => {
+    if (!editor || editor.isDestroyed) return;
+    editor.chain().focus().insertContent([
+      { type: "pageBreak" },
+      { type: "paragraph" },
+    ]).run();
+    schedulePageLayout(editor);
+  };
+
+  const goToNextPage = () => {
+    if (activePageIndex < pageCount - 1) {
+      goToPage(activePageIndex + 1);
+      return;
+    }
+    insertPageBreak();
+  };
+
   const askAi = () => {
     if (!editor || editor.isDestroyed) return;
     const { from, to } = editor.state.selection;
@@ -260,12 +319,28 @@ export default function ChapterRichTextEditor({
   const pageOffsetStyle = {
     "--chapter-page-offset": `${-activePageIndex * BOOK_PAGE_STRIDE}px`,
   } as CSSProperties;
+  const pageShellStyle = {
+    width: BOOK_PAGE_LAYOUT.width * pageScale,
+    height: BOOK_PAGE_LAYOUT.height * pageScale,
+  } satisfies CSSProperties;
+  const pageSurfaceStyle = {
+    width: BOOK_PAGE_LAYOUT.width,
+    height: BOOK_PAGE_LAYOUT.height,
+    transform: `scale(${pageScale})`,
+    transformOrigin: "top left",
+  } satisfies CSSProperties;
 
   return (
     <>
       <ChapterEditorToolbar editor={editor} onAskAi={askAi} />
-      <div className="chapter-editor-canvas min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-[clamp(12px,4vw,64px)] pb-20 pt-[clamp(18px,4vw,40px)]">
-        <div className="chapter-editor-page-shell relative mx-auto w-[720px] max-w-full">
+      <div
+        ref={canvasRef}
+        className="chapter-editor-canvas min-h-0 flex-1 overflow-auto px-[clamp(12px,2vw,32px)] pb-14 pt-[clamp(16px,2vw,28px)]"
+      >
+        <div
+          className="chapter-editor-page-shell relative mx-auto shrink-0"
+          style={pageShellStyle}
+        >
           <button
             className="chapter-page-arrow absolute left-2 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-500 shadow-md transition hover:border-violet-300 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-30 xl:-left-12"
             type="button"
@@ -276,28 +351,42 @@ export default function ChapterRichTextEditor({
             <ChevronLeft size={18} />
           </button>
 
-          <div className="chapter-editor-paper relative h-[960px] w-[720px] max-w-full overflow-hidden rounded-md border bg-white">
-            <div
-              className="chapter-editor-page-content absolute left-[72px] top-[72px] h-[816px] w-[576px] overflow-hidden"
-              style={pageOffsetStyle}
-            >
-              <EditorContent className="h-full w-full" editor={editor} />
+          <div className="absolute left-0 top-0" style={pageSurfaceStyle}>
+            <div className="chapter-editor-paper relative h-[960px] w-[720px] overflow-hidden rounded-md border bg-white">
+              <div
+                className="chapter-editor-page-content absolute left-[72px] top-[72px] h-[816px] w-[576px] overflow-hidden"
+                style={pageOffsetStyle}
+              >
+                <EditorContent className="h-full w-full" editor={editor} />
+              </div>
+              <footer className="chapter-editor-footer absolute inset-x-[72px] bottom-0 flex h-[54px] items-center justify-between border-t text-[10px]">
+                <span>第 {chapterNumber} 章</span>
+                <strong className="font-medium tabular-nums text-neutral-500">
+                  第 {activePageIndex + 1} / {pageCount} 页
+                </strong>
+                <button
+                  className="inline-flex items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-1 text-[10px] text-neutral-500 transition hover:bg-violet-50 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
+                  type="button"
+                  title="从光标处换页（Ctrl/Cmd + Enter）"
+                  onClick={insertPageBreak}
+                >
+                  <Plus size={10} />
+                  换页
+                </button>
+              </footer>
             </div>
-            <footer className="chapter-editor-footer absolute inset-x-[72px] bottom-0 flex h-[54px] items-center justify-between border-t text-[10px]">
-              <span>第 {chapterNumber} 章</span>
-              <strong className="font-medium tabular-nums text-neutral-500">
-                第 {activePageIndex + 1} / {pageCount} 页
-              </strong>
-              <span>StoryOS 自动保存</span>
-            </footer>
           </div>
 
           <button
             className="chapter-page-arrow absolute right-2 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-500 shadow-md transition hover:border-violet-300 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-30 xl:-right-12"
             type="button"
-            aria-label="下一页"
-            disabled={activePageIndex >= pageCount - 1}
-            onClick={() => goToPage(activePageIndex + 1)}
+            aria-label={activePageIndex >= pageCount - 1
+              ? "新建下一页"
+              : "下一页"}
+            title={activePageIndex >= pageCount - 1
+              ? "新建下一页"
+              : "下一页"}
+            onClick={goToNextPage}
           >
             <ChevronRight size={18} />
           </button>

@@ -3,6 +3,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyleKit } from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
 import StarterKitExtension from "@tiptap/starter-kit";
+import PageBreakExtension from "./PageBreakExtension.ts";
 
 export function createChapterEditorExtensions() {
   return [
@@ -24,6 +25,7 @@ export function createChapterEditorExtensions() {
       color: false,
       lineHeight: false,
     }),
+    PageBreakExtension,
     Placeholder.configure({
       placeholder: "在这里开始书写章节正文……",
     }),

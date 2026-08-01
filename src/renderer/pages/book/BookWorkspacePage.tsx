@@ -28,8 +28,25 @@ import type {
 import useBookWorkspace from "./useBookWorkspace.ts";
 
 const MIN_ASSISTANT_WIDTH = 300;
-const DEFAULT_ASSISTANT_WIDTH = 350;
 const MAX_ASSISTANT_WIDTH = 560;
+
+function getDefaultAssistantWidth(): number {
+  if (typeof window === "undefined") return 320;
+  return Math.min(
+    350,
+    Math.max(MIN_ASSISTANT_WIDTH, Math.round(window.innerWidth * 0.17)),
+  );
+}
+
+function getCatalogPanelWidth(viewportWidth: number): number {
+  if (viewportWidth >= 1536) {
+    return Math.min(270, Math.max(232, viewportWidth * 0.11));
+  }
+  if (viewportWidth >= 1024) {
+    return Math.min(248, Math.max(216, viewportWidth * 0.12));
+  }
+  return 0;
+}
 
 export default function BookWorkspacePage() {
   const { projectId } = useParams();
@@ -77,7 +94,7 @@ export default function BookWorkspacePage() {
   const [assistantVisible, setAssistantVisible] = useState(true);
   const [assistantFocused, setAssistantFocused] = useState(false);
   const [assistantWidth, setAssistantWidth] = useState(
-    DEFAULT_ASSISTANT_WIDTH,
+    getDefaultAssistantWidth,
   );
   const [assistantResizing, setAssistantResizing] = useState(false);
   const [assistantDraft, setAssistantDraft] = useState("");
@@ -341,7 +358,9 @@ export default function BookWorkspacePage() {
   };
 
   const clampAssistantWidth = (width: number): number => {
-    const catalogWidth = catalogVisible ? 248 : 0;
+    const catalogWidth = catalogVisible
+      ? getCatalogPanelWidth(window.innerWidth)
+      : 0;
     const availableMaximum = Math.max(
       MIN_ASSISTANT_WIDTH,
       window.innerWidth - 240 - catalogWidth - 420,

@@ -26,6 +26,23 @@ export const BOOK_PAGE_COLUMN_GAP =
 export const BOOK_PAGE_STRIDE =
   BOOK_PAGE_CONTENT_WIDTH + BOOK_PAGE_COLUMN_GAP;
 
+export const BOOK_PAGE_MIN_SCALE = 0.7;
+export const BOOK_PAGE_MAX_SCALE = 1.15;
+
+export function calculateBookPageScale(
+  availableWidth: number,
+  availableHeight: number,
+): number {
+  return Math.max(
+    BOOK_PAGE_MIN_SCALE,
+    Math.min(
+      BOOK_PAGE_MAX_SCALE,
+      availableWidth / BOOK_PAGE_LAYOUT.width,
+      availableHeight / BOOK_PAGE_LAYOUT.height,
+    ),
+  );
+}
+
 export type BookPageSlice = {
   readonly key: string;
   readonly chapterId: string;
