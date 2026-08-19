@@ -5,12 +5,12 @@ import {
   serializeTiptapDocument,
 } from "../../../../shared/book/richText.ts";
 import {
-  calculateBookPageScale,
+  calculateChapterPageScale,
   clampChapterEditablePosition,
   createChapterPaginationCacheKey,
   numberBookPages,
   type ChapterPageMeasurement,
-} from "./bookPagination.ts";
+} from "./paginationModel.ts";
 
 function chapter(
   id: string,
@@ -42,17 +42,21 @@ function page(
     chapterId,
     revisionId: "revision-1",
     chapterPageNumber,
+    index: chapterPageNumber - 1,
     from: chapterPageNumber - 1,
     to: chapterPageNumber,
+    usedHeight: 100,
+    breakReason: "automatic",
+    overflow: false,
     previewText: `${chapterId}-${chapterPageNumber}`,
   };
 }
 
-describe("book pagination", () => {
+describe("pagination model", () => {
   it("fits the logical page to the viewport without crossing scale bounds", () => {
-    expect(calculateBookPageScale(1440, 1200)).toBe(1.15);
-    expect(calculateBookPageScale(600, 800)).toBeCloseTo(5 / 6);
-    expect(calculateBookPageScale(320, 480)).toBe(0.7);
+    expect(calculateChapterPageScale(1440, 1200)).toBe(1.15);
+    expect(calculateChapterPageScale(600, 800)).toBeCloseTo(5 / 6);
+    expect(calculateChapterPageScale(320, 480)).toBe(0.7);
   });
 
   it("round-trips a persisted manual page break", () => {
@@ -65,11 +69,10 @@ describe("book pagination", () => {
       ],
     });
 
-    expect(parseTiptapDocument(stored).content?.[1]?.type)
-      .toBe("pageBreak");
+    expect(parseTiptapDocument(stored).content?.[1]?.type).toBe("pageBreak");
   });
 
-  it("keeps the structural document end out of editable page coordinates", () => {
+  it("keeps structural document ends out of editable coordinates", () => {
     expect(clampChapterEditablePosition(100, 100)).toBe(99);
     expect(clampChapterEditablePosition(0, 2)).toBe(1);
   });
@@ -85,7 +88,6 @@ describe("book pagination", () => {
     ]);
 
     const pages = numberBookPages(chapters, measurements);
-
     expect(pages.map((item) => item.globalPageNumber)).toEqual([1, 2, 3]);
     expect(pages.map((item) => item.chapterId)).toEqual([
       "chapter-1",
@@ -94,7 +96,7 @@ describe("book pagination", () => {
     ]);
   });
 
-  it("does not number later chapters before an earlier chapter is measured", () => {
+  it("waits for earlier chapters before numbering later pages", () => {
     const chapters = [
       chapter("chapter-1", "first", "revision-1"),
       chapter("chapter-2", "second", "revision-2"),
@@ -102,14 +104,12 @@ describe("book pagination", () => {
     const measurements = new Map([
       ["chapter-2", [page("chapter-2", 1)]],
     ]);
-
     expect(numberBookPages(chapters, measurements)).toEqual([]);
   });
 
-  it("invalidates the pagination cache when content changes", () => {
+  it("invalidates cached pagination when content changes", () => {
     const before = chapter("chapter-1", "before", "revision-1");
     const after = { ...before, content: "after" };
-
     expect(createChapterPaginationCacheKey(before))
       .not.toBe(createChapterPaginationCacheKey(after));
   });

@@ -1,0 +1,100 @@
+.chapter-pagination-viewport {
+  background: #f5f5f2;
+  overscroll-behavior: contain;
+  scroll-behavior: auto !important;
+  scrollbar-width: none;
+}
+
+.chapter-pagination-viewport::-webkit-scrollbar,
+.book-page-grid-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.book-page-grid-scroll {
+  scrollbar-width: none;
+}
+
+.chapter-pagination-stage {
+  isolation: isolate;
+}
+
+.chapter-pagination-sheet {
+  box-sizing: border-box;
+  width: 720px;
+  height: 960px;
+  border: 1px solid #e4e2dd;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgb(43 38 30 / 7%);
+}
+
+.chapter-pagination-footer {
+  border-color: #eeece7;
+  color: #9a978f;
+}
+
+.chapter-pagination-editor .chapter-rich-text {
+  box-sizing: border-box;
+  width: 720px;
+  min-height: var(--chapter-pagination-stage-height);
+  margin: 0;
+  padding: 72px;
+  background: transparent;
+}
+
+.chapter-pagination-gap {
+  display: block;
+  width: 1px;
+  min-width: 1px;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.chapter-pagination-insert-break {
+  transform: translateX(-100%);
+}
+
+.chapter-pagination-page-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 35;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid #e4e2dd;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 94%);
+  color: #737373;
+  box-shadow: 0 6px 20px rgb(43 38 30 / 9%);
+  transition: border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.chapter-pagination-page-arrow:hover:not(:disabled) {
+  border-color: #c4b5fd;
+  color: #6d28d9;
+}
+
+.chapter-pagination-page-arrow:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 2px;
+}
+
+.chapter-pagination-page-arrow:disabled {
+  cursor: default;
+  opacity: 0.25;
+}
+
+@media (max-width: 720px) {
+  .chapter-pagination-editor .chapter-rich-text {
+    width: 720px;
+    padding: 72px;
+    font-size: 16px;
+    line-height: 1.85;
+  }
+}

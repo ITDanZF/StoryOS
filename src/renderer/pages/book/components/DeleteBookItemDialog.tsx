@@ -24,6 +24,11 @@ export type DeleteBookItemTarget =
       readonly kind: "chapter";
       readonly id: string;
       readonly title: string;
+    }
+  | {
+      readonly kind: "page";
+      readonly title: string;
+      readonly chapterPageNumber: number;
     };
 
 type DeleteBookItemDialogProps = {
@@ -54,6 +59,7 @@ export default function DeleteBookItemDialog({
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const closeTimerRef = useRef<number | null>(null);
   const volume = target.kind === "volume";
+  const page = target.kind === "page";
 
   const close = useCallback(() => {
     if (submitting || closeTimerRef.current !== null) return;
@@ -115,13 +121,20 @@ export default function DeleteBookItemDialog({
     }
   };
 
-  const itemLabel = volume ? "分卷" : "章节";
+  const itemLabel = volume ? "分卷" : page ? "页面" : "章节";
   const consequence = volume
     ? `分卷结构将被删除，其中 ${target.chapterCount} 个章节会保留，并自动移动到“未分卷”。`
-    : "该章节的正文内容和全部历史版本将被永久删除。";
+    : page
+      ? `第 ${target.chapterPageNumber} 页的正文内容将从章节“${target.title}”中删除，后续内容会自动重新分页。`
+      : "该章节的正文内容和全部历史版本将被永久删除。";
   const warning = volume
     ? "此操作无法撤销，但不会删除章节正文。"
-    : "删除后无法恢复，请确认不再需要此章节。";
+    : page
+      ? "删除后可立即使用编辑器撤销恢复；离开章节前请确认结果。"
+      : "删除后无法恢复，请确认不再需要此章节。";
+  const question = page
+    ? `确定删除第 ${target.chapterPageNumber} 页吗？`
+    : `确定删除${itemLabel}“${target.title}”吗？`;
 
   return (
     <div
@@ -164,7 +177,7 @@ export default function DeleteBookItemDialog({
                 删除{itemLabel}
               </h2>
               <p className="mb-0 mt-1 text-[13px] font-medium leading-5 text-neutral-700">
-                确定删除{itemLabel}“{target.title}”吗？
+                {question}
               </p>
               <p
                 className="mb-0 mt-1 text-xs leading-5 text-neutral-500"

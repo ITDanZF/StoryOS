@@ -9,17 +9,51 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type {
   BookWorkspaceChapterDto,
   VolumeDto,
 } from "../../../../shared/agent/contracts.ts";
 import { cn } from "../../../../lib/utils.ts";
-import type { BookPageSlice } from "../pagination/bookPagination.ts";
+import type {
+  BookPageSlice,
+  LiveChapterPagination,
+} from "../pagination/paginationModel.ts";
 import BookPageGrid from "./BookPageGrid.tsx";
 import DeleteBookItemDialog, {
   type DeleteBookItemTarget,
 } from "./DeleteBookItemDialog.tsx";
+
+type CatalogDeleteTarget = Extract<
+  DeleteBookItemTarget,
+  { readonly kind: "volume" | "chapter" }
+>;
+
+const CATALOG_WIDTH_STORAGE_KEY = "storyos:book-catalog-width";
+const MIN_CATALOG_WIDTH = 216;
+const MAX_CATALOG_WIDTH = 360;
+const DEFAULT_CATALOG_WIDTH = 248;
+
+function clampCatalogWidth(width: number): number {
+  return Math.max(MIN_CATALOG_WIDTH, Math.min(MAX_CATALOG_WIDTH, width));
+}
+
+function getInitialCatalogWidth(): number {
+  if (typeof window === "undefined") return DEFAULT_CATALOG_WIDTH;
+  const stored = Number.parseFloat(
+    window.localStorage.getItem(CATALOG_WIDTH_STORAGE_KEY) ?? "",
+  );
+  return Number.isFinite(stored)
+    ? clampCatalogWidth(stored)
+    : DEFAULT_CATALOG_WIDTH;
+}
 
 type BookCatalogPanelProps = {
   readonly bookTitle: string | null;
@@ -27,8 +61,15 @@ type BookCatalogPanelProps = {
   readonly chapters: readonly BookWorkspaceChapterDto[];
   readonly activeChapterId: string | null;
   readonly activeChapterPageNumber: number | null;
+  readonly livePagination: LiveChapterPagination | null;
   readonly onSelectChapter: (chapterId: string) => void;
   readonly onSelectPage: (page: BookPageSlice) => void;
+  readonly onCreatePage: (
+    chapterId: string,
+    chapterPageNumber: number,
+  ) => void;
+  readonly onMovePage: (source: BookPageSlice, target: BookPageSlice) => void;
+  readonly onDeletePage: (page: BookPageSlice) => void;
   readonly onCreateVolume: (() => Promise<void>) | null;
   readonly onCreateChapter: (volumeId: string) => Promise<void>;
   readonly onShowOverview: () => void;
@@ -43,8 +84,12 @@ export default function BookCatalogPanel({
   chapters,
   activeChapterId,
   activeChapterPageNumber,
+  livePagination,
   onSelectChapter,
   onSelectPage,
+  onCreatePage,
+  onMovePage,
+  onDeletePage,
   onCreateVolume,
   onCreateChapter,
   onShowOverview,
@@ -58,7 +103,14 @@ export default function BookCatalogPanel({
     () => new Set(),
   );
   const [deleteTarget, setDeleteTarget] =
-    useState<DeleteBookItemTarget | null>(null);
+    useState<CatalogDeleteTarget | null>(null);
+  const [catalogWidth, setCatalogWidth] = useState(getInitialCatalogWidth);
+  const [catalogResizing, setCatalogResizing] = useState(false);
+  const resizeStart = useRef<{
+    readonly pointerId: number;
+    readonly x: number;
+    readonly width: number;
+  } | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
   const groups = useMemo(
     () => volumes.map((volume) => ({
@@ -76,9 +128,53 @@ export default function BookCatalogPanel({
     });
   }, [groups]);
 
+  const updateCatalogWidth = (width: number) => {
+    const nextWidth = clampCatalogWidth(width);
+    setCatalogWidth(nextWidth);
+    return nextWidth;
+  };
+
+  const startCatalogResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth < 1024) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeStart.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      width: catalogWidth,
+    };
+    setCatalogResizing(true);
+  };
+
+  const moveCatalogResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = resizeStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    updateCatalogWidth(start.width + event.clientX - start.x);
+  };
+
+  const finishCatalogResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = resizeStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const nextWidth = updateCatalogWidth(
+      start.width + event.clientX - start.x,
+    );
+    window.localStorage.setItem(
+      CATALOG_WIDTH_STORAGE_KEY,
+      String(nextWidth),
+    );
+    resizeStart.current = null;
+    setCatalogResizing(false);
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return (
     <>
-      <aside className="flex h-full w-[min(272px,86vw)] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50/95 lg:w-[clamp(216px,12vw,248px)] 2xl:w-[clamp(232px,11vw,270px)] max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:shadow-2xl">
+      <aside
+        className="relative flex h-full w-[min(272px,86vw)] shrink-0 flex-col border-r border-neutral-200 bg-neutral-50/95 lg:w-[var(--book-catalog-width)] max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:shadow-2xl"
+        style={{
+          "--book-catalog-width": `${catalogWidth}px`,
+        } as CSSProperties}
+      >
         <div className="shrink-0 px-5 pb-3 pt-5">
           <strong
             className="block truncate text-base font-semibold tracking-tight text-neutral-900"
@@ -259,10 +355,11 @@ export default function BookCatalogPanel({
                         >
                           <button
                             className={cn(
-                              "flex h-10 w-full items-center gap-2 rounded-xl border-0 bg-transparent px-2.5 pr-9 text-left text-neutral-600 transition hover:bg-white hover:text-neutral-900",
+                              "flex min-h-12 w-full items-center gap-2 rounded-xl border-0 bg-transparent px-2.5 py-2 pr-9 text-left text-neutral-600 transition hover:bg-white hover:text-neutral-900",
                               active && "bg-white text-neutral-950 shadow-sm shadow-violet-100 ring-1 ring-violet-200 hover:bg-white",
                             )}
                             type="button"
+                            title={chapter.title}
                             aria-current={active ? "page" : undefined}
                             onClick={() => {
                               onSelectChapter(chapter.id);
@@ -275,7 +372,14 @@ export default function BookCatalogPanel({
                             )}>
                               <FileText size={13} />
                             </span>
-                            <strong className="truncate text-[12px] font-medium">
+                            <strong
+                              className="min-w-0 overflow-hidden text-[12px] font-medium leading-[17px]"
+                              style={{
+                                display: "-webkit-box",
+                                WebkitBoxOrient: "vertical",
+                                WebkitLineClamp: active ? 3 : 2,
+                              }}
+                            >
                               {chapter.title}
                             </strong>
                           </button>
@@ -318,10 +422,48 @@ export default function BookCatalogPanel({
             chapters={chapters}
             activeChapterId={activeChapterId}
             activeChapterPageNumber={activeChapterPageNumber}
+            livePagination={livePagination}
             onSelectPage={onSelectPage}
+            onCreatePage={onCreatePage}
+            onMovePage={onMovePage}
+            onDeletePage={onDeletePage}
             onClose={onClose}
           />
         )}
+
+        <div
+          className={cn(
+            "group/catalog-resize absolute inset-y-0 right-0 z-40 hidden w-1.5 translate-x-1/2 cursor-col-resize touch-none lg:block",
+            catalogResizing && "bg-violet-50/70",
+          )}
+          role="separator"
+          tabIndex={0}
+          aria-label="调整目录宽度"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_CATALOG_WIDTH}
+          aria-valuemax={MAX_CATALOG_WIDTH}
+          aria-valuenow={Math.round(catalogWidth)}
+          onPointerDown={startCatalogResize}
+          onPointerMove={moveCatalogResize}
+          onPointerUp={finishCatalogResize}
+          onPointerCancel={finishCatalogResize}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            const nextWidth = updateCatalogWidth(
+              catalogWidth + (event.key === "ArrowRight" ? 16 : -16),
+            );
+            window.localStorage.setItem(
+              CATALOG_WIDTH_STORAGE_KEY,
+              String(nextWidth),
+            );
+          }}
+        >
+          <span className={cn(
+            "absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/catalog-resize:bg-violet-300 group-focus/catalog-resize:bg-violet-400",
+            catalogResizing && "w-0.5 bg-violet-500",
+          )} />
+        </div>
       </aside>
 
       {deleteTarget && (

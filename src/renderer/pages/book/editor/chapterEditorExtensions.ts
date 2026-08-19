@@ -1,11 +1,17 @@
 import { Placeholder } from "@tiptap/extensions";
-import TextAlign from "@tiptap/extension-text-align";
+import TextAlignExtension from "@tiptap/extension-text-align";
 import { TextStyleKit } from "@tiptap/extension-text-style";
-import Underline from "@tiptap/extension-underline";
+import UnderlineExtension from "@tiptap/extension-underline";
 import StarterKitExtension from "@tiptap/starter-kit";
+import {
+  ChapterPaginationController,
+  ChapterPaginationExtension,
+} from "../pagination/ChapterPaginationExtension.ts";
 import PageBreakExtension from "./PageBreakExtension.ts";
 
-export function createChapterEditorExtensions() {
+export function createChapterEditorExtensions(
+  paginationController?: ChapterPaginationController,
+) {
   return [
     StarterKitExtension.configure({
       heading: {
@@ -15,8 +21,8 @@ export function createChapterEditorExtensions() {
       codeBlock: false,
       horizontalRule: false,
     }),
-    Underline,
-    TextAlign.configure({
+    UnderlineExtension,
+    TextAlignExtension.configure({
       types: ["heading", "paragraph"],
       alignments: ["left", "center", "right"],
     }),
@@ -26,6 +32,11 @@ export function createChapterEditorExtensions() {
       lineHeight: false,
     }),
     PageBreakExtension,
+    ...(paginationController
+      ? [ChapterPaginationExtension.configure({
+          controller: paginationController,
+        })]
+      : []),
     Placeholder.configure({
       placeholder: "在这里开始书写章节正文……",
     }),

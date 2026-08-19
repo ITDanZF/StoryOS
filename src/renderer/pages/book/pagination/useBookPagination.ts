@@ -1,25 +1,34 @@
 import { Editor, type Content } from "@tiptap/core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BookWorkspaceChapterDto } from "../../../../shared/agent/contracts.ts";
 import { decodeStoredChapterContent } from "../../../../shared/book/richText.ts";
 import { createChapterEditorExtensions } from "../editor/chapterEditorExtensions.ts";
 import "../editor/chapterEditor.css";
+import { measurePaginationFragments } from "./domPaginationMeasurer.ts";
+import { paginateFragments } from "./paginationEngine.ts";
 import {
-  BOOK_PAGE_COLUMN_GAP,
-  BOOK_PAGE_CONTENT_WIDTH,
-  BOOK_PAGE_STRIDE,
-  clampChapterEditablePosition,
+  CHAPTER_PAGE_CONTENT_HEIGHT,
+  CHAPTER_PAGE_SPEC,
   createChapterPaginationCacheKey,
   numberBookPages,
   type BookPageSlice,
   type ChapterPageMeasurement,
-} from "./bookPagination.ts";
+  type LiveChapterPagination,
+} from "./paginationModel.ts";
+import "./pagination.css";
 
-type BookPaginationState = {
+export type BookPaginationState = {
   readonly pages: readonly BookPageSlice[];
   readonly measuredChapterIds: ReadonlySet<string>;
   readonly failedChapterIds: ReadonlySet<string>;
   readonly running: boolean;
+};
+
+type BackgroundPaginationState = Omit<BookPaginationState, "pages"> & {
+  readonly measurements: ReadonlyMap<
+    string,
+    readonly ChapterPageMeasurement[]
+  >;
 };
 
 const measurementCache = new Map<
@@ -33,49 +42,12 @@ function nextFrame(): Promise<void> {
   });
 }
 
-function pageIndexAtPosition(
-  editor: Editor,
-  requestedPosition: number,
-): number {
-  const position = clampChapterEditablePosition(
-    requestedPosition,
-    editor.state.doc.content.size,
-  );
-  const rootLeft = editor.view.dom.getBoundingClientRect().left;
-  const positionLeft = editor.view.coordsAtPos(position).left;
-  return Math.max(
-    0,
-    Math.floor((positionLeft - rootLeft) / BOOK_PAGE_STRIDE),
-  );
-}
-
-function findPageStart(
-  editor: Editor,
-  targetPageIndex: number,
-  documentSize: number,
-): number {
-  if (targetPageIndex <= 0) return 0;
-  let low = 1;
-  let high = Math.max(1, documentSize - 1);
-  let result = high;
-  while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    if (pageIndexAtPosition(editor, middle) >= targetPageIndex) {
-      result = middle;
-      high = middle - 1;
-    } else {
-      low = middle + 1;
-    }
-  }
-  return result;
-}
-
 async function measureChapter(
   chapter: BookWorkspaceChapterDto,
 ): Promise<readonly ChapterPageMeasurement[]> {
   const host = document.createElement("div");
   host.className = "book-pagination-measure-host";
-  host.style.width = `${BOOK_PAGE_CONTENT_WIDTH}px`;
+  host.style.width = `${CHAPTER_PAGE_SPEC.width}px`;
   document.body.append(host);
 
   const editor = new Editor({
@@ -94,33 +66,26 @@ async function measureChapter(
   try {
     await document.fonts.ready;
     await nextFrame();
-    const documentSize = editor.state.doc.content.size;
-    const measurements: ChapterPageMeasurement[] = [];
-    const pageCount = Math.max(
-      1,
-      Math.round(
-        (editor.view.dom.scrollWidth + BOOK_PAGE_COLUMN_GAP) /
-          BOOK_PAGE_STRIDE,
-      ),
-    );
-
-    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-      const start = findPageStart(editor, pageIndex, documentSize);
-      const end = pageIndex === pageCount - 1
-        ? documentSize
-        : findPageStart(editor, pageIndex + 1, documentSize);
-      const chapterPageNumber = pageIndex + 1;
-      measurements.push({
+    const documentEnd = Math.max(1, editor.state.doc.content.size - 1);
+    const pages = paginateFragments({
+      fragments: measurePaginationFragments(editor.view, []),
+      contentHeight: CHAPTER_PAGE_CONTENT_HEIGHT,
+      documentStart: 1,
+      documentEnd,
+    });
+    return pages.map((page) => {
+      const chapterPageNumber = page.index + 1;
+      return {
+        ...page,
         key: `${chapter.id}:${chapter.currentRevisionId ?? "draft"}:${chapterPageNumber}`,
         chapterId: chapter.id,
         revisionId: chapter.currentRevisionId,
         chapterPageNumber,
-        from: start,
-        to: end,
-        previewText: editor.state.doc.textBetween(start, end, "\n", "\n").trim(),
-      });
-    }
-    return measurements;
+        previewText: editor.state.doc
+          .textBetween(page.from, page.to, "\n", "\n")
+          .trim(),
+      };
+    });
   } finally {
     editor.destroy();
     host.remove();
@@ -129,9 +94,10 @@ async function measureChapter(
 
 export default function useBookPagination(
   chapters: readonly BookWorkspaceChapterDto[],
+  livePagination: LiveChapterPagination | null = null,
 ): BookPaginationState {
-  const [state, setState] = useState<BookPaginationState>({
-    pages: [],
+  const [state, setState] = useState<BackgroundPaginationState>({
+    measurements: new Map(),
     measuredChapterIds: new Set(),
     failedChapterIds: new Set(),
     running: chapters.length > 0,
@@ -139,6 +105,12 @@ export default function useBookPagination(
 
   useEffect(() => {
     let cancelled = false;
+    const validCacheKeys = new Set(
+      chapters.map(createChapterPaginationCacheKey),
+    );
+    for (const cacheKey of measurementCache.keys()) {
+      if (!validCacheKeys.has(cacheKey)) measurementCache.delete(cacheKey);
+    }
     const measurements = new Map<
       string,
       readonly ChapterPageMeasurement[]
@@ -147,7 +119,7 @@ export default function useBookPagination(
     const failedChapterIds = new Set<string>();
 
     setState({
-      pages: [],
+      measurements: new Map(),
       measuredChapterIds,
       failedChapterIds,
       running: chapters.length > 0,
@@ -170,10 +142,11 @@ export default function useBookPagination(
         }
         if (cancelled) return;
         setState({
-          pages: numberBookPages(chapters, measurements),
+          measurements: new Map(measurements),
           measuredChapterIds: new Set(measuredChapterIds),
           failedChapterIds: new Set(failedChapterIds),
-          running: measuredChapterIds.size + failedChapterIds.size < chapters.length,
+          running: measuredChapterIds.size + failedChapterIds.size <
+            chapters.length,
         });
         await nextFrame();
       }
@@ -185,5 +158,38 @@ export default function useBookPagination(
     };
   }, [chapters]);
 
-  return state;
+  const pages = useMemo(() => {
+    if (!livePagination) {
+      return numberBookPages(chapters, state.measurements);
+    }
+    const chapter = chapters.find(
+      (item) => item.id === livePagination.chapterId,
+    );
+    if (!chapter) return numberBookPages(chapters, state.measurements);
+    const measurements = new Map(state.measurements);
+    measurements.set(chapter.id, livePagination.pages.map((page) => ({
+      ...page,
+      key: `${chapter.id}:live:${livePagination.layoutKey}:${page.index + 1}`,
+      chapterId: chapter.id,
+      revisionId: chapter.currentRevisionId,
+      chapterPageNumber: page.index + 1,
+    })));
+    return numberBookPages(chapters, measurements);
+  }, [chapters, livePagination, state.measurements]);
+
+  const measuredChapterIds = new Set(state.measuredChapterIds);
+  const failedChapterIds = new Set(state.failedChapterIds);
+  if (livePagination && chapters.some(
+    (chapter) => chapter.id === livePagination.chapterId,
+  )) {
+    measuredChapterIds.add(livePagination.chapterId);
+    failedChapterIds.delete(livePagination.chapterId);
+  }
+
+  return {
+    pages,
+    measuredChapterIds,
+    failedChapterIds,
+    running: state.running,
+  };
 }

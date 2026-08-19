@@ -18,7 +18,10 @@ import {
   decodeStoredChapterContent,
 } from "../../../../shared/book/richText.ts";
 import type { BookSaveState } from "../bookWorkspaceModel.ts";
-import type { BookPageNavigationTarget } from "../pagination/bookPagination.ts";
+import type {
+  BookPageNavigationTarget,
+  LiveChapterPage,
+} from "../pagination/paginationModel.ts";
 
 const ChapterRichTextEditor = lazy(
   () => import("../editor/ChapterRichTextEditor.tsx"),
@@ -30,6 +33,10 @@ type ChapterEditorPanelProps = {
   readonly volumeTitle: string;
   readonly pageTarget: BookPageNavigationTarget | null;
   readonly onPageChange: (chapterPageNumber: number) => void;
+  readonly onPaginationChange: (
+    layoutKey: string,
+    pages: readonly LiveChapterPage[],
+  ) => void;
   readonly onSaveTitle: (title: string) => Promise<void>;
   readonly onSaveContent: (content: string) => Promise<void>;
   readonly onAskAi: (prompt: string) => void;
@@ -41,6 +48,7 @@ export default function ChapterEditorPanel({
   volumeTitle,
   pageTarget,
   onPageChange,
+  onPaginationChange,
   onSaveTitle,
   onSaveContent,
   onAskAi,
@@ -145,6 +153,7 @@ export default function ChapterEditorPanel({
           content={chapter.content}
           pageTarget={pageTarget}
           onPageChange={onPageChange}
+          onPaginationChange={onPaginationChange}
           onSave={onSaveContent}
           onSaveStateChange={setSaveState}
           onCharacterCountChange={setCharacterCount}

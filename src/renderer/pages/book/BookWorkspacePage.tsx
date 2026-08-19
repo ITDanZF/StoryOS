@@ -24,7 +24,8 @@ import { formatChineseOrdinal } from "./bookWorkspaceModel.ts";
 import type {
   BookPageNavigationTarget,
   BookPageSlice,
-} from "./pagination/bookPagination.ts";
+  LiveChapterPagination,
+} from "./pagination/paginationModel.ts";
 import useBookWorkspace from "./useBookWorkspace.ts";
 
 const MIN_ASSISTANT_WIDTH = 300;
@@ -90,6 +91,8 @@ export default function BookWorkspacePage() {
     useState<number | null>(null);
   const [pageTarget, setPageTarget] =
     useState<BookPageNavigationTarget | null>(null);
+  const [livePagination, setLivePagination] =
+    useState<LiveChapterPagination | null>(null);
   const [catalogVisible, setCatalogVisible] = useState(true);
   const [assistantVisible, setAssistantVisible] = useState(true);
   const [assistantFocused, setAssistantFocused] = useState(false);
@@ -282,21 +285,66 @@ export default function BookWorkspacePage() {
     setActiveChapterId(chapterId);
     setActiveChapterPageNumber(1);
     setPageTarget(null);
+    setLivePagination(null);
   };
 
   const showBookOverview = () => {
     setActiveChapterId(null);
     setActiveChapterPageNumber(null);
     setPageTarget(null);
+    setLivePagination(null);
   };
 
   const selectBookPage = (page: BookPageSlice) => {
     pageRequestId.current += 1;
     setActiveChapterId(page.chapterId);
+    if (page.chapterId !== activeChapterId) setLivePagination(null);
     setActiveChapterPageNumber(page.chapterPageNumber);
     setPageTarget({
+      kind: "navigate",
       chapterId: page.chapterId,
       position: page.from,
+      chapterPageNumber: page.chapterPageNumber,
+      requestId: pageRequestId.current,
+    });
+  };
+
+  const createBookPage = (chapterId: string, chapterPageNumber: number) => {
+    pageRequestId.current += 1;
+    setActiveChapterId(chapterId);
+    if (chapterId !== activeChapterId) setLivePagination(null);
+    setActiveChapterPageNumber(chapterPageNumber);
+    setPageTarget({
+      kind: "append",
+      chapterId,
+      chapterPageNumber,
+      requestId: pageRequestId.current,
+    });
+  };
+
+  const moveBookPage = (source: BookPageSlice, target: BookPageSlice) => {
+    if (source.chapterId !== target.chapterId) return;
+    pageRequestId.current += 1;
+    setActiveChapterId(source.chapterId);
+    if (source.chapterId !== activeChapterId) setLivePagination(null);
+    setActiveChapterPageNumber(target.chapterPageNumber);
+    setPageTarget({
+      kind: "move",
+      chapterId: source.chapterId,
+      sourceChapterPageNumber: source.chapterPageNumber,
+      targetChapterPageNumber: target.chapterPageNumber,
+      requestId: pageRequestId.current,
+    });
+  };
+
+  const deleteBookPage = (page: BookPageSlice) => {
+    pageRequestId.current += 1;
+    setActiveChapterId(page.chapterId);
+    if (page.chapterId !== activeChapterId) setLivePagination(null);
+    setActiveChapterPageNumber(page.chapterPageNumber);
+    setPageTarget({
+      kind: "delete",
+      chapterId: page.chapterId,
       chapterPageNumber: page.chapterPageNumber,
       requestId: pageRequestId.current,
     });
@@ -470,8 +518,12 @@ export default function BookWorkspacePage() {
             chapters={readyWorkspace?.chapters ?? []}
             activeChapterId={activeChapter?.id ?? null}
             activeChapterPageNumber={activeChapterPageNumber}
+            livePagination={livePagination}
             onSelectChapter={selectChapter}
             onSelectPage={selectBookPage}
+            onCreatePage={createBookPage}
+            onMovePage={moveBookPage}
+            onDeletePage={deleteBookPage}
             onCreateVolume={readyWorkspace ? addVolume : null}
             onCreateChapter={addChapter}
             onShowOverview={showBookOverview}
@@ -501,6 +553,13 @@ export default function BookWorkspacePage() {
               ? pageTarget
               : null}
             onPageChange={setActiveChapterPageNumber}
+            onPaginationChange={(layoutKey, pages) => {
+              setLivePagination({
+                chapterId: activeChapter.id,
+                layoutKey,
+                pages,
+              });
+            }}
             onSaveTitle={(title) =>
               updateChapterTitle(activeChapter.id, title)}
             onSaveContent={(content) =>
