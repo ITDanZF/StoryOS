@@ -9,6 +9,20 @@ export type TiptapDocument = TiptapNode & {
   readonly type: "doc";
 };
 
+export const CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION = 1;
+
+type StoredChapterContent = {
+  readonly schemaVersion: number;
+  readonly document: TiptapDocument;
+};
+
+export class UnsupportedChapterContentVersionError extends Error {
+  constructor(version: number) {
+    super(`Unsupported chapter content schema version: ${version}.`);
+    this.name = "UnsupportedChapterContentVersionError";
+  }
+}
+
 export const EMPTY_TIPTAP_DOCUMENT: TiptapDocument = Object.freeze({
   type: "doc",
   content: Object.freeze([{ type: "paragraph" }]),
@@ -39,8 +53,11 @@ function requireNode(value: unknown, path: string): TiptapNode {
   return value as TiptapNode;
 }
 
-export function requireTiptapDocument(value: unknown): TiptapDocument {
-  const document = requireNode(value, "document");
+export function requireTiptapDocument(
+  value: unknown,
+  path = "document",
+): TiptapDocument {
+  const document = requireNode(value, path);
   if (document.type !== "doc") {
     throw new Error("Tiptap document root must have type \"doc\".");
   }
@@ -49,7 +66,11 @@ export function requireTiptapDocument(value: unknown): TiptapDocument {
 
 export function serializeTiptapDocument(value: unknown): string {
   const document = requireTiptapDocument(value);
-  const serialized = JSON.stringify(document);
+  const stored: StoredChapterContent = {
+    schemaVersion: CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION,
+    document,
+  };
+  const serialized = JSON.stringify(stored);
   if (serialized === undefined) {
     throw new Error("Tiptap document cannot be serialized.");
   }
@@ -62,6 +83,16 @@ export function parseTiptapDocument(serialized: string): TiptapDocument {
     value = JSON.parse(serialized);
   } catch {
     throw new Error("Chapter content must be valid Tiptap JSON.");
+  }
+  if (isRecord(value) && "schemaVersion" in value) {
+    const version = value.schemaVersion;
+    if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+      throw new Error("Invalid chapter content schema version.");
+    }
+    if (version > CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION) {
+      throw new UnsupportedChapterContentVersionError(version);
+    }
+    return requireTiptapDocument(value.document, "document");
   }
   return requireTiptapDocument(value);
 }
@@ -92,7 +123,8 @@ export function decodeStoredChapterContent(
   if (!stored) return EMPTY_TIPTAP_DOCUMENT;
   try {
     return parseTiptapDocument(stored);
-  } catch {
+  } catch (error) {
+    if (error instanceof UnsupportedChapterContentVersionError) throw error;
     return plainTextToTiptapDocument(stored);
   }
 }
@@ -112,4 +144,3 @@ export function extractTiptapText(document: TiptapDocument): string {
 export function countTiptapCharacters(document: TiptapDocument): number {
   return Array.from(extractTiptapText(document).replace(/\s/g, "")).length;
 }
-

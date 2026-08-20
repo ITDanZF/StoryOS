@@ -1,5 +1,104 @@
-import type { BookWorkspaceChapterDto } from "../../../shared/agent/contracts.ts";
+import type {
+  BookWorkspaceChapterDto,
+  VolumeDto,
+} from "../../../shared/agent/contracts.ts";
 export type BookSaveState = "saved" | "saving" | "error";
+
+export type BookChapterGroup = {
+  readonly key: string;
+  readonly kind: "volume" | "unassigned";
+  readonly volume: VolumeDto | null;
+  readonly title: string;
+  readonly chapters: readonly BookWorkspaceChapterDto[];
+};
+
+export type BookChapterLocation = {
+  readonly group: BookChapterGroup;
+  readonly chapter: BookWorkspaceChapterDto;
+  readonly chapterIndex: number;
+  readonly chapterNumber: number;
+};
+
+export const UNASSIGNED_CHAPTER_GROUP_KEY = "unassigned";
+
+function compareByOrderThenId(
+  left: { readonly sortOrder: number; readonly id: string },
+  right: { readonly sortOrder: number; readonly id: string },
+): number {
+  return left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
+}
+
+export function createBookChapterGroups(
+  volumes: readonly VolumeDto[],
+  chapters: readonly BookWorkspaceChapterDto[],
+): readonly BookChapterGroup[] {
+  const orderedVolumes = [...volumes].sort(compareByOrderThenId);
+  const volumeIds = new Set(orderedVolumes.map((volume) => volume.id));
+  const chaptersByVolume = new Map<string, BookWorkspaceChapterDto[]>();
+  const unassigned: BookWorkspaceChapterDto[] = [];
+
+  for (const chapter of chapters) {
+    if (chapter.volumeId === null) {
+      unassigned.push(chapter);
+      continue;
+    }
+    if (!volumeIds.has(chapter.volumeId)) {
+      throw new Error(
+        `Chapter ${chapter.id} references unknown volume ${chapter.volumeId}.`,
+      );
+    }
+    const siblings = chaptersByVolume.get(chapter.volumeId) ?? [];
+    siblings.push(chapter);
+    chaptersByVolume.set(chapter.volumeId, siblings);
+  }
+
+  const groups: BookChapterGroup[] = orderedVolumes.map((volume) => ({
+    key: `volume:${volume.id}`,
+    kind: "volume",
+    volume,
+    title: volume.title,
+    chapters: Object.freeze(
+      [...(chaptersByVolume.get(volume.id) ?? [])].sort(compareByOrderThenId),
+    ),
+  }));
+  if (unassigned.length > 0) {
+    groups.push({
+      key: UNASSIGNED_CHAPTER_GROUP_KEY,
+      kind: "unassigned",
+      volume: null,
+      title: "未分卷",
+      chapters: Object.freeze([...unassigned].sort(compareByOrderThenId)),
+    });
+  }
+  return Object.freeze(groups);
+}
+
+export function flattenBookChapterGroups(
+  groups: readonly BookChapterGroup[],
+): readonly BookWorkspaceChapterDto[] {
+  return Object.freeze(groups.flatMap((group) => group.chapters));
+}
+
+export function findBookChapterLocation(
+  groups: readonly BookChapterGroup[],
+  chapterId: string | null,
+): BookChapterLocation | null {
+  if (!chapterId) return null;
+  for (const group of groups) {
+    const chapterIndex = group.chapters.findIndex(
+      (chapter) => chapter.id === chapterId,
+    );
+    if (chapterIndex >= 0) {
+      return {
+        group,
+        chapter: group.chapters[chapterIndex],
+        chapterIndex,
+        chapterNumber: chapterIndex + 1,
+      };
+    }
+  }
+  return null;
+}
 
 const STATUS_LABELS = {
   outline: "大纲",

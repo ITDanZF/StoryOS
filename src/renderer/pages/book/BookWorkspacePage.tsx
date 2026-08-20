@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -20,7 +21,11 @@ import BookProfilePanel, {
   type BookProfileInput,
 } from "./components/BookProfilePanel.tsx";
 import ChapterEditorPanel from "./components/ChapterEditorPanel.tsx";
-import { formatChineseOrdinal } from "./bookWorkspaceModel.ts";
+import {
+  createBookChapterGroups,
+  findBookChapterLocation,
+  formatChineseOrdinal,
+} from "./bookWorkspaceModel.ts";
 import type {
   BookPageNavigationTarget,
   BookPageSlice,
@@ -101,6 +106,14 @@ export default function BookWorkspacePage() {
   );
   const [assistantResizing, setAssistantResizing] = useState(false);
   const [assistantDraft, setAssistantDraft] = useState("");
+  const readyWorkspace = workspace?.state === "ready" ? workspace : null;
+  const chapterGroups = useMemo(
+    () => createBookChapterGroups(
+      readyWorkspace?.volumes ?? [],
+      readyWorkspace?.chapters ?? [],
+    ),
+    [readyWorkspace],
+  );
 
   const projectConversationActive =
     state.conversationScope.kind === "project" &&
@@ -179,6 +192,11 @@ export default function BookWorkspacePage() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (
+        target.isContentEditable ||
+        target.closest("input, textarea, select, [contenteditable='true']")
+      )) return;
       if (event.key.toLowerCase() === "b") {
         event.preventDefault();
         setCatalogVisible((value) => !value);
@@ -210,24 +228,17 @@ export default function BookWorkspacePage() {
   }
 
   const scope = { kind: "project", projectId } as const;
-  const readyWorkspace = workspace.state === "ready" ? workspace : null;
-  const activeChapter = readyWorkspace?.chapters.find(
-    (chapter) => chapter.id === activeChapterId,
-  ) ?? null;
-  const activeVolume = activeChapter?.volumeId
-    ? readyWorkspace?.volumes.find(
-        (volume) => volume.id === activeChapter.volumeId,
-      )
-    : null;
-  const chapterNumber = activeChapter && activeVolume && readyWorkspace
-    ? readyWorkspace.chapters
-      .filter((chapter) => chapter.volumeId === activeVolume.id)
-      .findIndex((chapter) => chapter.id === activeChapter.id) + 1
-    : null;
-  const activeVolumeNumber = activeVolume && readyWorkspace
-    ? readyWorkspace.volumes.findIndex(
-        (volume) => volume.id === activeVolume.id,
-      ) + 1
+  const activeChapterLocation = findBookChapterLocation(
+    chapterGroups,
+    activeChapterId,
+  );
+  const activeChapter = activeChapterLocation?.chapter ?? null;
+  const activeVolume = activeChapterLocation?.group.volume ?? null;
+  const chapterNumber = activeChapterLocation?.chapterNumber ?? null;
+  const activeVolumeNumber = activeVolume
+    ? chapterGroups
+      .filter((group) => group.kind === "volume")
+      .findIndex((group) => group.volume?.id === activeVolume.id) + 1
     : null;
   const activeVolumeTitle = activeVolume && activeVolumeNumber !== null
     ? activeVolume.title === `第${activeVolumeNumber}卷`
@@ -514,8 +525,7 @@ export default function BookWorkspacePage() {
         {catalogVisible && !assistantFocused && (
           <BookCatalogPanel
             bookTitle={readyWorkspace?.book.title ?? null}
-            volumes={readyWorkspace?.volumes ?? []}
-            chapters={readyWorkspace?.chapters ?? []}
+            groups={chapterGroups}
             activeChapterId={activeChapter?.id ?? null}
             activeChapterPageNumber={activeChapterPageNumber}
             livePagination={livePagination}

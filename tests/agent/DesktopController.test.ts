@@ -8,6 +8,7 @@ vi.mock("electron", () => ({
 import type { MessageRole, ThreadSkillState } from "../../src/main/agent/application/threadPorts.ts";
 import DesktopController from "../../src/main/agent/electron/DesktopController.ts";
 import type { DesktopControllerDependencies } from "../../src/main/agent/electron/DesktopController.ts";
+import { parseTiptapDocument, serializeTiptapDocument } from "../../src/shared/book/richText.ts";
 
 type StoredMessage = { readonly role: MessageRole; readonly content: string; readonly threadId: string };
 type TestMessage = StoredMessage & { readonly id: string; readonly createdAt: string };
@@ -407,7 +408,7 @@ describe("DesktopController", () => {
 
     expect(harness.novels.saveRevision).toHaveBeenCalledWith({
       chapterId: "chapter-1",
-      content,
+      content: serializeTiptapDocument(parseTiptapDocument(content)),
       characterCount: 2,
       changeSummary: "自动保存",
       expectedCurrentRevisionId: null,

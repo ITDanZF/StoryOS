@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION,
   countTiptapCharacters,
   decodeStoredChapterContent,
   extractTiptapText,
@@ -20,11 +21,26 @@ describe("rich text chapter content", () => {
       }],
     } as const;
 
-    const restored = parseTiptapDocument(
-      serializeTiptapDocument(document),
-    );
+    const serialized = serializeTiptapDocument(document);
+    expect(JSON.parse(serialized)).toMatchObject({
+      schemaVersion: CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION,
+      document: { type: "doc" },
+    });
+    const restored = parseTiptapDocument(serialized);
     expect(extractTiptapText(restored)).toBe("雨夜 开始");
     expect(countTiptapCharacters(restored)).toBe(4);
+  });
+
+  it("reads legacy unversioned documents and rejects future versions", () => {
+    expect(parseTiptapDocument('{"type":"doc","content":[{"type":"paragraph"}]}'))
+      .toMatchObject({ type: "doc" });
+    const future = JSON.stringify({
+      schemaVersion: CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION + 1,
+      document: { type: "doc", content: [{ type: "paragraph" }] },
+    });
+    expect(() => decodeStoredChapterContent(future)).toThrow(
+      "Unsupported chapter content schema version",
+    );
   });
 
   it("converts stored plain text into Tiptap paragraphs", () => {
@@ -42,4 +58,3 @@ describe("rich text chapter content", () => {
       .toThrow("content");
   });
 });
-

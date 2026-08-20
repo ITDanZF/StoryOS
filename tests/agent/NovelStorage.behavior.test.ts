@@ -204,4 +204,44 @@ describe("novel SQLite storage", () => {
     expect(revisionCount.count).toBe(0);
     fixture.database.close();
   });
+
+  it("appends deleted volume chapters after existing unassigned chapters", () => {
+    const fixture = createDatabase();
+    const novel = fixture.novels.createNovel({ title: "Stable grouping" });
+    const unassigned = fixture.novels.createChapter({
+      novelId: novel.id,
+      title: "Existing unassigned",
+      sortOrder: 0,
+    });
+    const volume = fixture.novels.createVolume({
+      novelId: novel.id,
+      title: "Volume one",
+      sortOrder: 0,
+    });
+    const first = fixture.novels.createChapter({
+      novelId: novel.id,
+      volumeId: volume.id,
+      title: "First moved",
+      sortOrder: 0,
+    });
+    const second = fixture.novels.createChapter({
+      novelId: novel.id,
+      volumeId: volume.id,
+      title: "Second moved",
+      sortOrder: 1,
+    });
+
+    fixture.novels.deleteVolume(volume.id);
+
+    expect(fixture.novels.listChapters(novel.id).map((item) => ({
+      id: item.id,
+      volumeId: item.volumeId,
+      sortOrder: item.sortOrder,
+    }))).toEqual([
+      { id: unassigned.id, volumeId: null, sortOrder: 0 },
+      { id: first.id, volumeId: null, sortOrder: 1 },
+      { id: second.id, volumeId: null, sortOrder: 2 },
+    ]);
+    fixture.database.close();
+  });
 });

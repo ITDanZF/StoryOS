@@ -20,15 +20,6 @@ const PageBreakExtension = Node.create({
       }),
     ];
   },
-
-  addKeyboardShortcuts() {
-    return {
-      "Mod-Enter": () => this.editor.commands.insertContent([
-        { type: this.name },
-        { type: "paragraph" },
-      ]),
-    };
-  },
 });
 
 export default PageBreakExtension;

@@ -34,6 +34,8 @@ import {
 import "./chapterEditor.css";
 import { createChapterEditorExtensions } from "./chapterEditorExtensions.ts";
 import ChapterEditorToolbar from "./ChapterEditorToolbar.tsx";
+import { runEditorCommand } from "./commands/editorCommandRegistry.ts";
+import ChapterFindReplacePanel from "./search/ChapterFindReplacePanel.tsx";
 
 type ChapterRichTextEditorProps = {
   readonly chapterNumber: number;
@@ -66,6 +68,9 @@ export default function ChapterRichTextEditor({
     [],
   );
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [findOpen, setFindOpen] = useState(false);
+  const [replaceMode, setReplaceMode] = useState(false);
+  const [linkRequestId, setLinkRequestId] = useState(0);
   const pendingPageNumber = useRef<number | null>(null);
   const processedPageRequestId = useRef<number | null>(null);
   const publishedLayoutKey = useRef<string | null>(null);
@@ -110,6 +115,11 @@ export default function ChapterRichTextEditor({
     if (pendingContent.current !== null) persist(pendingContent.current);
   }, [persist]);
 
+  const openFind = useCallback((replace: boolean) => {
+    setReplaceMode(replace);
+    setFindOpen(true);
+  }, []);
+
   const activatePage = useCallback((requestedIndex: number) => {
     const pageCount = Math.max(
       1,
@@ -121,7 +131,14 @@ export default function ChapterRichTextEditor({
   }, [paginationController]);
 
   const editor = useEditor({
-    extensions: createChapterEditorExtensions(paginationController),
+    extensions: createChapterEditorExtensions({
+      paginationController,
+      shortcuts: {
+        onFind: openFind,
+        onLink: () => setLinkRequestId((current) => current + 1),
+        onSave: flush,
+      },
+    }),
     content: decodeStoredChapterContent(content) as unknown as Content,
     editorProps: {
       attributes: {
@@ -156,7 +173,7 @@ export default function ChapterRichTextEditor({
       ));
     },
     onBlur: flush,
-  }, [paginationController]);
+  }, [flush, openFind, paginationController]);
 
   const pagination = useChapterPagination(
     paginationController,
@@ -261,10 +278,7 @@ export default function ChapterRichTextEditor({
 
   const insertPageBreak = () => {
     if (!editor || editor.isDestroyed) return;
-    editor.chain().focus().insertContent([
-      { type: "pageBreak" },
-      { type: "paragraph" },
-    ]).run();
+    runEditorCommand(editor, "pageBreak");
   };
 
   const askAi = () => {
@@ -277,8 +291,20 @@ export default function ChapterRichTextEditor({
   };
 
   return (
-    <>
-      <ChapterEditorToolbar editor={editor} onAskAi={askAi} />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <ChapterEditorToolbar
+        editor={editor}
+        linkRequestId={linkRequestId}
+        onAskAi={askAi}
+        onOpenFind={() => openFind(false)}
+      />
+      {editor && findOpen && (
+        <ChapterFindReplacePanel
+          editor={editor}
+          replaceMode={replaceMode}
+          onClose={() => setFindOpen(false)}
+        />
+      )}
       <PaginatedEditorSurface
         editor={editor}
         chapterNumber={chapterNumber}
@@ -293,6 +319,6 @@ export default function ChapterRichTextEditor({
         onActivePageChange={activatePage}
         onInsertPageBreak={insertPageBreak}
       />
-    </>
+    </div>
   );
 }

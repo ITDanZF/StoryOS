@@ -6,11 +6,11 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type {
-  BookWorkspaceChapterDto,
-  VolumeDto,
-} from "../../../../shared/agent/contracts.ts";
 import { cn } from "../../../../lib/utils.ts";
+import {
+  flattenBookChapterGroups,
+  type BookChapterGroup,
+} from "../bookWorkspaceModel.ts";
 import useBookPagination from "../pagination/useBookPagination.ts";
 import type {
   BookPageSlice,
@@ -19,8 +19,7 @@ import type {
 import DeleteBookItemDialog from "./DeleteBookItemDialog.tsx";
 
 type BookPageGridProps = {
-  readonly volumes: readonly VolumeDto[];
-  readonly chapters: readonly BookWorkspaceChapterDto[];
+  readonly groups: readonly BookChapterGroup[];
   readonly activeChapterId: string | null;
   readonly activeChapterPageNumber: number | null;
   readonly livePagination: LiveChapterPagination | null;
@@ -35,8 +34,7 @@ type BookPageGridProps = {
 };
 
 export default function BookPageGrid({
-  volumes,
-  chapters,
+  groups,
   activeChapterId,
   activeChapterPageNumber,
   livePagination,
@@ -52,22 +50,10 @@ export default function BookPageGrid({
     readonly page: BookPageSlice;
     readonly chapterTitle: string;
   } | null>(null);
-  const orderedChapters = useMemo(() => {
-    const volumeOrder = new Map(
-      [...volumes]
-        .sort((left, right) => left.sortOrder - right.sortOrder)
-        .map((volume, index) => [volume.id, index]),
-    );
-    return [...chapters].sort((left, right) => {
-      const leftVolume = left.volumeId === null
-        ? Number.MAX_SAFE_INTEGER
-        : volumeOrder.get(left.volumeId) ?? Number.MAX_SAFE_INTEGER;
-      const rightVolume = right.volumeId === null
-        ? Number.MAX_SAFE_INTEGER
-        : volumeOrder.get(right.volumeId) ?? Number.MAX_SAFE_INTEGER;
-      return leftVolume - rightVolume || left.sortOrder - right.sortOrder;
-    });
-  }, [chapters, volumes]);
+  const orderedChapters = useMemo(
+    () => flattenBookChapterGroups(groups),
+    [groups],
+  );
   const pagination = useBookPagination(orderedChapters, livePagination);
   const pagesByChapter = useMemo(() => {
     const result = new Map<string, BookPageSlice[]>();
@@ -78,12 +64,7 @@ export default function BookPageGrid({
     }
     return result;
   }, [pagination.pages]);
-  const volumeTitles = useMemo(
-    () => new Map(volumes.map((volume) => [volume.id, volume.title])),
-    [volumes],
-  );
-
-  if (chapters.length === 0) {
+  if (orderedChapters.length === 0) {
     return (
       <div className="grid min-h-0 flex-1 place-items-center px-6 text-center text-[11px] text-neutral-400">
         新建章节并开始写作后，页面会显示在这里。
@@ -93,7 +74,7 @@ export default function BookPageGrid({
 
   return (
     <div className="book-page-grid-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-5 pt-3" aria-label="书籍页面">
-      {orderedChapters.map((chapter, chapterIndex) => {
+      {groups.flatMap((group) => group.chapters.map((chapter, chapterIndex) => {
         const pages = pagesByChapter.get(chapter.id) ?? [];
         const measured = pagination.measuredChapterIds.has(chapter.id);
         const failed = pagination.failedChapterIds.has(chapter.id);
@@ -105,7 +86,7 @@ export default function BookPageGrid({
                   {chapter.title}
                 </strong>
                 <span className="block truncate text-[9px] text-neutral-400">
-                  {chapter.volumeId ? volumeTitles.get(chapter.volumeId) : "未分卷"}
+                  {group.title}
                 </span>
               </div>
               <span className="shrink-0 text-[9px] tabular-nums text-neutral-400">
@@ -241,7 +222,7 @@ export default function BookPageGrid({
             )}
           </section>
         );
-      })}
+      }))}
 
       {pagination.running && (
         <div className="flex items-center justify-center gap-1.5 py-2 text-[10px] text-neutral-400">

@@ -95,6 +95,23 @@
   color: #78716c;
 }
 
+.chapter-rich-text a {
+  color: #6d28d9;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chapter-rich-text .chapter-find-match {
+  border-radius: 2px;
+  background: #fef3c7;
+  box-shadow: 0 0 0 1px rgb(245 158 11 / 18%);
+}
+
+.chapter-rich-text .chapter-find-match-active {
+  background: #fbbf24;
+  box-shadow: 0 0 0 1px rgb(217 119 6 / 35%);
+}
+
 .chapter-rich-text p.is-editor-empty:first-child::before {
   float: left;
   height: 0;

@@ -125,13 +125,26 @@ export default class SqliteNovelStore implements NovelPersistence {
 
   deleteVolume(volumeId: string): void {
     this.database.transaction(() => {
-      this.requireVolume(volumeId);
+      const volume = this.requireVolume(volumeId);
       const now = Date.now();
-      this.database.prepare(`
-        UPDATE chapters
-        SET volume_id = NULL, updated_at = ?
+      const movingChapters = this.database.prepare(`
+        SELECT id FROM chapters
         WHERE volume_id = ?
-      `).run(now, volumeId);
+        ORDER BY sort_order ASC, id ASC
+      `).all(volumeId) as { id: string }[];
+      const unassignedOrder = this.database.prepare(`
+        SELECT COALESCE(MAX(sort_order), -1) AS maximum
+        FROM chapters
+        WHERE novel_id = ? AND volume_id IS NULL
+      `).get(volume.novelId) as { maximum: number };
+      const moveChapter = this.database.prepare(`
+        UPDATE chapters
+        SET volume_id = NULL, sort_order = ?, updated_at = ?
+        WHERE id = ?
+      `);
+      movingChapters.forEach((chapter, index) => {
+        moveChapter.run(unassignedOrder.maximum + index + 1, now, chapter.id);
+      });
       const result = this.database.prepare(
         "DELETE FROM volumes WHERE id = ?",
       ).run(volumeId);

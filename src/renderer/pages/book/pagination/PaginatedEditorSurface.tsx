@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { cn } from "../../../../lib/utils.ts";
 import {
@@ -21,6 +22,10 @@ import {
   CHAPTER_PAGE_SPEC,
   type ChapterPaginationSnapshot,
 } from "./paginationModel.ts";
+import {
+  chapterPageContainsPosition,
+  editablePositionInChapterPage,
+} from "./useChapterPagination.ts";
 import "./pagination.css";
 
 type PaginatedEditorSurfaceProps = {
@@ -56,6 +61,7 @@ export default function PaginatedEditorSurface({
   onInsertPageBreak,
 }: PaginatedEditorSurfaceProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const scrollFrame = useRef<number | null>(null);
   const programmaticScroll = useRef(false);
   const releaseScrollFrame = useRef<number | null>(null);
@@ -165,6 +171,63 @@ export default function PaginatedEditorSurface({
       : 0,
     "--chapter-pagination-stage-height": `${stageHeight}px`,
   } as CSSProperties;
+
+  const keepPointerInClickedPage = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (
+      event.button !== 0 ||
+      !editor ||
+      editor.isDestroyed ||
+      snapshot.status !== "ready"
+    ) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("button")) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const sheets = Array.from(
+      stage.querySelectorAll<HTMLElement>(".chapter-pagination-sheet"),
+    );
+    const clickedPageIndex = sheets.findIndex((sheet) => {
+      const rect = sheet.getBoundingClientRect();
+      return event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+    });
+    if (clickedPageIndex < 0 || !snapshot.pages[clickedPageIndex]) return;
+
+    const mapped = editor.view.posAtCoords({
+      left: event.clientX,
+      top: event.clientY,
+    });
+    if (mapped && chapterPageContainsPosition(
+      snapshot,
+      clickedPageIndex,
+      mapped.pos,
+    )) return;
+
+    const page = snapshot.pages[clickedPageIndex];
+    const sheetRect = sheets[clickedPageIndex].getBoundingClientRect();
+    const edge = mapped
+      ? (mapped.pos < page.from ? "start" : "end")
+      : (event.clientY < (sheetRect.top + sheetRect.bottom) / 2
+        ? "start"
+        : "end");
+    const position = editablePositionInChapterPage(
+      editor.state.doc,
+      snapshot,
+      clickedPageIndex,
+      edge,
+    );
+    if (position === null) return;
+
+    event.preventDefault();
+    editor.chain().focus().setTextSelection(position).run();
+    if (clickedPageIndex !== activePageIndex) {
+      onActivePageChange(clickedPageIndex);
+    }
+  };
 
   return (
     <div
@@ -281,8 +344,13 @@ export default function PaginatedEditorSurface({
           layoutMode === "horizontal" && "overflow-hidden",
         )}
         style={shellStyle}
+        onPointerDownCapture={keepPointerInClickedPage}
       >
-        <div className="chapter-pagination-stage absolute left-0" style={stageStyle}>
+        <div
+          ref={stageRef}
+          className="chapter-pagination-stage absolute left-0"
+          style={stageStyle}
+        >
           <div className="chapter-pagination-sheets" aria-hidden="true">
             {Array.from({ length: pageCount }, (_, pageIndex) => (
               <div

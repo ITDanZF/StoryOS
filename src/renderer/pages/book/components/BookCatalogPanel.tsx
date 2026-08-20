@@ -11,17 +11,13 @@ import {
 } from "lucide-react";
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type {
-  BookWorkspaceChapterDto,
-  VolumeDto,
-} from "../../../../shared/agent/contracts.ts";
 import { cn } from "../../../../lib/utils.ts";
+import type { BookChapterGroup } from "../bookWorkspaceModel.ts";
 import type {
   BookPageSlice,
   LiveChapterPagination,
@@ -57,8 +53,7 @@ function getInitialCatalogWidth(): number {
 
 type BookCatalogPanelProps = {
   readonly bookTitle: string | null;
-  readonly volumes: readonly VolumeDto[];
-  readonly chapters: readonly BookWorkspaceChapterDto[];
+  readonly groups: readonly BookChapterGroup[];
   readonly activeChapterId: string | null;
   readonly activeChapterPageNumber: number | null;
   readonly livePagination: LiveChapterPagination | null;
@@ -80,8 +75,7 @@ type BookCatalogPanelProps = {
 
 export default function BookCatalogPanel({
   bookTitle,
-  volumes,
-  chapters,
+  groups,
   activeChapterId,
   activeChapterPageNumber,
   livePagination,
@@ -99,7 +93,7 @@ export default function BookCatalogPanel({
 }: BookCatalogPanelProps) {
   const [view, setView] = useState<"chapters" | "pages">("chapters");
   const [query, setQuery] = useState("");
-  const [expandedVolumes, setExpandedVolumes] = useState<ReadonlySet<string>>(
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   const [deleteTarget, setDeleteTarget] =
@@ -112,18 +106,15 @@ export default function BookCatalogPanel({
     readonly width: number;
   } | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
-  const groups = useMemo(
-    () => volumes.map((volume) => ({
-      ...volume,
-      chapters: chapters.filter((chapter) => chapter.volumeId === volume.id),
-    })),
-    [chapters, volumes],
+  const chapterCount = groups.reduce(
+    (total, group) => total + group.chapters.length,
+    0,
   );
 
   useEffect(() => {
-    setExpandedVolumes((current) => {
+    setExpandedGroups((current) => {
       const next = new Set(current);
-      groups.forEach((group) => next.add(group.id));
+      groups.forEach((group) => next.add(group.key));
       return next;
     });
   }, [groups]);
@@ -249,7 +240,7 @@ export default function BookCatalogPanel({
           )}
         </header>
 
-        {view === "chapters" && chapters.length > 0 && (
+        {view === "chapters" && chapterCount > 0 && (
           <label className="mx-3.5 mt-3 flex h-9 shrink-0 items-center gap-2.5 rounded-lg border border-neutral-200 bg-white px-3 shadow-sm shadow-neutral-100 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">
             <Search className="text-neutral-400" size={14} />
             <input
@@ -277,22 +268,22 @@ export default function BookCatalogPanel({
           )}
 
           {groups.map((group) => {
-            const expanded = expandedVolumes.has(group.id);
+            const expanded = expandedGroups.has(group.key);
             const visibleChapters = group.chapters.filter((chapter) =>
               !normalizedQuery ||
               chapter.title.toLocaleLowerCase("zh-CN").includes(normalizedQuery));
             if (normalizedQuery && visibleChapters.length === 0) return null;
             return (
-              <section className="mb-3" key={group.id}>
+              <section className="mb-3" key={group.key}>
                 <header className="group/volume flex min-w-0 items-center">
                   <button
                     className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-neutral-700 transition hover:bg-white/80 hover:text-neutral-950"
                     type="button"
                     aria-expanded={expanded}
-                    onClick={() => setExpandedVolumes((current) => {
+                    onClick={() => setExpandedGroups((current) => {
                       const next = new Set(current);
-                      if (next.has(group.id)) next.delete(group.id);
-                      else next.add(group.id);
+                      if (next.has(group.key)) next.delete(group.key);
+                      else next.add(group.key);
                       return next;
                     })}
                   >
@@ -304,7 +295,7 @@ export default function BookCatalogPanel({
                       size={12}
                     />
                     <span className="grid size-5 shrink-0 place-items-center rounded-md bg-neutral-900 text-[9px] font-semibold text-white">
-                      卷
+                      {group.kind === "volume" ? "卷" : "未"}
                     </span>
                     <strong className="truncate text-[12px] font-semibold">
                       {group.title}
@@ -313,29 +304,33 @@ export default function BookCatalogPanel({
                   <span className="shrink-0 px-1 text-[10px] tabular-nums text-neutral-400">
                     {group.chapters.length} 章
                   </span>
-                  <button
-                    className="grid size-7 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-violet-700"
-                    type="button"
-                    title={`在“${group.title}”下新建章节`}
-                    aria-label={`在“${group.title}”下新建章节`}
-                    onClick={() => void onCreateChapter(group.id)}
-                  >
-                    <Plus size={13} />
-                  </button>
-                  <button
-                    className="grid size-7 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/volume:opacity-100"
-                    type="button"
-                    title={`删除分卷“${group.title}”`}
-                    aria-label={`删除分卷“${group.title}”`}
-                    onClick={() => setDeleteTarget({
-                      kind: "volume",
-                      id: group.id,
-                      title: group.title,
-                      chapterCount: group.chapters.length,
-                    })}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  {group.volume && (
+                    <>
+                      <button
+                        className="grid size-7 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-violet-700"
+                        type="button"
+                        title={`在“${group.title}”下新建章节`}
+                        aria-label={`在“${group.title}”下新建章节`}
+                        onClick={() => void onCreateChapter(group.volume.id)}
+                      >
+                        <Plus size={13} />
+                      </button>
+                      <button
+                        className="grid size-7 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/volume:opacity-100"
+                        type="button"
+                        title={`删除分卷“${group.title}”`}
+                        aria-label={`删除分卷“${group.title}”`}
+                        onClick={() => setDeleteTarget({
+                          kind: "volume",
+                          id: group.volume.id,
+                          title: group.title,
+                          chapterCount: group.chapters.length,
+                        })}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  )}
                 </header>
 
                 {expanded && visibleChapters.length === 0 && !normalizedQuery && (
@@ -386,7 +381,8 @@ export default function BookCatalogPanel({
                           <button
                             className={cn(
                               "absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg border-0 bg-transparent text-neutral-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover/chapter:opacity-100",
-                              active && "opacity-60",
+                              (active || group.kind === "unassigned") &&
+                                "opacity-60",
                             )}
                             type="button"
                             title={`删除章节“${chapter.title}”`}
@@ -418,8 +414,7 @@ export default function BookCatalogPanel({
           </nav>
         ) : (
           <BookPageGrid
-            volumes={volumes}
-            chapters={chapters}
+            groups={groups}
             activeChapterId={activeChapterId}
             activeChapterPageNumber={activeChapterPageNumber}
             livePagination={livePagination}
