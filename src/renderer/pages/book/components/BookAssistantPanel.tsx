@@ -2,6 +2,7 @@ import {
   BookOpen,
   Expand,
   Folder,
+  Layers3,
   Plus,
   Send,
   Sparkles,
@@ -11,14 +12,23 @@ import {
 import { useEffect, useRef, type CSSProperties, type FormEvent } from "react";
 import { cn } from "../../../../lib/utils.ts";
 import type { ThreadSnapshot } from "../../../../shared/agent/contracts.ts";
+import AgentActivityTimeline from "../../../features/agent/components/AgentActivityTimeline.tsx";
+import ChatViewport from "../../../features/agent/components/ChatViewport.tsx";
 import type {
   MessageView,
   PendingToolApprovalView,
   ResolveToolApproval,
   ToolActivityView,
 } from "../../../features/agent/types.ts";
-import BookToolActivity from "./BookToolActivity.tsx";
 import ProjectConversationSwitcher from "./ProjectConversationSwitcher.tsx";
+
+const MAX_TEXTAREA_HEIGHT = 156;
+
+function getRunIdFromMessageId(messageId: string): string | null {
+  if (messageId.startsWith("answer-")) return messageId.slice("answer-".length);
+  if (messageId.startsWith("draft-")) return messageId.slice("draft-".length);
+  return null;
+}
 
 type BookAssistantPanelProps = {
   readonly projectName: string;
@@ -73,11 +83,14 @@ export default function BookAssistantPanel({
   onDeleteConversation,
   onToggleFocus,
 }: BookAssistantPanelProps) {
-  const endRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, pendingApprovals, toolActivities]);
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  }, [draft]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -91,13 +104,17 @@ export default function BookAssistantPanel({
     }
   };
 
+  const messageRunIds = new Set(messages.map((message) => getRunIdFromMessageId(message.id)).filter((runId): runId is string => Boolean(runId)));
+  const orphanApprovals = pendingApprovals.filter((approval) => !messageRunIds.has(approval.runId));
+  const orphanActivities = toolActivities.filter((activity) => !messageRunIds.has(activity.runId));
+
   return (
     <aside
       className={cn(
-      "flex h-full shrink-0 flex-col border-l border-neutral-200 bg-[#fbfbfa]",
-      focused
-        ? "min-w-0 flex-1"
-        : "max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-30 max-xl:shadow-2xl",
+        "flex h-full shrink-0 flex-col border-l border-neutral-200 bg-[#fbfbfa]",
+        focused
+          ? "min-w-0 flex-1"
+          : "max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-30 max-xl:shadow-2xl",
       )}
       style={focused
         ? undefined
@@ -129,7 +146,17 @@ export default function BookAssistantPanel({
       </header>
 
       <div className="flex min-h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-neutral-100 px-4 py-2">
-        <span className="text-[10px] text-neutral-400">上下文</span>
+        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 text-[10px] font-medium text-neutral-500">
+          <Layers3 size={12} />上下文
+        </span>
+        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 text-[10px] text-neutral-500" title={`当前项目：${projectName}`}>
+          <Folder size={12} />
+          <span className="max-w-28 truncate">{projectName}</span>
+        </span>
+        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 text-[10px] text-neutral-500" title={bookTitle ? `当前书籍：${bookTitle}` : "当前书籍待命名"}>
+          <BookOpen size={12} />
+          <span className="max-w-28 truncate">{bookTitle ?? "待命名书籍"}</span>
+        </span>
         {contextEnabled && chapterNumber !== null && chapterTitle && (
           <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 px-2.5 text-[10px] text-violet-700" type="button" title="移除章节上下文" onClick={() => onContextEnabledChange(false)}>
             <BookOpen size={12} />
@@ -144,68 +171,55 @@ export default function BookAssistantPanel({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 2xl:px-5" aria-live="polite">
-        {messages.length === 0 && (
-          <div className="grid min-h-[260px] place-items-center text-center">
-            <div>
-              <span className="mx-auto mb-3 grid size-9 place-items-center rounded-xl bg-neutral-100 text-neutral-500">
-                <Sparkles size={17} />
-              </span>
-              <p className="m-0 text-xs font-medium text-neutral-700">
-                和 AI 一起打磨这一章
-              </p>
-              <p className="mt-1.5 text-[10px] leading-5 text-neutral-400">
-                {chapterNumber === null
-                  ? "这是属于当前书籍的项目对话"
-                  : "当前章节会作为本次项目对话的上下文"}
-              </p>
-            </div>
-          </div>
-        )}
-        <div className="grid gap-5">
-          {messages.map((message, index) => (
-            <div key={message.id}>
-              {(index === 0 || messageDateKey(messages[index - 1].createdAt) !== messageDateKey(message.createdAt)) && (
-                <div className="mb-5 flex items-center gap-2 text-[9px] text-neutral-300 before:h-px before:flex-1 before:bg-neutral-100 after:h-px after:flex-1 after:bg-neutral-100">
-                  {formatMessageDate(message.createdAt)}
-                </div>
-              )}
-              <article>
-              {message.role === "user" ? (
-                <div className="ml-auto max-w-[88%] rounded-xl rounded-br-sm bg-neutral-100 px-3 py-2.5 text-xs leading-[1.75] text-neutral-700">
-                  {message.content}
-                </div>
-              ) : (
-                <div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="grid size-[23px] place-items-center rounded-lg bg-neutral-800 text-white">
-                      <Sparkles size={12} />
-                    </span>
-                    <strong className="text-[10px]">StoryOS</strong>
-                  </div>
-                  <p className="m-0 whitespace-pre-wrap text-xs leading-[1.8] text-neutral-700">
-                    {message.content || (message.streaming ? "正在思考…" : "")}
-                  </p>
-                </div>
-              )}
-              </article>
-            </div>
-          ))}
-          <BookToolActivity
-            approvals={pendingApprovals}
-            activities={toolActivities}
+      <ChatViewport
+        assistantName="StoryOS"
+        bottomPaddingClassName="pb-4"
+        compact
+        emptyDescription={chapterNumber === null
+          ? "这是属于当前书籍的项目对话，适合做设定梳理、结构规划和整体节奏讨论。"
+          : "当前章节会作为本次项目对话的上下文，适合续写、润色、检查冲突和提取伏笔。"}
+        emptyTitle={chapterNumber === null ? "和 AI 一起规划这本书" : "和 AI 一起打磨这一章"}
+        footer={(orphanApprovals.length > 0 || orphanActivities.length > 0) && (
+          <AgentActivityTimeline
+            approvals={orphanApprovals}
+            activities={orphanActivities}
+            compact
+            defaultOpen={orphanApprovals.length > 0 || orphanActivities.some((activity) => activity.status === "started")}
+            title="当前执行过程"
             onResolveApproval={onResolveApproval}
           />
-          <div ref={endRef} />
-        </div>
-      </div>
+        )}
+        messages={messages}
+        renderMessageFooter={(message) => {
+          const runId = getRunIdFromMessageId(message.id);
+          if (!runId) return null;
+          const messageApprovals = pendingApprovals.filter((approval) => approval.runId === runId);
+          const messageActivities = toolActivities.filter((activity) => activity.runId === runId);
+          if (messageApprovals.length === 0 && messageActivities.length === 0) return null;
+          return (
+            <AgentActivityTimeline
+              approvals={messageApprovals}
+              activities={messageActivities}
+              compact
+              defaultOpen={message.streaming || messageApprovals.length > 0 || messageActivities.some((activity) => activity.status === "started")}
+              title={message.streaming ? "正在执行" : "本次执行过程"}
+              onResolveApproval={onResolveApproval}
+            />
+          );
+        }}
+        suggestions={chapterNumber === null
+          ? ["梳理整本书的主线冲突", "检查人物动机是否成立", "规划下一卷的节奏"]
+          : ["检查本章节奏和冲突", "续写下一段并保持风格", "提取本章伏笔和回收点"]}
+        onPickSuggestion={onDraftChange}
+        onQuote={(content) => onDraftChange(`${draft ? `${draft}\n\n` : ""}> ${content.slice(0, 320).replace(/\n/g, "\n> ")}\n\n`)}
+      />
 
-      <form className="mx-3 mb-3 shrink-0 rounded-[14px] border border-neutral-200 bg-white p-3 shadow-[0_10px_28px_rgba(30,28,20,0.07)] focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100" onSubmit={(event) => void submit(event)}>
-        <div className="flex items-center gap-1.5 text-[9px] text-neutral-400">
-          <span className="flex items-center gap-1"><Folder size={11} />项目 / <b>{projectName}</b></span>
+      <form className="mx-3 mb-3 shrink-0 rounded-[18px] border border-neutral-200 bg-white/95 p-3 shadow-[0_14px_34px_rgba(30,28,20,0.09)] backdrop-blur-xl transition focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100" onSubmit={(event) => void submit(event)}>
+        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[9px] text-neutral-400">
+          <span className="flex min-w-0 items-center gap-1"><Folder className="shrink-0" size={11} />项目 / <b className="truncate">{projectName}</b></span>
           <span>·</span>
-          <span className="flex items-center gap-1">
-            <BookOpen size={11} />
+          <span className="flex min-w-0 items-center gap-1">
+            <BookOpen className="shrink-0" size={11} />
                   {bookTitle ? <>书籍 / <b>{bookTitle}</b></> : "书籍 / 待命名"}
           </span>
           <span>·</span>
@@ -216,8 +230,9 @@ export default function BookAssistantPanel({
           </strong>
         </div>
         <textarea
-          className="mt-2 min-h-[68px] w-full resize-none border-0 bg-transparent text-xs leading-5 outline-none placeholder:text-neutral-400"
-          rows={3}
+          ref={textareaRef}
+          className="mt-2 block max-h-[156px] min-h-[64px] w-full resize-none overflow-y-auto border-0 bg-transparent text-xs leading-5 text-neutral-800 outline-none placeholder:text-neutral-400"
+          rows={2}
           value={draft}
           placeholder={chapterNumber === null
             ? "输入消息，和 AI 一起构思这本书……"
@@ -246,24 +261,4 @@ export default function BookAssistantPanel({
       </form>
     </aside>
   );
-}
-
-function messageDateKey(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toDateString();
-}
-
-function formatMessageDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "历史消息";
-  const today = new Date();
-  if (date.toDateString() === today.toDateString()) return "今天";
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return "昨天";
-  return date.toLocaleDateString("zh-CN", {
-    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
-    month: "long",
-    day: "numeric",
-  });
 }

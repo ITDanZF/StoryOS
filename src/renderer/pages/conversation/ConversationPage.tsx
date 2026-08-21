@@ -13,6 +13,7 @@ export default function ConversationPage() {
     switchThread,
     sendMessage,
     cancelRun,
+    resolveApproval,
     openSidebar,
   } = useWorkspaceOutlet();
   const { threadId } = useParams();
@@ -22,6 +23,13 @@ export default function ConversationPage() {
     ? state.threads?.activeThread
     : null;
   const globalActiveRun = globalConversationActive ? activeRun : undefined;
+  const activeThreadId = activeThread?.id ?? "";
+  const pendingApprovals = state.pendingApprovals.filter(
+    (approval) => approval.threadId === activeThreadId,
+  );
+  const toolActivities = state.toolActivities.filter(
+    (activity) => activity.threadId === activeThreadId,
+  );
 
   useEffect(() => {
     if (state.conversationScope.kind !== "global") {
@@ -84,6 +92,9 @@ export default function ConversationPage() {
         <ConversationView
           messages={globalConversationActive ? state.messages : []}
           loading={state.loading || !globalConversationActive}
+          pendingApprovals={globalConversationActive ? pendingApprovals : []}
+          toolActivities={globalConversationActive ? toolActivities : []}
+          onResolveApproval={resolveApproval}
         />
         <MessageComposer
           disabled={
