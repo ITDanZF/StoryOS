@@ -12,6 +12,11 @@ import type { ProjectNavigationSnapshot } from "../../main/agent/application/pro
 import type { MessageDto, ThreadDto, ThreadSnapshot } from "../../main/agent/application/threadContracts.ts";
 import type { ThreadSkillState } from "../../main/agent/application/threadPorts.ts";
 import type { ToolApprovalDecision } from "../../main/agent/security/ToolPolicy.ts";
+import type { ConversationTurnContext } from "../../main/agent/application/conversationTurnContext.ts";
+import type {
+    RendererEditorToolRequest,
+    RendererEditorToolResponse,
+} from "../../main/agent/tools/editor/contracts.ts";
 import type { SkillDetail } from "../../main/agent/skills/SkillTypes.ts";
 import type { SkillSnapshot } from "../../main/agent/skills/SkillApplication.ts";
 import type { AgentConfigurationRequest, AgentServiceStatus } from "../../main/agent/StoryAgentService.ts";
@@ -81,6 +86,8 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     disableSkill: "agent:disable-skill",
     clearSkillState: "agent:clear-skill-state",
     event: "agent:event",
+    editorToolRequest: "agent:editor-tool-request",
+    editorToolResponse: "agent:editor-tool-response",
 } as const);
 
 export type WorkspaceSnapshot = {
@@ -134,6 +141,9 @@ export type AgentDesktopApi = {
     disableSkill(skillId: string, threadId?: string): Promise<ThreadSkillState>;
     clearSkillState(threadId?: string): Promise<ThreadSkillState>;
     onEvent(handler: (event: ConversationApplicationEvent) => void): () => void;
+    onEditorToolRequest(
+        handler: (request: RendererEditorToolRequest) => Promise<unknown>,
+    ): () => void;
 };
 
 export type {
@@ -148,6 +158,7 @@ export type {
     ConversationRef,
     ConversationScope,
     ConversationSnapshot,
+    ConversationTurnContext,
     CreateConversationRequest,
     CreateBookChapterRequest,
     CreateBookVolumeRequest,
@@ -161,6 +172,8 @@ export type {
     ProjectNavigationSnapshot,
     ReadyBookWorkspaceSnapshot,
     RenameProjectRequest,
+    RendererEditorToolRequest,
+    RendererEditorToolResponse,
     RunSnapshot,
     SaveBookChapterContentRequest,
     SendConversationMessageRequest,

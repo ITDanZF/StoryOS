@@ -6,12 +6,16 @@
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
+    "native:node": "npm rebuild better-sqlite3",
+    "native:electron": "electron-rebuild -f -w better-sqlite3",
+    "prestart": "npm run native:electron",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run native:node",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test && npm run lint:agent",
     "lint:agent": "eslint src/main/agent src/main/ipc/agent.ts src/preload/agentApi.ts src/shared/agent tests/agent --ext .ts"

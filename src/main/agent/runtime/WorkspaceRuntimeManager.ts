@@ -19,6 +19,8 @@ import SkillInstallService from "../skills/SkillInstallService.ts";
 import SkillLoader from "../skills/SkillLoader.ts";
 import SkillScaffoldService from "../skills/SkillScaffoldService.ts";
 import WorkspaceToolContext from "../tools/WorkspaceToolContext.ts";
+import BookToolContext from "../tools/book/BookToolContext.ts";
+import type { RendererEditorToolClient } from "../tools/editor/contracts.ts";
 import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
 import SqliteNovelStore from "../storage/project/SqliteNovelStore.ts";
 import SqliteRunStore from "../storage/project/SqliteRunStore.ts";
@@ -68,13 +70,19 @@ export default class WorkspaceRuntimeManager {
   private constructor(
     private readonly projects: ProjectApplication,
     private readonly modelConfiguration: ModelConnectionConfiguration,
+    private readonly rendererEditorTools?: RendererEditorToolClient,
   ) {}
 
   static async create(
     projects: ProjectApplication,
     modelConfiguration: ModelConnectionConfiguration,
+    rendererEditorTools?: RendererEditorToolClient,
   ): Promise<WorkspaceRuntimeManager> {
-    const manager = new WorkspaceRuntimeManager(projects, modelConfiguration);
+    const manager = new WorkspaceRuntimeManager(
+      projects,
+      modelConfiguration,
+      rendererEditorTools,
+    );
     try {
       manager.globalRuntime = await manager.createRuntime(null);
       const activeProjectPath = projects.getSnapshot().activeProjectPath;
@@ -222,6 +230,15 @@ export default class WorkspaceRuntimeManager {
           skillDefinitionsProvider: () => skills.listSkillDefinitions(),
           skillInstaller,
           workspaceContext,
+          ...(project
+            ? { bookContext: new BookToolContext(project.id, novels) }
+            : {}),
+          ...(project && this.rendererEditorTools
+            ? {
+                rendererEditorTools: this.rendererEditorTools,
+                rendererEditorProjectId: project.id,
+              }
+            : {}),
         }),
         {
           checkpointPath: layout.checkpointPath,

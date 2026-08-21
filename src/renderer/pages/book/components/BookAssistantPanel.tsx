@@ -2,17 +2,22 @@ import {
   BookOpen,
   Expand,
   Folder,
-  MoreHorizontal,
   Plus,
   Send,
   Sparkles,
   Square,
   X,
 } from "lucide-react";
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, type CSSProperties, type FormEvent } from "react";
 import { cn } from "../../../../lib/utils.ts";
 import type { ThreadSnapshot } from "../../../../shared/agent/contracts.ts";
-import type { MessageView } from "../../../features/agent/types.ts";
+import type {
+  MessageView,
+  PendingToolApprovalView,
+  ResolveToolApproval,
+  ToolActivityView,
+} from "../../../features/agent/types.ts";
+import BookToolActivity from "./BookToolActivity.tsx";
 import ProjectConversationSwitcher from "./ProjectConversationSwitcher.tsx";
 
 type BookAssistantPanelProps = {
@@ -23,14 +28,19 @@ type BookAssistantPanelProps = {
   readonly conversationSnapshot: ThreadSnapshot | null;
   readonly runningThreadIds: ReadonlySet<string>;
   readonly messages: readonly MessageView[];
+  readonly pendingApprovals: readonly PendingToolApprovalView[];
+  readonly toolActivities: readonly ToolActivityView[];
   readonly connected: boolean;
   readonly running: boolean;
   readonly focused: boolean;
   readonly width: number;
   readonly draft: string;
+  readonly contextEnabled: boolean;
   readonly onDraftChange: (value: string) => void;
+  readonly onContextEnabledChange: (enabled: boolean) => void;
   readonly onSend: (content: string) => Promise<void>;
   readonly onCancel: () => Promise<void>;
+  readonly onResolveApproval: ResolveToolApproval;
   readonly onCreateConversation: () => Promise<void>;
   readonly onSwitchConversation: (threadId: string) => Promise<void>;
   readonly onDeleteConversation: (threadId: string) => Promise<void>;
@@ -45,27 +55,40 @@ export default function BookAssistantPanel({
   conversationSnapshot,
   runningThreadIds,
   messages,
+  pendingApprovals,
+  toolActivities,
   connected,
   running,
   focused,
   width,
   draft,
+  contextEnabled,
   onDraftChange,
+  onContextEnabledChange,
   onSend,
   onCancel,
+  onResolveApproval,
   onCreateConversation,
   onSwitchConversation,
   onDeleteConversation,
   onToggleFocus,
 }: BookAssistantPanelProps) {
-  const [contextVisible, setContextVisible] = useState(true);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, pendingApprovals, toolActivities]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const normalized = draft.trim();
     if (!normalized || running || !connected) return;
     onDraftChange("");
-    await onSend(normalized);
+    try {
+      await onSend(normalized);
+    } catch {
+      onDraftChange(normalized);
+    }
   };
 
   return (
@@ -102,32 +125,26 @@ export default function BookAssistantPanel({
           <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 hover:bg-neutral-100 hover:text-neutral-800" type="button" aria-label="展开对话" onClick={onToggleFocus}>
             <Expand size={15} />
           </button>
-          <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 hover:bg-neutral-100 hover:text-neutral-800" type="button" aria-label="对话菜单">
-            <MoreHorizontal size={16} />
-          </button>
         </div>
       </header>
 
       <div className="flex min-h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-neutral-100 px-4 py-2">
         <span className="text-[10px] text-neutral-400">上下文</span>
-        {contextVisible && chapterNumber !== null && chapterTitle && (
-          <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 px-2.5 text-[10px] text-violet-700" type="button" title="移除章节上下文" onClick={() => setContextVisible(false)}>
+        {contextEnabled && chapterNumber !== null && chapterTitle && (
+          <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 px-2.5 text-[10px] text-violet-700" type="button" title="移除章节上下文" onClick={() => onContextEnabledChange(false)}>
             <BookOpen size={12} />
             <span>第{chapterNumber}章 · {chapterTitle}</span>
             <X size={10} />
           </button>
         )}
-        {!contextVisible && chapterNumber !== null && (
-          <button className="grid size-6 shrink-0 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-400 hover:text-neutral-800" type="button" aria-label="添加章节上下文" onClick={() => setContextVisible(true)}>
+        {!contextEnabled && chapterNumber !== null && (
+          <button className="grid size-6 shrink-0 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-400 hover:text-neutral-800" type="button" aria-label="添加章节上下文" onClick={() => onContextEnabledChange(true)}>
             <Plus size={11} />
           </button>
         )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 2xl:px-5" aria-live="polite">
-        <div className="mb-5 flex items-center gap-2 text-[9px] text-neutral-300 before:h-px before:flex-1 before:bg-neutral-100 after:h-px after:flex-1 after:bg-neutral-100">
-          今天
-        </div>
         {messages.length === 0 && (
           <div className="grid min-h-[260px] place-items-center text-center">
             <div>
@@ -146,8 +163,14 @@ export default function BookAssistantPanel({
           </div>
         )}
         <div className="grid gap-5">
-          {messages.map((message) => (
-            <article key={message.id}>
+          {messages.map((message, index) => (
+            <div key={message.id}>
+              {(index === 0 || messageDateKey(messages[index - 1].createdAt) !== messageDateKey(message.createdAt)) && (
+                <div className="mb-5 flex items-center gap-2 text-[9px] text-neutral-300 before:h-px before:flex-1 before:bg-neutral-100 after:h-px after:flex-1 after:bg-neutral-100">
+                  {formatMessageDate(message.createdAt)}
+                </div>
+              )}
+              <article>
               {message.role === "user" ? (
                 <div className="ml-auto max-w-[88%] rounded-xl rounded-br-sm bg-neutral-100 px-3 py-2.5 text-xs leading-[1.75] text-neutral-700">
                   {message.content}
@@ -165,8 +188,15 @@ export default function BookAssistantPanel({
                   </p>
                 </div>
               )}
-            </article>
+              </article>
+            </div>
           ))}
+          <BookToolActivity
+            approvals={pendingApprovals}
+            activities={toolActivities}
+            onResolveApproval={onResolveApproval}
+          />
+          <div ref={endRef} />
         </div>
       </div>
 
@@ -216,4 +246,24 @@ export default function BookAssistantPanel({
       </form>
     </aside>
   );
+}
+
+function messageDateKey(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toDateString();
+}
+
+function formatMessageDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "历史消息";
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return "今天";
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return "昨天";
+  return date.toLocaleDateString("zh-CN", {
+    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }

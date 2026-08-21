@@ -7,6 +7,8 @@ import ModelRouter from "../../model/ModelRouter.ts";
 import Model from "../../model/Model.ts";
 import ToolResolver from "../../tools/ToolResolver.ts";
 import type WorkspaceToolContext from "../../tools/WorkspaceToolContext.ts";
+import type BookToolContext from "../../tools/book/BookToolContext.ts";
+import type { RendererEditorToolClient } from "../../tools/editor/contracts.ts";
 import ToolPolicy, { denyToolApproval } from "../../security/ToolPolicy.ts";
 import type { SkillInstaller } from "../../skills/SkillInstallService.ts";
 import AgentExecutor from "../AgentExecutor.ts";
@@ -34,6 +36,9 @@ export type AgentOrchestratorFactoryOptions = {
   readonly skillDefinitionsProvider?: () => readonly SkillDefinition[];
   readonly skillInstaller?: SkillInstaller;
   readonly workspaceContext?: WorkspaceToolContext;
+  readonly bookContext?: BookToolContext;
+  readonly rendererEditorTools?: RendererEditorToolClient;
+  readonly rendererEditorProjectId?: string;
 };
 
 function isSkillAgent(definition: { readonly metadata?: Readonly<Record<string, unknown>> }) {
@@ -63,12 +68,25 @@ export function createAgentOrchestrator(
     : options.skillDefinitionsProvider ?? (() => skillDefinitions);
   const skillInstaller = usesLegacyLimits ? undefined : options.skillInstaller;
   const workspaceContext = usesLegacyLimits ? undefined : options.workspaceContext;
+  const bookContext = usesLegacyLimits ? undefined : options.bookContext;
+  const rendererEditorTools = usesLegacyLimits
+    ? undefined
+    : options.rendererEditorTools;
+  const rendererEditorProjectId = usesLegacyLimits
+    ? undefined
+    : options.rendererEditorProjectId;
   const model = usesLegacyLimits ? createDefaultModel() : options.model ?? createDefaultModel();
   const modelRouter = new ModelRouter(
     model,
     usesLegacyLimits ? [] : options.modelGateways,
   );
-  const toolResolver = new ToolResolver({ skillInstaller, workspaceContext });
+  const toolResolver = new ToolResolver({
+    skillInstaller,
+    workspaceContext,
+    bookContext,
+    rendererEditorTools,
+    rendererEditorProjectId,
+  });
   const registry = new AgentRegistry(builtInAgents);
   const syncSkillAgents = () => registry.replaceWhere(
     isSkillAgent,

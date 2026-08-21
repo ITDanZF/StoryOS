@@ -19,6 +19,10 @@ import {
 } from "../../../../shared/book/richText.ts";
 import type { BookSaveState } from "../bookWorkspaceModel.ts";
 import type {
+  ChapterEditorBridge,
+  ChapterEditorLiveContext,
+} from "../editor/chapterEditorContext.ts";
+import type {
   BookPageNavigationTarget,
   LiveChapterPage,
 } from "../pagination/paginationModel.ts";
@@ -40,6 +44,8 @@ type ChapterEditorPanelProps = {
   readonly onSaveTitle: (title: string) => Promise<void>;
   readonly onSaveContent: (content: string) => Promise<void>;
   readonly onAskAi: (prompt: string) => void;
+  readonly onEditorContextChange: (context: ChapterEditorLiveContext) => void;
+  readonly onEditorBridgeChange: (bridge: ChapterEditorBridge | null) => void;
 };
 
 export default function ChapterEditorPanel({
@@ -52,6 +58,8 @@ export default function ChapterEditorPanel({
   onSaveTitle,
   onSaveContent,
   onAskAi,
+  onEditorContextChange,
+  onEditorBridgeChange,
 }: ChapterEditorPanelProps) {
   const [title, setTitle] = useState(chapter.title);
   const [saveState, setSaveState] = useState<BookSaveState>("saved");
@@ -158,6 +166,8 @@ export default function ChapterEditorPanel({
           onSaveStateChange={setSaveState}
           onCharacterCountChange={setCharacterCount}
           onAskAiSelection={askAiAboutSelection}
+          onContextChange={onEditorContextChange}
+          onBridgeChange={onEditorBridgeChange}
         />
       </Suspense>
     </article>

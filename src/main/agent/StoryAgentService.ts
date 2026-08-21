@@ -12,6 +12,7 @@ import {
 } from "./model/ModelConfiguration.ts";
 import WorkSpace from "./workspace/index.ts";
 import WorkspaceRuntimeManager from "./runtime/WorkspaceRuntimeManager.ts";
+import type { RendererEditorToolClient } from "./tools/editor/contracts.ts";
 
 export type AgentConfigurationRequest = {
     readonly provider: "deepseek" | "openai" | "qwen";
@@ -33,6 +34,7 @@ export type AgentServiceStatus = {
 export type StoryAgentServiceOptions = {
     readonly agentHome: string;
     readonly bundledSkillRoot: string;
+    readonly rendererEditorTools?: RendererEditorToolClient;
 };
 
 export default class StoryAgentService {
@@ -191,6 +193,7 @@ export default class StoryAgentService {
             const runtime = await WorkspaceRuntimeManager.create(
                 projects,
                 modelConfiguration,
+                this.options.rendererEditorTools,
             );
             const controller = new DesktopController({ projects, runtime });
             for (const subscriber of this.subscribers) {

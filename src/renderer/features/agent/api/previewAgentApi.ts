@@ -417,6 +417,7 @@ if (previewEnabled && !window.storyOSAgent) {
     disableSkill: async () => ({ activeSkillIds: [], disabledSkillIds: [] }),
     clearSkillState: async () => ({ activeSkillIds: [], disabledSkillIds: [] }),
     onEvent: (handler) => { handlers.add(handler); return () => handlers.delete(handler); },
+    onEditorToolRequest: () => () => undefined,
   };
   Object.defineProperty(window, "storyOSAgent", { configurable: true, value: api });
 }

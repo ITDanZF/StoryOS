@@ -80,9 +80,7 @@ describe("WorkspaceRuntimeManager behavior", () => {
       activeThread: { title: "新对话" },
       threads: [{ title: "新对话" }],
     });
-    expect(manager.novels.getProjectBook()).toMatchObject({
-      title: "Stable Story",
-    });
+    expect(manager.novels.getProjectBook()).toBeNull();
     await manager.close();
   });
 
@@ -165,9 +163,7 @@ describe("WorkspaceRuntimeManager behavior", () => {
       kind: "project",
       projectId: project.id,
     });
-    expect(projectRuntime.novels.getProjectBook()).toMatchObject({
-      title: "Stable Story",
-    });
+    expect(projectRuntime.novels.getProjectBook()).toBeNull();
     const projectThread = projectRuntime.threads.createThread({
       title: "Book discussion",
     });

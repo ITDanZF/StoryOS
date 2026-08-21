@@ -8,10 +8,16 @@ import { createSearchTextTool } from "./io/searchText.ts";
 import { createWriteFileTool } from "./io/writeFile.ts";
 import { createSkillTool } from "./skill/createSkill.ts";
 import { createTextTools } from "./text/index.ts";
+import { createBookTools, type BookToolContext } from "./book/index.ts";
+import type { RendererEditorToolClient } from "./editor/contracts.ts";
+import { createEditorTools } from "./editor/editorTools.ts";
 
 export type CreateToolsOptions = {
   readonly skillInstaller?: SkillInstaller;
   readonly workspaceContext?: WorkspaceToolContext;
+  readonly bookContext?: BookToolContext;
+  readonly rendererEditorTools?: RendererEditorToolClient;
+  readonly rendererEditorProjectId?: string;
 };
 
 export function createTools(options: CreateToolsOptions = {}) {
@@ -24,6 +30,13 @@ export function createTools(options: CreateToolsOptions = {}) {
     createListFilesTool(context),
     createSearchTextTool(context),
     ...createTextTools(context),
+    ...(options.bookContext ? createBookTools(options.bookContext) : []),
+    ...(options.rendererEditorTools && options.rendererEditorProjectId
+      ? createEditorTools(
+          options.rendererEditorTools,
+          options.rendererEditorProjectId,
+        )
+      : []),
     ...(options.skillInstaller ? [createSkillTool(options.skillInstaller)] : []),
   ];
 }

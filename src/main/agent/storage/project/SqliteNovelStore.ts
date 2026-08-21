@@ -123,6 +123,37 @@ export default class SqliteNovelStore implements NovelPersistence {
     `).all(novelId) as VolumeRow[]).map((row) => this.toVolume(row));
   }
 
+  updateVolume(
+    input: Pick<VolumeRecord, "id" | "title" | "summary" | "sortOrder">,
+  ): VolumeRecord {
+    this.database.transaction(() => {
+      const volume = this.requireVolume(input.id);
+      const rows = this.database.prepare(`
+        SELECT id, sort_order FROM volumes
+        WHERE novel_id = ?
+        ORDER BY sort_order ASC, id ASC
+      `).all(volume.novelId) as { id: string; sort_order: number }[];
+      const orderedIds = rows
+        .map((row) => row.id)
+        .filter((id) => id !== input.id);
+      orderedIds.splice(Math.min(input.sortOrder, orderedIds.length), 0, input.id);
+      const temporaryStart = Math.max(...rows.map((row) => row.sort_order), -1) +
+        orderedIds.length + 1;
+      const now = Date.now();
+      const setOrder = this.database.prepare(`
+        UPDATE volumes SET sort_order = ?, updated_at = ? WHERE id = ?
+      `);
+      orderedIds.forEach((id, index) => {
+        setOrder.run(temporaryStart + index, now, id);
+      });
+      orderedIds.forEach((id, index) => setOrder.run(index, now, id));
+      this.database.prepare(`
+        UPDATE volumes SET title = ?, summary = ?, updated_at = ? WHERE id = ?
+      `).run(input.title, input.summary, now, input.id);
+    })();
+    return this.requireVolume(input.id);
+  }
+
   deleteVolume(volumeId: string): void {
     this.database.transaction(() => {
       const volume = this.requireVolume(volumeId);
@@ -151,6 +182,21 @@ export default class SqliteNovelStore implements NovelPersistence {
       if (result.changes === 0) {
         throw new Error(`Volume not found: ${volumeId}`);
       }
+      const remaining = this.database.prepare(`
+        SELECT id, sort_order FROM volumes
+        WHERE novel_id = ? ORDER BY sort_order ASC, id ASC
+      `).all(volume.novelId) as { id: string; sort_order: number }[];
+      const temporaryStart = Math.max(
+        ...remaining.map((row) => row.sort_order),
+        -1,
+      ) + remaining.length + 1;
+      const setOrder = this.database.prepare(`
+        UPDATE volumes SET sort_order = ?, updated_at = ? WHERE id = ?
+      `);
+      remaining.forEach((row, index) => {
+        setOrder.run(temporaryStart + index, now, row.id);
+      });
+      remaining.forEach((row, index) => setOrder.run(index, now, row.id));
     })();
   }
 
@@ -206,31 +252,96 @@ export default class SqliteNovelStore implements NovelPersistence {
       "id" | "volumeId" | "title" | "status" | "sortOrder"
     >,
   ): ChapterRecord {
-    const chapter = this.requireChapter(input.id);
-    this.assertVolumeBelongsToNovel(input.volumeId, chapter.novelId);
-    const result = this.database.prepare(`
-      UPDATE chapters
-      SET volume_id = ?, title = ?, status = ?, sort_order = ?, updated_at = ?
-      WHERE id = ?
-    `).run(
-      input.volumeId,
-      input.title,
-      input.status,
-      input.sortOrder,
-      Date.now(),
-      input.id,
-    );
-    if (result.changes === 0) throw new Error(`Chapter not found: ${input.id}`);
+    this.database.transaction(() => {
+      const chapter = this.requireChapter(input.id);
+      this.assertVolumeBelongsToNovel(input.volumeId, chapter.novelId);
+      const sameGroup = chapter.volumeId === input.volumeId;
+      const listGroup = (volumeId: string | null) => this.database.prepare(`
+        SELECT id, sort_order FROM chapters
+        WHERE novel_id = ? AND ${volumeId === null ? "volume_id IS NULL" : "volume_id = ?"}
+        ORDER BY sort_order ASC, id ASC
+      `).all(...(volumeId === null
+        ? [chapter.novelId]
+        : [chapter.novelId, volumeId])) as { id: string; sort_order: number }[];
+      const oldRows = listGroup(chapter.volumeId);
+      const targetRows = sameGroup ? oldRows : listGroup(input.volumeId);
+      const targetIds = targetRows
+        .map((row) => row.id)
+        .filter((id) => id !== input.id);
+      targetIds.splice(Math.min(input.sortOrder, targetIds.length), 0, input.id);
+      const oldIds = oldRows
+        .map((row) => row.id)
+        .filter((id) => id !== input.id);
+      const now = Date.now();
+      const setOrder = this.database.prepare(`
+        UPDATE chapters SET sort_order = ?, updated_at = ? WHERE id = ?
+      `);
+      const resequence = (
+        rows: readonly { readonly sort_order: number }[],
+        ids: readonly string[],
+      ) => {
+        const temporaryStart = Math.max(
+          ...rows.map((row) => row.sort_order),
+          -1,
+        ) + ids.length + 1;
+        ids.forEach((id, index) => setOrder.run(temporaryStart + index, now, id));
+        ids.forEach((id, index) => setOrder.run(index, now, id));
+      };
+
+      if (!sameGroup) {
+        const temporaryOrder = Math.max(
+          ...targetRows.map((row) => row.sort_order),
+          -1,
+        ) + targetIds.length * 2 + 2;
+        this.database.prepare(`
+          UPDATE chapters
+          SET volume_id = ?, sort_order = ?, updated_at = ?
+          WHERE id = ?
+        `).run(input.volumeId, temporaryOrder, now, input.id);
+        resequence(oldRows, oldIds);
+      }
+      resequence(targetRows, targetIds);
+      this.database.prepare(`
+        UPDATE chapters SET title = ?, status = ?, updated_at = ? WHERE id = ?
+      `).run(input.title, input.status, now, input.id);
+    })();
     return this.requireChapter(input.id);
   }
 
   deleteChapter(chapterId: string): void {
-    const result = this.database.prepare(
-      "DELETE FROM chapters WHERE id = ?",
-    ).run(chapterId);
-    if (result.changes === 0) {
-      throw new Error(`Chapter not found: ${chapterId}`);
-    }
+    this.database.transaction(() => {
+      const chapter = this.requireChapter(chapterId);
+      const result = this.database.prepare(
+        "DELETE FROM chapters WHERE id = ?",
+      ).run(chapterId);
+      if (result.changes === 0) {
+        throw new Error(`Chapter not found: ${chapterId}`);
+      }
+      const remaining = this.database.prepare(`
+        SELECT id, sort_order FROM chapters
+        WHERE novel_id = ? AND ${chapter.volumeId === null
+          ? "volume_id IS NULL"
+          : "volume_id = ?"}
+        ORDER BY sort_order ASC, id ASC
+      `).all(...(chapter.volumeId === null
+        ? [chapter.novelId]
+        : [chapter.novelId, chapter.volumeId])) as {
+          id: string;
+          sort_order: number;
+        }[];
+      const now = Date.now();
+      const temporaryStart = Math.max(
+        ...remaining.map((row) => row.sort_order),
+        -1,
+      ) + remaining.length + 1;
+      const setOrder = this.database.prepare(`
+        UPDATE chapters SET sort_order = ?, updated_at = ? WHERE id = ?
+      `);
+      remaining.forEach((row, index) => {
+        setOrder.run(temporaryStart + index, now, row.id);
+      });
+      remaining.forEach((row, index) => setOrder.run(index, now, row.id));
+    })();
   }
 
   saveRevision(

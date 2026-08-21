@@ -47,7 +47,10 @@ function createHarness() {
     systemWorkspace,
   });
   const agent = {
-    startRun: vi.fn(() => "run-1"),
+    startRun: vi.fn((request: { readonly threadId: string; readonly input: string }) => {
+      void request;
+      return "run-1";
+    }),
     waitForRun: vi.fn((): Promise<string> => completion.promise),
     cancelRun: vi.fn(() => true),
     listRuns: vi.fn(() => []),
@@ -142,10 +145,28 @@ function createHarness() {
       novels,
     })),
   };
-  const dependencies = { projects, runtime } as unknown as DesktopControllerDependencies;
+  const projectNavigation = {
+    read: vi.fn(() => {
+      const currentBook = novels.getProjectBook();
+      return {
+        project,
+        book: currentBook ? {
+          ...currentBook,
+          volumeCount: novels.listVolumes().length,
+          chapterCount: novels.listChapters().length,
+        } : null,
+        conversations: threadSnapshot,
+      };
+    }),
+  };
+  const dependencies = {
+    projects,
+    runtime,
+    projectNavigation,
+  } as unknown as DesktopControllerDependencies;
   vi.mocked(shell.openPath).mockClear();
   vi.mocked(shell.trashItem).mockClear();
-  return { agent, book, completion, controller: new DesktopController(dependencies), messages, novels, projects, runtime, threads, volume };
+  return { agent, book, completion, controller: new DesktopController(dependencies), messages, novels, projectNavigation, projects, runtime, threads, volume };
 }
 
 describe("DesktopController", () => {
@@ -202,10 +223,47 @@ describe("DesktopController", () => {
         },
         conversations: { activeThreadId: "thread-1" },
       });
-    expect(harness.runtime.resolve).toHaveBeenCalledWith({
-      kind: "project",
-      projectId: "prj-story",
+    expect(harness.projectNavigation.read).toHaveBeenCalledWith("prj-story");
+    expect(harness.runtime.resolve).not.toHaveBeenCalled();
+  });
+
+  it("passes live book editor context to the agent without persisting it in chat", async () => {
+    const harness = createHarness();
+
+    await harness.controller.sendConversationMessage({
+      scope: { kind: "project", projectId: "prj-story" },
+      threadId: "thread-1",
+      content: "分析当前段落",
+      context: {
+        kind: "book_editor",
+        projectId: "prj-story",
+        projectName: "Story",
+        book: { id: "novel-story", title: "Story" },
+        chapter: {
+          id: "chapter-1",
+          title: "雨夜",
+          number: 1,
+          volumeTitle: "第一卷",
+          revisionNumber: 2,
+          pageNumber: 3,
+          documentText: "雨落在旧城。",
+          selection: { from: 1, to: 7, text: "雨落在旧城" },
+        },
+      },
     });
+
+    expect(harness.messages[0]).toEqual({
+      threadId: "thread-1",
+      role: "user",
+      content: "分析当前段落",
+    });
+    expect(harness.agent.startRun).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      input: expect.stringContaining("<chapter_text>\n雨落在旧城。\n</chapter_text>"),
+    });
+    expect(harness.agent.startRun.mock.calls[0][0].input).toContain(
+      "<selection>\n雨落在旧城\n</selection>",
+    );
   });
 
   it("returns explicit uninitialized book state without using project name", async () => {

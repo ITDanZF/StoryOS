@@ -1,5 +1,6 @@
 import { shell } from "electron";
 import type ProjectApplication from "../application/ProjectApplication.ts";
+import ProjectNavigationReader from "../application/ProjectNavigationReader.ts";
 import type { CreateProjectRequest, RenameProjectRequest } from "../application/projectContracts.ts";
 import type {
   ConversationApplicationEventHandler,
@@ -8,6 +9,7 @@ import type {
   CreateConversationRequest,
   SendConversationMessageRequest,
 } from "../application/conversationContracts.ts";
+import { formatConversationTurnInput } from "../application/conversationTurnContext.ts";
 import type { ToolApprovalDecision } from "../security/ToolPolicy.ts";
 import type WorkspaceRuntimeManager from "../runtime/WorkspaceRuntimeManager.ts";
 import type {
@@ -35,10 +37,16 @@ import {
 export type DesktopControllerDependencies = {
   readonly projects: ProjectApplication;
   readonly runtime: WorkspaceRuntimeManager;
+  readonly projectNavigation?: Pick<ProjectNavigationReader, "read">;
 };
 
 export default class DesktopController {
-  constructor(private readonly dependencies: DesktopControllerDependencies) {}
+  private readonly projectNavigation: Pick<ProjectNavigationReader, "read">;
+
+  constructor(private readonly dependencies: DesktopControllerDependencies) {
+    this.projectNavigation = dependencies.projectNavigation
+      ?? new ProjectNavigationReader(dependencies.projects);
+  }
 
   subscribe(handler: ConversationApplicationEventHandler): () => void {
     return this.dependencies.runtime.subscribe(handler);
@@ -49,13 +57,23 @@ export default class DesktopController {
   }
 
   async sendConversationMessage(request: SendConversationMessageRequest) {
+    if (request.context && (
+      request.scope.kind !== "project" ||
+      request.context.projectId !== request.scope.projectId
+    )) {
+      throw new Error("Conversation context does not match its project scope.");
+    }
     const runtime = await this.dependencies.runtime.resolve(request.scope);
     return this.sendMessageWithRuntime(runtime, request);
   }
 
   private sendMessageWithRuntime(
     runtime: Pick<ActiveWorkspaceRuntime, "threads" | "agent">,
-    request: { readonly threadId: string; readonly content: string },
+    request: {
+      readonly threadId: string;
+      readonly content: string;
+      readonly context?: SendConversationMessageRequest["context"];
+    },
   ) {
     const threadId = request.threadId.trim();
     const content = request.content.trim();
@@ -63,7 +81,10 @@ export default class DesktopController {
     if (!content) throw new Error("Message content is required.");
     const { threads, agent } = runtime;
     threads.appendMessage({ threadId, role: "user", content });
-    const runId = agent.startRun({ threadId, input: content });
+    const runId = agent.startRun({
+      threadId,
+      input: formatConversationTurnInput(content, request.context),
+    });
     void agent.waitForRun(runId).then((answer) => {
       threads.appendMessage({ threadId, role: "assistant", content: answer });
     }).catch(() => {
@@ -107,27 +128,7 @@ export default class DesktopController {
   }
 
   async getProjectNavigation(projectId: string) {
-    const project = this.dependencies.projects.getSnapshot().projects.find(
-      (item) => item.id === projectId,
-    );
-    if (!project) throw new Error(`Project not found: ${projectId}`);
-    const runtime = await this.dependencies.runtime.resolve({
-      kind: "project",
-      projectId,
-    });
-    const book = runtime.novels.getProjectBook();
-    return Object.freeze({
-      project,
-      book: book ? Object.freeze({
-        id: book.id,
-        title: book.title,
-        status: book.status,
-        volumeCount: runtime.novels.listVolumes(book.id).length,
-        chapterCount: runtime.novels.listChapters(book.id).length,
-        updatedAt: book.updatedAt,
-      }) : null,
-      conversations: runtime.threads.getSnapshot(),
-    });
+    return this.projectNavigation.read(projectId);
   }
 
   async getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot> {

@@ -6,6 +6,7 @@ import StoryAgentService from './agent/StoryAgentService';
 import { registerAgentIpc } from './ipc/agent';
 import { registerWindowIpc } from './ipc/window';
 import { getAgentHome } from './agent/workspace/path';
+import RendererEditorToolBridge from './agent/electron/RendererEditorToolBridge';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -18,6 +19,7 @@ let unregisterAgentIpc: (() => void) | null = null;
 let unregisterWindowIpc: (() => void) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 let shutdownComplete = false;
+const rendererEditorTools = new RendererEditorToolBridge();
 
 app.whenReady().then(async () => {
     agentService = new StoryAgentService({
@@ -25,9 +27,10 @@ app.whenReady().then(async () => {
         bundledSkillRoot: app.isPackaged
             ? path.join(process.resourcesPath, 'app.asar.unpacked', 'skills')
             : path.join(app.getAppPath(), 'skills'),
+        rendererEditorTools,
     });
     await agentService.initialize();
-    unregisterAgentIpc = registerAgentIpc(agentService);
+    unregisterAgentIpc = registerAgentIpc(agentService, rendererEditorTools);
     unregisterWindowIpc = registerWindowIpc();
     MainAppWin.createMainWindow();
 }).catch((error) => {
@@ -46,6 +49,7 @@ app.on('before-quit', (event) => {
         unregisterWindowIpc?.();
         unregisterWindowIpc = null;
         await agentService?.shutdown();
+        rendererEditorTools.close();
         agentService = null;
     })();
     void shutdownPromise

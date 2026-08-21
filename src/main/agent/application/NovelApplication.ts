@@ -86,13 +86,24 @@ export default class NovelApplication {
     readonly sortOrder: number;
   }): VolumeDto {
     this.requireNovel(input.novelId);
-    return this.toVolumeDto(this.persistence.createVolume({
+    const requestedOrder = this.requireSortOrder(input.sortOrder);
+    const existing = this.persistence.listVolumes(input.novelId);
+    const appendOrder = Math.max(...existing.map((item) => item.sortOrder), -1) + 1;
+    const created = this.persistence.createVolume({
       id: `volume_${crypto.randomUUID()}`,
       novelId: input.novelId,
       title: this.requireTitle(input.title),
       summary: input.summary?.trim() ?? "",
-      sortOrder: this.requireSortOrder(input.sortOrder),
-    }));
+      sortOrder: appendOrder,
+    });
+    return this.toVolumeDto(requestedOrder === appendOrder
+      ? created
+      : this.persistence.updateVolume({
+          id: created.id,
+          title: created.title,
+          summary: created.summary,
+          sortOrder: requestedOrder,
+        }));
   }
 
   listVolumes(novelId: string): readonly VolumeDto[] {
@@ -101,6 +112,20 @@ export default class NovelApplication {
       this.persistence.listVolumes(novelId)
         .map((record) => this.toVolumeDto(record)),
     );
+  }
+
+  updateVolume(input: {
+    readonly id: string;
+    readonly title: string;
+    readonly summary: string;
+    readonly sortOrder: number;
+  }): VolumeDto {
+    return this.toVolumeDto(this.persistence.updateVolume({
+      id: input.id,
+      title: this.requireTitle(input.title),
+      summary: input.summary.trim(),
+      sortOrder: this.requireSortOrder(input.sortOrder),
+    }));
   }
 
   deleteVolume(volumeId: string): void {
@@ -115,14 +140,28 @@ export default class NovelApplication {
     readonly sortOrder: number;
   }): ChapterDto {
     this.requireNovel(input.novelId);
-    return this.toChapterDto(this.persistence.createChapter({
+    const requestedOrder = this.requireSortOrder(input.sortOrder);
+    const existing = this.persistence.listChapters(input.novelId).filter(
+      (item) => item.volumeId === (input.volumeId ?? null),
+    );
+    const appendOrder = Math.max(...existing.map((item) => item.sortOrder), -1) + 1;
+    const created = this.persistence.createChapter({
       id: `chapter_${crypto.randomUUID()}`,
       novelId: input.novelId,
       volumeId: input.volumeId ?? null,
       title: this.requireTitle(input.title),
       status: this.requireChapterStatus(input.status ?? "outline"),
-      sortOrder: this.requireSortOrder(input.sortOrder),
-    }));
+      sortOrder: appendOrder,
+    });
+    return this.toChapterDto(requestedOrder === appendOrder
+      ? created
+      : this.persistence.updateChapter({
+          id: created.id,
+          volumeId: created.volumeId,
+          title: created.title,
+          status: created.status,
+          sortOrder: requestedOrder,
+        }));
   }
 
   getChapter(chapterId: string): ChapterDto {

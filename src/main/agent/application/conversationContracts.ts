@@ -1,5 +1,6 @@
 import type { ApplicationEvent } from "./contracts.ts";
 import type { ThreadSnapshot } from "./threadContracts.ts";
+import type { ConversationTurnContext } from "./conversationTurnContext.ts";
 
 export type ConversationScope =
   | {
@@ -22,6 +23,7 @@ export type CreateConversationRequest = {
 
 export type SendConversationMessageRequest = ConversationRef & {
   readonly content: string;
+  readonly context?: ConversationTurnContext;
 };
 
 export type ConversationSnapshot = {

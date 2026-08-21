@@ -8,6 +8,7 @@ import type {
     CreateConversationRequest,
     SendConversationMessageRequest,
 } from "../agent/application/conversationContracts.ts";
+import type { ConversationTurnContext } from "../agent/application/conversationTurnContext.ts";
 import type { AgentConfigurationRequest } from "../agent/StoryAgentService.ts";
 import type { ToolApprovalDecision } from "../agent/security/ToolPolicy.ts";
 import type {
@@ -21,6 +22,8 @@ import type {
     UpdateBookChapterRequest,
 } from "../agent/application/bookWorkspaceContracts.ts";
 import type { NovelStatus } from "../agent/application/novelPorts.ts";
+import type RendererEditorToolBridge from "../agent/electron/RendererEditorToolBridge.ts";
+import type { RendererEditorToolResponse } from "../agent/tools/editor/contracts.ts";
 
 function requireApprovalDecision(decision: ToolApprovalDecision): ToolApprovalDecision {
     if (!["allow_once", "allow_session", "deny"].includes(decision)) {
@@ -62,6 +65,64 @@ function requireContent(value: unknown): string {
     return value;
 }
 
+function requireConversationTurnContext(
+    value: ConversationTurnContext,
+): ConversationTurnContext {
+    if (!value || typeof value !== "object" || value.kind !== "book_editor") {
+        throw new Error("Invalid conversation context.");
+    }
+    const book = value.book === null ? null : Object.freeze({
+        id: requireText(value.book?.id, "Book id"),
+        title: requireText(value.book?.title, "Book title"),
+    });
+    const chapter = value.chapter === null ? null : Object.freeze({
+        id: requireText(value.chapter?.id, "Chapter id"),
+        title: requireText(value.chapter?.title, "Chapter title"),
+        number: requirePositiveInteger(value.chapter?.number, "Chapter number"),
+        volumeTitle: requireText(value.chapter?.volumeTitle, "Volume title"),
+        revisionNumber: value.chapter?.revisionNumber === null
+            ? null
+            : requirePositiveInteger(value.chapter?.revisionNumber, "Revision number"),
+        pageNumber: value.chapter?.pageNumber === null
+            ? null
+            : requirePositiveInteger(value.chapter?.pageNumber, "Page number"),
+        documentText: requireString(value.chapter?.documentText, "Chapter text"),
+        selection: value.chapter?.selection === null ? null : Object.freeze({
+            from: requireNonNegativeInteger(value.chapter?.selection?.from, "Selection start"),
+            to: requireNonNegativeInteger(value.chapter?.selection?.to, "Selection end"),
+            text: requireText(value.chapter?.selection?.text, "Selection text"),
+        }),
+    });
+    if (chapter?.selection && chapter.selection.to <= chapter.selection.from) {
+        throw new Error("Selection end must be after selection start.");
+    }
+    return Object.freeze({
+        kind: "book_editor",
+        projectId: requireText(value.projectId, "Project id"),
+        projectName: requireText(value.projectName, "Project name"),
+        book,
+        chapter,
+    });
+}
+
+function requireString(value: unknown, label: string): string {
+    if (typeof value !== "string") throw new Error(`${label} must be a string.`);
+    return value;
+}
+
+function requireNonNegativeInteger(value: unknown, label: string): number {
+    if (!Number.isInteger(value) || (value as number) < 0) {
+        throw new Error(`${label} must be a non-negative integer.`);
+    }
+    return value as number;
+}
+
+function requirePositiveInteger(value: unknown, label: string): number {
+    const result = requireNonNegativeInteger(value, label);
+    if (result === 0) throw new Error(`${label} must be a positive integer.`);
+    return result;
+}
+
 function requireNovelStatus(value: unknown): NovelStatus {
     if (!["planning", "writing", "completed", "archived"].includes(
         value as string,
@@ -71,7 +132,10 @@ function requireNovelStatus(value: unknown): NovelStatus {
     return value as NovelStatus;
 }
 
-export function registerAgentIpc(service: StoryAgentService): () => void {
+export function registerAgentIpc(
+    service: StoryAgentService,
+    rendererEditorTools?: RendererEditorToolBridge,
+): () => void {
     const registeredChannels: string[] = [];
     const handle = <TArgs extends unknown[]>(
         channel: string,
@@ -88,6 +152,9 @@ export function registerAgentIpc(service: StoryAgentService): () => void {
         service.requireController().sendConversationMessage({
             ...requireConversationRef(request),
             content: requireText(request?.content, "Message content"),
+            ...(request?.context === undefined
+                ? {}
+                : { context: requireConversationTurnContext(request.context) }),
         }));
     handle(AGENT_IPC_CHANNELS.cancelRun, (runId: string) => service.requireController().cancelRun(runId));
     handle(AGENT_IPC_CHANNELS.cancelConversationRun, (scope: ConversationScope, runId: string) =>
@@ -209,9 +276,18 @@ export function registerAgentIpc(service: StoryAgentService): () => void {
             if (!window.isDestroyed()) window.webContents.send(AGENT_IPC_CHANNELS.event, event);
         }
     });
+    const onEditorToolResponse = (
+        _event: Electron.IpcMainEvent,
+        response: RendererEditorToolResponse,
+    ) => rendererEditorTools?.acceptResponse(response);
+    ipcMain.on(AGENT_IPC_CHANNELS.editorToolResponse, onEditorToolResponse);
 
     return () => {
         unsubscribe();
+        ipcMain.removeListener(
+            AGENT_IPC_CHANNELS.editorToolResponse,
+            onEditorToolResponse,
+        );
         for (const channel of registeredChannels) ipcMain.removeHandler(channel);
     };
 }

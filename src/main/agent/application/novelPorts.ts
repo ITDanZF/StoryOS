@@ -51,6 +51,7 @@ export interface NovelPersistence {
   deleteNovel(novelId: string): void;
   createVolume(input: Omit<VolumeRecord, "createdAt" | "updatedAt">): VolumeRecord;
   listVolumes(novelId: string): VolumeRecord[];
+  updateVolume(input: Pick<VolumeRecord, "id" | "title" | "summary" | "sortOrder">): VolumeRecord;
   deleteVolume(volumeId: string): void;
   createChapter(input: Omit<ChapterRecord, "currentRevisionId" | "createdAt" | "updatedAt">): ChapterRecord;
   getChapter(chapterId: string): ChapterRecord | null;

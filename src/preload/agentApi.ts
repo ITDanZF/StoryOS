@@ -4,6 +4,8 @@ import type {
     AgentConfigurationRequest,
     AgentDesktopApi,
     ConversationApplicationEvent,
+    RendererEditorToolRequest,
+    RendererEditorToolResponse,
     ToolApprovalDecision,
 } from "../shared/agent/contracts.ts";
 
@@ -56,6 +58,37 @@ const agentApi: AgentDesktopApi = {
         const listener = (_event: Electron.IpcRendererEvent, event: ConversationApplicationEvent) => handler(event);
         ipcRenderer.on(AGENT_IPC_CHANNELS.event, listener);
         return () => ipcRenderer.removeListener(AGENT_IPC_CHANNELS.event, listener);
+    },
+    onEditorToolRequest: (
+        handler: (request: RendererEditorToolRequest) => Promise<unknown>,
+    ) => {
+        const listener = (
+            _event: Electron.IpcRendererEvent,
+            request: RendererEditorToolRequest,
+        ) => {
+            void handler(request)
+                .then((result) => {
+                    const response: RendererEditorToolResponse = {
+                        requestId: request.requestId,
+                        success: true,
+                        result,
+                    };
+                    ipcRenderer.send(AGENT_IPC_CHANNELS.editorToolResponse, response);
+                })
+                .catch((cause: unknown) => {
+                    const response: RendererEditorToolResponse = {
+                        requestId: request.requestId,
+                        success: false,
+                        error: cause instanceof Error ? cause.message : String(cause),
+                    };
+                    ipcRenderer.send(AGENT_IPC_CHANNELS.editorToolResponse, response);
+                });
+        };
+        ipcRenderer.on(AGENT_IPC_CHANNELS.editorToolRequest, listener);
+        return () => ipcRenderer.removeListener(
+            AGENT_IPC_CHANNELS.editorToolRequest,
+            listener,
+        );
     },
 };
 

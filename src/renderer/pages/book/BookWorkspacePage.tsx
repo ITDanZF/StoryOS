@@ -6,6 +6,7 @@ import {
   PanelRight,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -14,6 +15,11 @@ import {
 } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { cn } from "../../../lib/utils.ts";
+import type { ConversationTurnContext } from "../../../shared/agent/contracts.ts";
+import {
+  decodeStoredChapterContent,
+  extractTiptapText,
+} from "../../../shared/book/richText.ts";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
 import BookAssistantPanel from "./components/BookAssistantPanel.tsx";
 import BookCatalogPanel from "./components/BookCatalogPanel.tsx";
@@ -32,10 +38,15 @@ import type {
   LiveChapterPagination,
 } from "./pagination/paginationModel.ts";
 import useBookWorkspace from "./useBookWorkspace.ts";
+import type {
+  ChapterEditorBridge,
+  ChapterEditorLiveContext,
+} from "./editor/chapterEditorContext.ts";
+import useBookEditorToolHandler from "./ai/useBookEditorToolHandler.ts";
+import useBookToolRefresh from "./ai/useBookToolRefresh.ts";
 
 const MIN_ASSISTANT_WIDTH = 300;
 const MAX_ASSISTANT_WIDTH = 560;
-
 function getDefaultAssistantWidth(): number {
   if (typeof window === "undefined") return 320;
   return Math.min(
@@ -68,11 +79,13 @@ export default function BookWorkspacePage() {
     deleteThread,
     sendMessage,
     cancelRun,
+    resolveApproval,
   } = useWorkspaceOutlet();
   const {
     workspace,
     loading: bookLoading,
     error: bookError,
+    load: reloadBookWorkspace,
     createBookProfile,
     createVolume,
     createChapter,
@@ -106,6 +119,10 @@ export default function BookWorkspacePage() {
   );
   const [assistantResizing, setAssistantResizing] = useState(false);
   const [assistantDraft, setAssistantDraft] = useState("");
+  const [assistantContextEnabled, setAssistantContextEnabled] = useState(true);
+  const [editorContext, setEditorContext] =
+    useState<ChapterEditorLiveContext | null>(null);
+  const editorBridgeRef = useRef<ChapterEditorBridge | null>(null);
   const readyWorkspace = workspace?.state === "ready" ? workspace : null;
   const chapterGroups = useMemo(
     () => createBookChapterGroups(
@@ -114,6 +131,23 @@ export default function BookWorkspacePage() {
     ),
     [readyWorkspace],
   );
+  const activeChapterLocation = findBookChapterLocation(
+    chapterGroups,
+    activeChapterId,
+  );
+  const activeChapter = activeChapterLocation?.chapter ?? null;
+  const activeVolume = activeChapterLocation?.group.volume ?? null;
+  const chapterNumber = activeChapterLocation?.chapterNumber ?? null;
+  const activeVolumeNumber = activeVolume
+    ? chapterGroups
+      .filter((group) => group.kind === "volume")
+      .findIndex((group) => group.volume?.id === activeVolume.id) + 1
+    : null;
+  const activeVolumeTitle = activeVolume && activeVolumeNumber !== null
+    ? activeVolume.title === `第${activeVolumeNumber}卷`
+      ? `第${activeVolumeNumber}卷`
+      : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
+    : "未分卷";
 
   const projectConversationActive =
     state.conversationScope.kind === "project" &&
@@ -125,6 +159,13 @@ export default function BookWorkspacePage() {
     state.runs
       .filter((run) => run.status === "running" || run.status === "cancelling")
       .map((run) => run.threadId),
+  );
+  const activeConversationThreadId = projectConversationSnapshot?.activeThreadId ?? "";
+  const pendingApprovals = state.pendingApprovals.filter(
+    (approval) => approval.threadId === activeConversationThreadId,
+  );
+  const toolActivities = state.toolActivities.filter(
+    (activity) => activity.threadId === activeConversationThreadId,
   );
 
   useEffect(() => {
@@ -190,6 +231,43 @@ export default function BookWorkspacePage() {
   }, [activeChapterId, workspace]);
 
   useEffect(() => {
+    setAssistantContextEnabled(true);
+    setEditorContext(null);
+  }, [activeChapterId]);
+
+  const openChapterFromTool = useCallback((chapterId: string, pageNumber: number) => {
+    pageRequestId.current += 1;
+    setActiveChapterId(chapterId);
+    setActiveChapterPageNumber(pageNumber);
+    setLivePagination(null);
+    setPageTarget({
+      kind: "navigate",
+      chapterId,
+      position: 1,
+      chapterPageNumber: pageNumber,
+      requestId: pageRequestId.current,
+    });
+  }, []);
+
+  useBookEditorToolHandler({
+    projectId,
+    projectName: project?.name ?? null,
+    workspace: readyWorkspace,
+    activeChapter,
+    chapterNumber,
+    volumeTitle: activeVolumeTitle,
+    pageNumber: activeChapterPageNumber,
+    editorBridgeRef,
+    openChapter: openChapterFromTool,
+  });
+  useBookToolRefresh({
+    projectId,
+    activities: state.toolActivities,
+    reloadWorkspace: reloadBookWorkspace,
+    reloadNavigation: loadProjectNavigation,
+  });
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
       const target = event.target;
@@ -228,24 +306,6 @@ export default function BookWorkspacePage() {
   }
 
   const scope = { kind: "project", projectId } as const;
-  const activeChapterLocation = findBookChapterLocation(
-    chapterGroups,
-    activeChapterId,
-  );
-  const activeChapter = activeChapterLocation?.chapter ?? null;
-  const activeVolume = activeChapterLocation?.group.volume ?? null;
-  const chapterNumber = activeChapterLocation?.chapterNumber ?? null;
-  const activeVolumeNumber = activeVolume
-    ? chapterGroups
-      .filter((group) => group.kind === "volume")
-      .findIndex((group) => group.volume?.id === activeVolume.id) + 1
-    : null;
-  const activeVolumeTitle = activeVolume && activeVolumeNumber !== null
-    ? activeVolume.title === `第${activeVolumeNumber}卷`
-      ? `第${activeVolumeNumber}卷`
-      : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
-    : "未分卷";
-
   const ensureProjectConversation = async () => {
     if (!projectConversationActive) {
       const snapshot = await openConversationScope(scope);
@@ -263,7 +323,28 @@ export default function BookWorkspacePage() {
 
   const sendAssistantMessage = async (content: string) => {
     await ensureProjectConversation();
-    await sendMessage(content);
+    const context: ConversationTurnContext = {
+      kind: "book_editor",
+      projectId,
+      projectName: project.name,
+      book: readyWorkspace
+        ? { id: readyWorkspace.book.id, title: readyWorkspace.book.title }
+        : null,
+      chapter: assistantContextEnabled && activeChapter && chapterNumber !== null
+        ? {
+            id: activeChapter.id,
+            title: activeChapter.title,
+            number: chapterNumber,
+            volumeTitle: activeVolumeTitle,
+            revisionNumber: activeChapter.revisionNumber,
+            pageNumber: activeChapterPageNumber,
+            documentText: editorContext?.documentText
+              ?? extractTiptapText(decodeStoredChapterContent(activeChapter.content)),
+            selection: editorContext?.selection ?? null,
+          }
+        : null,
+    };
+    await sendMessage(content, context);
   };
 
   const createProjectConversation = async () => {
@@ -578,6 +659,10 @@ export default function BookWorkspacePage() {
               setAssistantDraft(prompt);
               setAssistantVisible(true);
             }}
+            onEditorContextChange={setEditorContext}
+            onEditorBridgeChange={(bridge) => {
+              editorBridgeRef.current = bridge;
+            }}
           />
         )}
 
@@ -618,16 +703,21 @@ export default function BookWorkspacePage() {
               conversationSnapshot={projectConversationSnapshot}
               runningThreadIds={runningThreadIds}
               messages={projectConversationActive ? state.messages : []}
+              pendingApprovals={pendingApprovals}
+              toolActivities={toolActivities}
               connected={Boolean(state.status?.initialized)}
               running={projectConversationActive && Boolean(activeRun)}
               focused={assistantFocused}
               width={assistantWidth}
               draft={assistantDraft}
+              contextEnabled={assistantContextEnabled}
               onDraftChange={setAssistantDraft}
+              onContextEnabledChange={setAssistantContextEnabled}
               onSend={sendAssistantMessage}
               onCancel={async () => {
                 if (activeRun) await cancelRun(activeRun.runId);
               }}
+              onResolveApproval={resolveApproval}
               onCreateConversation={createProjectConversation}
               onSwitchConversation={switchProjectConversation}
               onDeleteConversation={deleteProjectConversation}
