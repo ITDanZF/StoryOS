@@ -5,6 +5,10 @@ import type {
   ReadyBookWorkspaceSnapshot,
   UpdateBookRequest,
 } from "../../../shared/agent/contracts.ts";
+import {
+  countTiptapCharacters,
+  decodeStoredChapterContent,
+} from "../../../shared/book/richText.ts";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -213,6 +217,25 @@ export default function useBookWorkspace(projectId: string | undefined) {
     }
   }, [projectId]);
 
+  const previewChapterContent = useCallback((chapterId: string, content: string) => {
+    setWorkspace((current) => {
+      if (current?.state !== "ready") return current;
+      let changed = false;
+      const chapters = current.chapters.map((chapter) => {
+        if (chapter.id !== chapterId || chapter.content === content) return chapter;
+        changed = true;
+        return {
+          ...chapter,
+          content,
+          characterCount: countTiptapCharacters(
+            decodeStoredChapterContent(content),
+          ),
+        };
+      });
+      return changed ? { ...current, chapters } : current;
+    });
+  }, []);
+
   return {
     workspace,
     loading,
@@ -226,5 +249,6 @@ export default function useBookWorkspace(projectId: string | undefined) {
     updateBookProfile,
     updateChapterTitle,
     saveChapterContent,
+    previewChapterContent,
   };
 }

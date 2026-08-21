@@ -94,6 +94,7 @@ export default function BookWorkspacePage() {
     updateBookProfile,
     updateChapterTitle,
     saveChapterContent,
+    previewChapterContent,
   } = useBookWorkspace(projectId);
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationId = searchParams.get("conversation");
@@ -655,6 +656,8 @@ export default function BookWorkspacePage() {
               updateChapterTitle(activeChapter.id, title)}
             onSaveContent={(content) =>
               saveChapterContent(activeChapter.id, content)}
+            onLiveContentChange={(content) =>
+              previewChapterContent(activeChapter.id, content)}
             onAskAi={(prompt) => {
               setAssistantDraft(prompt);
               setAssistantVisible(true);

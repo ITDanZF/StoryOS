@@ -43,6 +43,7 @@ type ChapterEditorPanelProps = {
   ) => void;
   readonly onSaveTitle: (title: string) => Promise<void>;
   readonly onSaveContent: (content: string) => Promise<void>;
+  readonly onLiveContentChange: (content: string) => void;
   readonly onAskAi: (prompt: string) => void;
   readonly onEditorContextChange: (context: ChapterEditorLiveContext) => void;
   readonly onEditorBridgeChange: (bridge: ChapterEditorBridge | null) => void;
@@ -57,6 +58,7 @@ export default function ChapterEditorPanel({
   onPaginationChange,
   onSaveTitle,
   onSaveContent,
+  onLiveContentChange,
   onAskAi,
   onEditorContextChange,
   onEditorBridgeChange,
@@ -69,10 +71,13 @@ export default function ChapterEditorPanel({
   useEffect(() => {
     setTitle(chapter.title);
     setSaveState("saved");
+  }, [chapter.id, chapter.title]);
+
+  useEffect(() => {
     setCharacterCount(
       countTiptapCharacters(decodeStoredChapterContent(chapter.content)),
     );
-  }, [chapter.content, chapter.id, chapter.title]);
+  }, [chapter.content]);
 
   const saveTitle = async () => {
     const normalized = title.trim();
@@ -163,6 +168,7 @@ export default function ChapterEditorPanel({
           onPageChange={onPageChange}
           onPaginationChange={onPaginationChange}
           onSave={onSaveContent}
+          onLiveContentChange={onLiveContentChange}
           onSaveStateChange={setSaveState}
           onCharacterCountChange={setCharacterCount}
           onAskAiSelection={askAiAboutSelection}

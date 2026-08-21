@@ -54,6 +54,7 @@ type ChapterRichTextEditorProps = {
     pages: readonly LiveChapterPage[],
   ) => void;
   readonly onSave: (content: string) => Promise<void>;
+  readonly onLiveContentChange: (content: string) => void;
   readonly onSaveStateChange: (state: BookSaveState) => void;
   readonly onCharacterCountChange: (count: number) => void;
   readonly onAskAiSelection: (selection: string | null) => void;
@@ -68,6 +69,7 @@ export default function ChapterRichTextEditor({
   onPageChange,
   onPaginationChange,
   onSave,
+  onLiveContentChange,
   onSaveStateChange,
   onCharacterCountChange,
   onAskAiSelection,
@@ -90,6 +92,7 @@ export default function ChapterRichTextEditor({
   const lastSavedContent = useRef(content);
   const saveSequence = useRef(Promise.resolve());
   const onSaveRef = useRef(onSave);
+  const onLiveContentChangeRef = useRef(onLiveContentChange);
   const onSaveStateChangeRef = useRef(onSaveStateChange);
   const onCharacterCountChangeRef = useRef(onCharacterCountChange);
   const onPageChangeRef = useRef(onPageChange);
@@ -97,6 +100,7 @@ export default function ChapterRichTextEditor({
   const onBridgeChangeRef = useRef(onBridgeChange);
   const documentVersionRef = useRef(0);
   onSaveRef.current = onSave;
+  onLiveContentChangeRef.current = onLiveContentChange;
   onSaveStateChangeRef.current = onSaveStateChange;
   onCharacterCountChangeRef.current = onCharacterCountChange;
   onPageChangeRef.current = onPageChange;
@@ -197,6 +201,7 @@ export default function ChapterRichTextEditor({
       const document = current.getJSON();
       const serialized = serializeTiptapDocument(document);
       pendingContent.current = serialized;
+      onLiveContentChangeRef.current(serialized);
       onCharacterCountChangeRef.current(countTiptapCharacters(document));
       onSaveStateChangeRef.current("saving");
       publishContext(current);
@@ -218,6 +223,28 @@ export default function ChapterRichTextEditor({
     },
     onBlur: flush,
   }, [flush, openFind, paginationController, publishContext]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const editorContent = serializeTiptapDocument(editor.getJSON());
+    if (content === editorContent) return;
+    const hasUnsavedLocalChange = pendingContent.current !== null &&
+      pendingContent.current !== lastSavedContent.current;
+    if (hasUnsavedLocalChange) return;
+
+    if (saveTimer.current !== null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const document = decodeStoredChapterContent(content) as unknown as Content;
+    editor.commands.setContent(document, { emitUpdate: false });
+    lastSavedContent.current = content;
+    pendingContent.current = null;
+    documentVersionRef.current += 1;
+    onCharacterCountChangeRef.current(countTiptapCharacters(editor.getJSON()));
+    onSaveStateChangeRef.current("saved");
+    publishContext(editor);
+  }, [content, editor, publishContext]);
 
   const pagination = useChapterPagination(
     paginationController,
