@@ -58,6 +58,13 @@ function summarizeInput(toolName: string, input: unknown): string {
     return `Merge text${outputPath ? ` into: ${outputPath}` : " inline"}`;
   }
 
+  if (toolName === "apply_active_editor_styles") {
+    const operationCount = Array.isArray(values.operations)
+      ? values.operations.length
+      : 0;
+    return `Apply ${operationCount} targeted editor style operation${operationCount === 1 ? "" : "s"}`;
+  }
+
   if (
     [
       "edit_text_range",

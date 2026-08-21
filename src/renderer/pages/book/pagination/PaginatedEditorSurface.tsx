@@ -393,12 +393,17 @@ export default function PaginatedEditorSurface({
 
       <div className={cn(
         "z-30 mx-auto w-fit rounded-full border border-neutral-200 bg-white/95 px-3 py-1 text-[10px] tabular-nums text-neutral-500 shadow-sm backdrop-blur",
+        snapshot.status === "failed" &&
+          "border-red-200 bg-red-50/95 text-red-700",
         layoutMode === "horizontal"
           ? "absolute bottom-2 left-1/2 -translate-x-1/2"
           : "sticky bottom-2 mt-2",
       )}>
-        第 {activePageIndex + 1} 页，共 {pageCount} 页
-        {snapshot.status === "pending" ? " · 正在排版" : ""}
+        {snapshot.status === "failed"
+          ? `排版失败：${snapshot.error ?? "未知错误"}`
+          : `第 ${activePageIndex + 1} 页，共 ${pageCount} 页${
+            snapshot.status === "pending" ? " · 正在排版" : ""
+          }`}
       </div>
     </div>
   );

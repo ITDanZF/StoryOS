@@ -1,7 +1,11 @@
 import type {
   EditorCommandName,
   EditorStyleChange,
+  EditorTargetedStyleOperation,
+  EditorTextQuery,
+  EditorTextRange,
 } from "../../../../main/agent/tools/editor/contracts.ts";
+import type { EditorTextInspection } from "./ai/richTextTargeting.ts";
 
 export type ChapterEditorLiveContext = {
   readonly version: number;
@@ -15,6 +19,15 @@ export type ChapterEditorLiveContext = {
 
 export type ChapterEditorBridge = {
   readonly getContext: () => ChapterEditorLiveContext;
+  readonly inspectText: (request: {
+    readonly queries: readonly EditorTextQuery[];
+  }) => ChapterEditorLiveContext & {
+    readonly inspections: readonly EditorTextInspection[];
+  };
+  readonly selectRange: (request: {
+    readonly expectedVersion: number;
+    readonly range: EditorTextRange;
+  }) => ChapterEditorLiveContext;
   readonly replaceRange: (request: {
     readonly expectedVersion: number;
     readonly from: number;
@@ -29,6 +42,18 @@ export type ChapterEditorBridge = {
     readonly expectedVersion: number;
     readonly style: EditorStyleChange;
   }) => ChapterEditorLiveContext;
+  readonly applyTargetedStyles: (request: {
+    readonly expectedVersion: number;
+    readonly operations: readonly EditorTargetedStyleOperation[];
+  }) => ChapterEditorLiveContext & {
+    readonly appliedTargetCount: number;
+    readonly appliedOperationCount: number;
+    readonly appliedOperations: readonly {
+      readonly index: number;
+      readonly targetCount: number;
+      readonly ranges: readonly EditorTextRange[];
+    }[];
+  };
   readonly managePage: (request: {
     readonly expectedVersion: number;
     readonly action: "append" | "move" | "delete";

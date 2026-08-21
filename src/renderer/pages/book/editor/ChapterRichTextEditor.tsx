@@ -1,4 +1,5 @@
 import type { Content, Editor } from "@tiptap/core";
+import { TextSelection } from "@tiptap/pm/state";
 import { useEditor } from "@tiptap/react";
 import {
   useCallback,
@@ -35,6 +36,8 @@ import "./chapterEditor.css";
 import { createChapterEditorExtensions } from "./chapterEditorExtensions.ts";
 import ChapterEditorToolbar from "./ChapterEditorToolbar.tsx";
 import { runEditorCommand } from "./commands/editorCommandRegistry.ts";
+import { inspectEditorText, resolveEditorTargetSelector } from "./ai/richTextTargeting.ts";
+import { buildEditorStyleTransaction } from "./ai/richTextTransactions.ts";
 import type {
   ChapterEditorBridge,
   ChapterEditorLiveContext,
@@ -231,6 +234,27 @@ export default function ChapterRichTextEditor({
     };
     const bridge: ChapterEditorBridge = {
       getContext: () => getContext(editor),
+      inspectText: ({ queries }) => ({
+        ...getContext(editor),
+        inspections: inspectEditorText(editor.state.doc, queries),
+      }),
+      selectRange: ({ expectedVersion, range }) => {
+        requireVersion(expectedVersion);
+        const [resolved] = resolveEditorTargetSelector(
+          editor.state.doc,
+          editor.state.selection,
+          { kind: "ranges", ranges: [range] },
+        );
+        editor.view.dispatch(
+          editor.state.tr.setSelection(TextSelection.create(
+            editor.state.doc,
+            resolved.from,
+            resolved.to,
+          )).scrollIntoView(),
+        );
+        editor.view.focus();
+        return getContext(editor);
+      },
       replaceRange: ({ expectedVersion, from, to, replacement }) => {
         requireVersion(expectedVersion);
         const maximum = editor.state.doc.content.size;
@@ -252,46 +276,35 @@ export default function ChapterRichTextEditor({
       },
       setStyle: ({ expectedVersion, style }) => {
         requireVersion(expectedVersion);
-        if (style.kind === "text_color") {
-          const chain = editor.chain().focus();
-          const changed = style.value
-            ? chain.setColor(style.value).run()
-            : chain.unsetColor().run();
-          if (!changed) throw new Error("Text color could not be applied.");
-        } else if (style.kind === "background_color") {
-          const chain = editor.chain().focus();
-          const changed = style.value
-            ? chain.setBackgroundColor(style.value).run()
-            : chain.unsetBackgroundColor().run();
-          if (!changed) throw new Error("Background color could not be applied.");
-        } else if (style.kind === "link") {
-          if (style.href && !/^(https?:\/\/|mailto:|tel:|#|\/)/i.test(style.href.trim())) {
-            throw new Error("Only safe HTTP(S), mail, telephone, anchor, or relative links are allowed.");
-          }
-          const chain = editor.chain().focus().extendMarkRange("link");
-          const changed = style.href
-            ? chain.setLink({ href: style.href.trim() }).run()
-            : chain.unsetLink().run();
-          if (!changed) throw new Error("Link style could not be applied.");
-        } else {
-          const format = {
-            ...(style.lineHeight === undefined
-              ? {}
-              : { lineHeight: style.lineHeight }),
-            ...(style.firstLineIndent === undefined
-              ? {}
-              : { firstLineIndent: style.firstLineIndent ? "2em" : null }),
-          };
-          if (Object.keys(format).length > 0 &&
-            !editor.commands.setParagraphFormat(format)) {
-            throw new Error("Paragraph format could not be applied.");
-          }
-          if (style.indentDelta !== undefined &&
-            !editor.commands.adjustParagraphIndent(style.indentDelta)) {
-            throw new Error("Paragraph indentation could not be applied.");
-          }
-        }
+        const selection = editor.state.selection;
+        if (selection.empty) throw new Error("The active editor selection is empty.");
+        const expectedText = editor.state.doc.textBetween(
+          selection.from,
+          selection.to,
+          "\n",
+          "\n",
+        );
+        const result = buildEditorStyleTransaction(editor.state, [{
+          selector: { kind: "selection", expectedText },
+          style,
+        }]);
+        editor.view.dispatch(result.transaction.scrollIntoView());
         return getContext(editor);
+      },
+      applyTargetedStyles: ({ expectedVersion, operations }) => {
+        requireVersion(expectedVersion);
+        const result = buildEditorStyleTransaction(editor.state, operations);
+        editor.view.dispatch(result.transaction.scrollIntoView());
+        return {
+          ...getContext(editor),
+          appliedTargetCount: result.targetCount,
+          appliedOperationCount: result.operations.length,
+          appliedOperations: result.operations.map((operation, index) => ({
+            index,
+            targetCount: operation.ranges.length,
+            ranges: operation.ranges,
+          })),
+        };
       },
       managePage: ({
         expectedVersion,

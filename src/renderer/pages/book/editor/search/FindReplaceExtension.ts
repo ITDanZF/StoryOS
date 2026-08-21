@@ -7,6 +7,7 @@ import {
   type EditorState,
 } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { findEditorTextMatches } from "../ai/richTextTargeting.ts";
 
 export type ChapterSearchMatch = {
   readonly from: number;
@@ -51,39 +52,10 @@ export function findChapterSearchMatches(
   document: ProseMirrorNode,
   query: string,
 ): readonly ChapterSearchMatch[] {
-  if (!query) return [];
-  let searchable = "";
-  const positions: number[] = [];
-  let previousTextEnd: number | null = null;
-  document.descendants((node, position) => {
-    if (!node.isText || !node.text) return true;
-    if (previousTextEnd !== null && previousTextEnd !== position) {
-      searchable += "\n";
-      positions.push(-1);
-    }
-    searchable += node.text;
-    for (let index = 0; index < node.text.length; index += 1) {
-      positions.push(position + index);
-    }
-    previousTextEnd = position + node.text.length;
-    return false;
+  return findEditorTextMatches(document, {
+    text: query,
+    caseSensitive: false,
   });
-
-  const haystack = searchable.toLocaleLowerCase("zh-CN");
-  const needle = query.toLocaleLowerCase("zh-CN");
-  const matches: ChapterSearchMatch[] = [];
-  let offset = 0;
-  while (offset <= haystack.length - needle.length) {
-    const index = haystack.indexOf(needle, offset);
-    if (index < 0) break;
-    const start = positions[index];
-    const endPosition = positions[index + needle.length - 1];
-    if (start >= 0 && endPosition >= start) {
-      matches.push({ from: start, to: endPosition + 1 });
-    }
-    offset = index + Math.max(1, needle.length);
-  }
-  return matches;
 }
 
 function nextSearchState(

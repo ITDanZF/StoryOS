@@ -33,7 +33,50 @@ export type EditorStyleChange =
   | {
       readonly kind: "link";
       readonly href: string | null;
+    }
+  | {
+      readonly kind: "mark";
+      readonly mark: "bold" | "italic" | "underline" | "strike";
+      readonly enabled: boolean;
+    }
+  | {
+      readonly kind: "clear_inline";
     };
+
+export type EditorTextQuery = {
+  readonly text: string;
+  readonly caseSensitive: boolean;
+};
+
+export type EditorTextRange = {
+  readonly from: number;
+  readonly to: number;
+  readonly expectedText: string;
+};
+
+export type EditorTargetSelector =
+  | {
+      readonly kind: "text";
+      readonly text: string;
+      readonly caseSensitive: boolean;
+      readonly expectedCount: number;
+      readonly occurrences:
+        | { readonly kind: "all" }
+        | { readonly kind: "indices"; readonly indices: readonly number[] };
+    }
+  | {
+      readonly kind: "ranges";
+      readonly ranges: readonly EditorTextRange[];
+    }
+  | {
+      readonly kind: "selection";
+      readonly expectedText: string;
+    };
+
+export type EditorTargetedStyleOperation = {
+  readonly selector: EditorTargetSelector;
+  readonly style: EditorStyleChange;
+};
 
 export type RendererEditorToolOperation =
   | { readonly kind: "get_context" }
@@ -61,6 +104,22 @@ export type RendererEditorToolOperation =
       readonly chapterId: string;
       readonly expectedVersion: number;
       readonly style: EditorStyleChange;
+    }
+  | {
+      readonly kind: "inspect_text";
+      readonly queries: readonly EditorTextQuery[];
+    }
+  | {
+      readonly kind: "select_range";
+      readonly chapterId: string;
+      readonly expectedVersion: number;
+      readonly range: EditorTextRange;
+    }
+  | {
+      readonly kind: "apply_targeted_styles";
+      readonly chapterId: string;
+      readonly expectedVersion: number;
+      readonly operations: readonly EditorTargetedStyleOperation[];
     }
   | {
       readonly kind: "page_operation";

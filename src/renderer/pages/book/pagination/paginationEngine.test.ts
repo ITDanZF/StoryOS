@@ -109,4 +109,25 @@ describe("pagination engine", () => {
       documentEnd: 4,
     })).toThrow("out of order");
   });
+
+  it("keeps repeated reflows stable when fed the same clean measurements", () => {
+    const fragments = [
+      fragment("line-1", 1, 2, 60),
+      fragment("line-2", 2, 3, 60),
+      fragment("line-3", 3, 4, 60),
+      fragment("line-4", 4, 5, 60),
+      fragment("line-5", 5, 6, 60),
+    ];
+    const paginate = () => paginateFragments({
+      fragments,
+      contentHeight: 120,
+      documentStart: 1,
+      documentEnd: 6,
+    });
+
+    const first = paginate();
+    const second = paginate();
+    expect(first).toHaveLength(3);
+    expect(second).toEqual(first);
+  });
 });

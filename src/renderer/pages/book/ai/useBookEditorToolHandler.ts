@@ -63,39 +63,60 @@ export default function useBookEditorToolHandler({
     let snapshot: ChapterEditorLiveContext;
     if (operation.kind === "get_context") {
       snapshot = bridge.getContext();
+    } else if (operation.kind === "inspect_text") {
+      snapshot = bridge.inspectText({ queries: operation.queries });
     } else {
       if (operation.chapterId !== activeChapter.id) {
         throw new Error(
           "The active chapter changed before the editor tool could run.",
         );
       }
-      snapshot = operation.kind === "replace_range"
-        ? bridge.replaceRange({
+      switch (operation.kind) {
+        case "replace_range":
+          snapshot = bridge.replaceRange({
             expectedVersion: operation.expectedVersion,
             from: operation.from,
             to: operation.to,
             replacement: operation.replacement,
-          })
-        : operation.kind === "run_command"
-          ? bridge.runCommand({
-              expectedVersion: operation.expectedVersion,
-              command: operation.command,
-            })
-          : operation.kind === "set_style"
-            ? bridge.setStyle({
-                expectedVersion: operation.expectedVersion,
-                style: operation.style,
-              })
-            : bridge.managePage({
-              expectedVersion: operation.expectedVersion,
-              action: operation.action,
-              ...(operation.pageNumber === undefined
-                ? {}
-                : { pageNumber: operation.pageNumber }),
-              ...(operation.targetPageNumber === undefined
-                ? {}
-                : { targetPageNumber: operation.targetPageNumber }),
-            });
+          });
+          break;
+        case "run_command":
+          snapshot = bridge.runCommand({
+            expectedVersion: operation.expectedVersion,
+            command: operation.command,
+          });
+          break;
+        case "set_style":
+          snapshot = bridge.setStyle({
+            expectedVersion: operation.expectedVersion,
+            style: operation.style,
+          });
+          break;
+        case "select_range":
+          snapshot = bridge.selectRange({
+            expectedVersion: operation.expectedVersion,
+            range: operation.range,
+          });
+          break;
+        case "apply_targeted_styles":
+          snapshot = bridge.applyTargetedStyles({
+            expectedVersion: operation.expectedVersion,
+            operations: operation.operations,
+          });
+          break;
+        case "page_operation":
+          snapshot = bridge.managePage({
+            expectedVersion: operation.expectedVersion,
+            action: operation.action,
+            ...(operation.pageNumber === undefined
+              ? {}
+              : { pageNumber: operation.pageNumber }),
+            ...(operation.targetPageNumber === undefined
+              ? {}
+              : { targetPageNumber: operation.targetPageNumber }),
+          });
+          break;
+      }
     }
 
     return {

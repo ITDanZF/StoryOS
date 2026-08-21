@@ -5,6 +5,12 @@ import type {
   EditorStyleChange,
   RendererEditorToolClient,
 } from "./contracts.ts";
+import {
+  editorStyleSchema,
+  editorTargetSelectorSchema,
+  toEditorStyle,
+  toEditorTargetSelector,
+} from "./editorToolSchemas.ts";
 
 const editorCommandSchema = z.enum([
   "bold",
@@ -101,6 +107,7 @@ export function createEditorTools(
       description: [
         "Run a supported Tiptap formatting command on the active editor selection.",
         "First call get_active_editor_context and pass its exact chapterId and version.",
+        "If there is no selection, do not ask the user to select text: call inspect_active_editor_text and select_active_editor_range first.",
       ].join(" "),
       schema: z.object({
         chapter_id: z.string().min(1),
@@ -157,48 +164,108 @@ export function createEditorTools(
     {
       name: "style_active_editor_selection",
       description: [
-        "Apply text color, background highlight, paragraph spacing/indentation, or a safe link to the active editor selection.",
+        "Apply marks, text color, background highlight, paragraph spacing/indentation, a safe link, or clear inline formatting on the active editor selection.",
         "First call get_active_editor_context and pass its exact chapterId and version.",
         "Use null to clear a color, highlight, line height, or link.",
+        "If there is no selection, do not ask the user to select text: use inspect_active_editor_text and apply_active_editor_styles instead.",
       ].join(" "),
       schema: z.object({
         chapter_id: z.string().min(1),
         expected_version: z.number().int().nonnegative(),
-        style: z.discriminatedUnion("kind", [
-          z.object({
-            kind: z.literal("text_color"),
-            value: z.string().regex(/^#[0-9a-f]{6}$/i).nullable(),
-          }),
-          z.object({
-            kind: z.literal("background_color"),
-            value: z.string().regex(/^#[0-9a-f]{6}$/i).nullable(),
-          }),
-          z.object({
-            kind: z.literal("paragraph"),
-            lineHeight: z.enum(["1", "1.5", "1.75", "2"]).nullable().optional(),
-            firstLineIndent: z.boolean().optional(),
-            indentDelta: z.union([z.literal(-2), z.literal(2)]).optional(),
-          }).refine(
-            (value) => value.lineHeight !== undefined ||
-              value.firstLineIndent !== undefined ||
-              value.indentDelta !== undefined,
-            { message: "At least one paragraph style must be provided." },
-          ),
-          z.object({
-            kind: z.literal("link"),
-            href: z.string().min(1).max(2048).nullable(),
-          }),
-        ]),
+        style: editorStyleSchema,
+      }),
+    },
+  );
+
+  const inspectText = tool(
+    async ({ queries }) => JSON.stringify(await client.invoke(projectId, {
+      kind: "inspect_text",
+      queries: queries.map((query) => ({
+        text: query.text,
+        caseSensitive: query.case_sensitive,
+      })),
+    }), null, 2),
+    {
+      name: "inspect_active_editor_text",
+      description: [
+        "Find one or more literal strings in the live active editor and return their real ProseMirror ranges, snippets, counts, and editor version.",
+        "Call this before apply_active_editor_styles so expected counts can be approved and conflict-checked.",
+      ].join(" "),
+      schema: z.object({
+        queries: z.array(z.object({
+          text: z.string().min(1).max(200),
+          case_sensitive: z.boolean().optional().default(true),
+        })).min(1).max(20),
+      }),
+    },
+  );
+
+  const selectRange = tool(
+    async ({ chapter_id, expected_version, from, to, expected_text }) =>
+      JSON.stringify(await client.invoke(projectId, {
+        kind: "select_range",
+        chapterId: chapter_id,
+        expectedVersion: expected_version,
+        range: { from, to, expectedText: expected_text },
+      }), null, 2),
+    {
+      name: "select_active_editor_range",
+      description: [
+        "Select an exact verified ProseMirror range in the visible editor.",
+        "Use a range and version returned by inspect_active_editor_text.",
+        "This is mainly for selection-dependent structural commands; use apply_active_editor_styles for batch inline styling.",
+      ].join(" "),
+      schema: z.object({
+        chapter_id: z.string().min(1),
+        expected_version: z.number().int().nonnegative(),
+        from: z.number().int().nonnegative(),
+        to: z.number().int().positive(),
+        expected_text: z.string().min(1),
+      }),
+    },
+  );
+
+  const applyTargetedStyles = tool(
+    async ({ chapter_id, expected_version, operations }) => JSON.stringify(
+      await client.invoke(projectId, {
+        kind: "apply_targeted_styles",
+        chapterId: chapter_id,
+        expectedVersion: expected_version,
+        operations: operations.map((operation) => ({
+          selector: toEditorTargetSelector(operation.selector),
+          style: toEditorStyle(operation.style),
+        })),
+      }),
+      null,
+      2,
+    ),
+    {
+      name: "apply_active_editor_styles",
+      description: [
+        "Atomically apply different rich-text styles to multiple literal text matches or verified ranges in the live editor.",
+        "First call inspect_active_editor_text, then pass its exact chapterId, version, and match counts.",
+        "All selectors are validated before one undoable transaction; no partial changes are written on conflict.",
+      ].join(" "),
+      schema: z.object({
+        chapter_id: z.string().min(1),
+        expected_version: z.number().int().nonnegative(),
+        operations: z.array(z.object({
+          selector: editorTargetSelectorSchema,
+          style: editorStyleSchema,
+        })).min(1).max(50),
       }),
     },
   );
 
   return [
     getContext,
+    inspectText,
     openChapter,
+    selectRange,
     replaceRange,
     runCommand,
     setStyle,
+    applyTargetedStyles,
     managePage,
   ];
 }

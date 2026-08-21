@@ -10,6 +10,48 @@ function truncate(value: string): string {
   return `${value.slice(0, MAX_PREVIEW_LENGTH)}\n… preview truncated …`;
 }
 
+function describeEditorSelector(value: unknown): string {
+  if (!value || typeof value !== "object") return "未知目标";
+  const selector = value as Record<string, unknown>;
+  if (selector.kind === "text") {
+    const text = typeof selector.text === "string" ? selector.text : "<未知文本>";
+    const expectedCount = typeof selector.expected_count === "number"
+      ? selector.expected_count
+      : "?";
+    const occurrences = selector.occurrences;
+    const selectedCount = occurrences && typeof occurrences === "object" &&
+      Array.isArray((occurrences as Record<string, unknown>).indices)
+      ? ((occurrences as Record<string, unknown>).indices as unknown[]).length
+      : expectedCount;
+    return `“${text}”：${selectedCount} 处（全文匹配 ${expectedCount} 处）`;
+  }
+  if (selector.kind === "ranges" && Array.isArray(selector.ranges)) {
+    return `明确文本范围：${selector.ranges.length} 处`;
+  }
+  return "未知目标";
+}
+
+function describeEditorStyle(value: unknown): string {
+  if (!value || typeof value !== "object") return "未知格式";
+  const style = value as Record<string, unknown>;
+  switch (style.kind) {
+    case "text_color":
+      return `文字颜色 ${String(style.value ?? "清除")}`;
+    case "background_color":
+      return `背景高亮 ${String(style.value ?? "清除")}`;
+    case "mark":
+      return `${String(style.mark)}：${style.enabled === true ? "启用" : "移除"}`;
+    case "link":
+      return `链接 ${String(style.href ?? "移除")}`;
+    case "paragraph":
+      return "段落格式";
+    case "clear_inline":
+      return "清除行内格式";
+    default:
+      return "未知格式";
+  }
+}
+
 export function createToolApprovalPreview(
   request: ToolApprovalRequest,
 ): string {
@@ -46,6 +88,22 @@ export function createToolApprovalPreview(
         content,
       ].join("\n"),
     );
+  }
+
+  if (request.toolName === "apply_active_editor_styles") {
+    const operations = Array.isArray(input.operations) ? input.operations : [];
+    return truncate([
+      "批量格式化当前章节",
+      `版本：${String(input.expected_version ?? "未知")}`,
+      `操作组：${operations.length}`,
+      "",
+      ...operations.map((operation, index) => {
+        const value = operation && typeof operation === "object"
+          ? operation as Record<string, unknown>
+          : {};
+        return `${index + 1}. ${describeEditorSelector(value.selector)} → ${describeEditorStyle(value.style)}`;
+      }),
+    ].join("\n"));
   }
 
   if (

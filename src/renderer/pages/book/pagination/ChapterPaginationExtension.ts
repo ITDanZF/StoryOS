@@ -14,20 +14,21 @@ import {
 } from "./paginationModel.ts";
 import {
   measurePaginationFragments,
-  type ExistingPaginationGap,
 } from "./domPaginationMeasurer.ts";
 
 type PaginationPluginState = {
   readonly snapshot: ChapterPaginationSnapshot;
   readonly decorations: DecorationSet;
-  readonly gaps: readonly ExistingPaginationGap[];
 };
 
 type ApplyPaginationMeta = {
   readonly type: "apply";
   readonly snapshot: ChapterPaginationSnapshot;
   readonly decorations: DecorationSet;
-  readonly gaps: readonly ExistingPaginationGap[];
+};
+
+type ClearPaginationMeta = {
+  readonly type: "clear-for-measurement";
 };
 
 const chapterPaginationKey = new PluginKey<PaginationPluginState>(
@@ -78,22 +79,21 @@ function mapPluginState(
 ): PaginationPluginState {
   const meta = transaction.getMeta(chapterPaginationKey) as
     | ApplyPaginationMeta
+    | ClearPaginationMeta
     | undefined;
+  if (meta?.type === "clear-for-measurement") {
+    return { ...current, decorations: DecorationSet.empty };
+  }
   if (meta?.type === "apply") {
     return {
       snapshot: meta.snapshot,
       decorations: meta.decorations,
-      gaps: meta.gaps,
     };
   }
   if (!transaction.docChanged) return current;
   return {
     snapshot: current.snapshot,
     decorations: current.decorations.map(transaction.mapping, transaction.doc),
-    gaps: current.gaps.map((gap) => ({
-      ...gap,
-      position: transaction.mapping.map(gap.position, 1),
-    })),
   };
 }
 
@@ -103,9 +103,7 @@ function createGapDecorations(
   pageSpec: ChapterPageSpec,
 ): {
   readonly decorations: DecorationSet;
-  readonly gaps: readonly ExistingPaginationGap[];
 } {
-  const gaps: ExistingPaginationGap[] = [];
   const decorations: Decoration[] = [];
   for (let pageIndex = 0; pageIndex < snapshot.pages.length - 1; pageIndex += 1) {
     const page = snapshot.pages[pageIndex];
@@ -122,7 +120,6 @@ function createGapDecorations(
       1,
       Math.min(nextPage.from, view.state.doc.content.size - 1),
     );
-    gaps.push({ position, height });
     decorations.push(Decoration.widget(position, () => {
       const element = document.createElement("span");
       element.className = "chapter-pagination-gap";
@@ -138,7 +135,6 @@ function createGapDecorations(
   }
   return {
     decorations: DecorationSet.create(view.state.doc, decorations),
-    gaps,
   };
 }
 
@@ -151,7 +147,6 @@ function createPaginationPlugin(
       init: () => ({
         snapshot: EMPTY_SNAPSHOT,
         decorations: DecorationSet.empty,
-        gaps: [],
       }),
       apply: mapPluginState,
     },
@@ -163,7 +158,9 @@ function createPaginationPlugin(
     view(view) {
       let generation = 0;
       let frame: number | null = null;
+      let settleFrame: number | null = null;
       let disposed = false;
+      let observedWidth = 0;
 
       const publishPending = () => {
         const current = options.controller.getSnapshot();
@@ -182,13 +179,29 @@ function createPaginationPlugin(
           frame = window.requestAnimationFrame(run);
           return;
         }
+        const editorRect = view.dom.getBoundingClientRect();
+        if (!view.dom.isConnected || editorRect.width < 1 || editorRect.height < 1) {
+          frame = window.requestAnimationFrame(run);
+          return;
+        }
         const requestedGeneration = generation;
         try {
           const currentState = chapterPaginationKey.getState(view.state);
-          const fragments = measurePaginationFragments(
-            view,
-            currentState?.gaps ?? [],
-          );
+          // Pagination gaps are presentation-only. Measuring while they are in
+          // the DOM creates a feedback loop where a later reflow can count or
+          // over-correct its own previous gaps and collapse multiple pages into
+          // one. Clear them synchronously, measure the clean document, then
+          // install a fresh decoration set in the same animation frame.
+          if (currentState && currentState.decorations.find().length > 0) {
+            view.dispatch(
+              view.state.tr
+                .setMeta(chapterPaginationKey, {
+                  type: "clear-for-measurement",
+                } satisfies ClearPaginationMeta)
+                .setMeta("addToHistory", false),
+            );
+          }
+          const fragments = measurePaginationFragments(view);
           const documentEnd = Math.max(1, view.state.doc.content.size - 1);
           const pages = paginateFragments({
             fragments,
@@ -209,7 +222,6 @@ function createPaginationPlugin(
               type: "apply",
               snapshot,
               decorations: layout.decorations,
-              gaps: layout.gaps,
             } satisfies ApplyPaginationMeta)
             .setMeta("addToHistory", false);
           view.dispatch(transaction);
@@ -233,6 +245,36 @@ function createPaginationPlugin(
         frame = window.requestAnimationFrame(run);
       };
 
+      // The editor can mount before its surrounding workspace has finished its
+      // first layout. A measurement taken in that transient state may see all
+      // caret coordinates on one visual line and incorrectly publish one page.
+      // Reflow once more after two paints, and whenever the usable editor width
+      // changes or the window becomes visible/focused again.
+      const scheduleAfterLayoutSettles = () => {
+        if (settleFrame !== null) window.cancelAnimationFrame(settleFrame);
+        settleFrame = window.requestAnimationFrame(() => {
+          settleFrame = window.requestAnimationFrame(() => {
+            settleFrame = null;
+            if (!disposed) schedule();
+          });
+        });
+      };
+
+      const resizeObserver = new ResizeObserver((entries) => {
+        const width = entries[0]?.contentRect.width ?? 0;
+        if (width < 1 || Math.abs(width - observedWidth) < 0.5) return;
+        observedWidth = width;
+        scheduleAfterLayoutSettles();
+      });
+      resizeObserver.observe(view.dom);
+
+      const onWindowFocus = () => scheduleAfterLayoutSettles();
+      const onVisibilityChange = () => {
+        if (document.visibilityState === "visible") scheduleAfterLayoutSettles();
+      };
+      window.addEventListener("focus", onWindowFocus);
+      document.addEventListener("visibilitychange", onVisibilityChange);
+
       const onCompositionEnd = () => schedule();
       view.dom.addEventListener("compositionend", onCompositionEnd);
       options.controller.setRequestReflow(schedule);
@@ -240,6 +282,7 @@ function createPaginationPlugin(
         if (!disposed) schedule();
       });
       schedule();
+      scheduleAfterLayoutSettles();
 
       return {
         update(nextView, previousState) {
@@ -249,6 +292,10 @@ function createPaginationPlugin(
         destroy() {
           disposed = true;
           if (frame !== null) window.cancelAnimationFrame(frame);
+          if (settleFrame !== null) window.cancelAnimationFrame(settleFrame);
+          resizeObserver.disconnect();
+          window.removeEventListener("focus", onWindowFocus);
+          document.removeEventListener("visibilitychange", onVisibilityChange);
           view.dom.removeEventListener("compositionend", onCompositionEnd);
           options.controller.setRequestReflow(null);
         },

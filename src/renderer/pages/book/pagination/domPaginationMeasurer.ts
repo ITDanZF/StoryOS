@@ -5,36 +5,19 @@ import type {
   PaginationFragmentKind,
 } from "./paginationModel.ts";
 
-export type ExistingPaginationGap = {
-  readonly position: number;
-  readonly height: number;
-};
-
 type LogicalCoordinates = {
   readonly top: number;
   readonly bottom: number;
 };
 
-function gapHeightBefore(
-  position: number,
-  gaps: readonly ExistingPaginationGap[],
-): number {
-  return gaps.reduce(
-    (total, gap) => total + (gap.position <= position ? gap.height : 0),
-    0,
-  );
-}
-
 function coordinatesAtPosition(
   view: EditorView,
   position: number,
-  gaps: readonly ExistingPaginationGap[],
 ): LogicalCoordinates {
   const coordinates = view.coordsAtPos(position, 1);
-  const removedHeight = gapHeightBefore(position, gaps);
   return {
-    top: coordinates.top - removedHeight,
-    bottom: coordinates.bottom - removedHeight,
+    top: coordinates.top,
+    bottom: coordinates.bottom,
   };
 }
 
@@ -58,7 +41,6 @@ function measureTextBlock(
   node: ProseMirrorNode,
   position: number,
   parent: ProseMirrorNode | null,
-  gaps: readonly ExistingPaginationGap[],
 ): readonly PaginationFragment[] {
   const contentStart = position + 1;
   const contentEnd = position + node.nodeSize - 1;
@@ -90,14 +72,14 @@ function measureTextBlock(
   const lines: PaginationFragment[] = [];
   let lineStart = contentStart;
   while (lineStart < contentEnd) {
-    const startCoordinates = coordinatesAtPosition(view, lineStart, gaps);
+    const startCoordinates = coordinatesAtPosition(view, lineStart);
     const threshold = startCoordinates.top + 1;
     let low = lineStart + 1;
     let high = contentEnd;
     let nextLineStart = contentEnd;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      const middleCoordinates = coordinatesAtPosition(view, middle, gaps);
+      const middleCoordinates = coordinatesAtPosition(view, middle);
       if (middleCoordinates.top > threshold) {
         nextLineStart = middle;
         high = middle - 1;
@@ -109,7 +91,6 @@ function measureTextBlock(
     const lineEndCoordinates = coordinatesAtPosition(
       view,
       Math.max(lineStart, nextLineStart - 1),
-      gaps,
     );
     const lineHeight = Math.max(
       configuredLineHeight,
@@ -146,7 +127,6 @@ function measureTextBlock(
 
 export function measurePaginationFragments(
   view: EditorView,
-  gaps: readonly ExistingPaginationGap[],
 ): readonly PaginationFragment[] {
   const fragments: PaginationFragment[] = [];
   view.state.doc.descendants((node, position, parent) => {
@@ -181,7 +161,7 @@ export function measurePaginationFragments(
       return false;
     }
     if (node.isTextblock) {
-      fragments.push(...measureTextBlock(view, node, position, parent, gaps));
+      fragments.push(...measureTextBlock(view, node, position, parent));
       return false;
     }
     if (node.isBlock && node.isAtom) {

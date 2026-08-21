@@ -68,7 +68,7 @@ async function measureChapter(
     await nextFrame();
     const documentEnd = Math.max(1, editor.state.doc.content.size - 1);
     const pages = paginateFragments({
-      fragments: measurePaginationFragments(editor.view, []),
+      fragments: measurePaginationFragments(editor.view),
       contentHeight: CHAPTER_PAGE_CONTENT_HEIGHT,
       documentStart: 1,
       documentEnd,
