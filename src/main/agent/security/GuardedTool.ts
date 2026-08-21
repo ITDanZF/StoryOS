@@ -54,6 +54,17 @@ function summarizeInput(toolName: string, input: unknown): string {
     const skillId = typeof values.id === "string" ? values.id : "<unknown>";
     return `Create skill: ${skillId}`;
   }
+
+  if (
+    toolName === "replace_book_chapter_text" ||
+    toolName === "rewrite_book_chapter_text"
+  ) {
+    const chapterId = typeof values.chapter_id === "string"
+      ? values.chapter_id
+      : "<unknown>";
+    return `Edit saved chapter text: ${chapterId}`;
+  }
+
   if (toolName === "merge_text") {
     return `Merge text${outputPath ? ` into: ${outputPath}` : " inline"}`;
   }

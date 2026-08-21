@@ -10,6 +10,8 @@ const BOOK_MUTATION_TOOL_NAMES = new Set([
   "create_book_chapter",
   "update_book_chapter",
   "delete_book_chapter",
+  "replace_book_chapter_text",
+  "rewrite_book_chapter_text",
 ]);
 
 type UseBookToolRefreshOptions = {

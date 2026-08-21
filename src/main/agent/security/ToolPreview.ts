@@ -52,6 +52,54 @@ function describeEditorStyle(value: unknown): string {
   }
 }
 
+function createSimpleLineDiff(previous: string, next: string): string {
+  if (previous === next) return "No textual changes.";
+
+  const previousLines = previous.split(/\r?\n/);
+  const nextLines = next.split(/\r?\n/);
+  let prefix = 0;
+  while (
+    prefix < previousLines.length &&
+    prefix < nextLines.length &&
+    previousLines[prefix] === nextLines[prefix]
+  ) {
+    prefix += 1;
+  }
+
+  let suffix = 0;
+  while (
+    suffix + prefix < previousLines.length &&
+    suffix + prefix < nextLines.length &&
+    previousLines[previousLines.length - 1 - suffix] ===
+      nextLines[nextLines.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+
+  const contextStart = Math.max(0, prefix - 2);
+  const contextEndPrevious = Math.min(previousLines.length, previousLines.length - suffix + 2);
+  const contextEndNext = Math.min(nextLines.length, nextLines.length - suffix + 2);
+  const lines: string[] = [];
+  if (contextStart > 0) lines.push(" …");
+  for (let index = contextStart; index < prefix; index += 1) {
+    lines.push(` ${previousLines[index]}`);
+  }
+  for (let index = prefix; index < previousLines.length - suffix; index += 1) {
+    lines.push(`-${previousLines[index]}`);
+  }
+  for (let index = prefix; index < nextLines.length - suffix; index += 1) {
+    lines.push(`+${nextLines[index]}`);
+  }
+  const unchangedTailStart = Math.max(prefix, previousLines.length - suffix);
+  for (let index = unchangedTailStart; index < contextEndPrevious; index += 1) {
+    lines.push(` ${previousLines[index]}`);
+  }
+  if (contextEndPrevious < previousLines.length || contextEndNext < nextLines.length) {
+    lines.push(" …");
+  }
+  return lines.join("\n");
+}
+
 export function createToolApprovalPreview(
   request: ToolApprovalRequest,
 ): string {
@@ -103,6 +151,41 @@ export function createToolApprovalPreview(
           : {};
         return `${index + 1}. ${describeEditorSelector(value.selector)} → ${describeEditorStyle(value.style)}`;
       }),
+    ].join("\n"));
+  }
+
+  if (request.toolName === "replace_book_chapter_text") {
+    const previous = typeof input.expected_text === "string"
+      ? input.expected_text
+      : "";
+    const next = typeof input.replacement_text === "string"
+      ? input.replacement_text
+      : "";
+    return truncate([
+      "保存层章节正文替换",
+      `章节：${String(input.chapter_id ?? "未知")}`,
+      `期望修订：${String(input.expected_revision_number ?? "无")}`,
+      `范围：${input.replace_all === true ? "全部匹配" : `第 ${String(input.occurrence ?? 1)} 处匹配`}`,
+      "",
+      "--- current excerpt",
+      "+++ proposed excerpt",
+      createSimpleLineDiff(previous, next),
+    ].join("\n"));
+  }
+
+  if (request.toolName === "rewrite_book_chapter_text") {
+    const previous = typeof input.expected_current_text === "string"
+      ? input.expected_current_text
+      : "";
+    const next = typeof input.new_text === "string" ? input.new_text : "";
+    return truncate([
+      "保存层章节全文改写",
+      `章节：${String(input.chapter_id ?? "未知")}`,
+      `期望修订：${String(input.expected_revision_number ?? "无")}`,
+      "",
+      "--- current chapter",
+      "+++ proposed chapter",
+      createSimpleLineDiff(previous, next),
     ].join("\n"));
   }
 
