@@ -19,6 +19,7 @@ import {
 import { cn } from "../../../../lib/utils.ts";
 import {
   calculateChapterPageScale,
+  chapterPaginationStageHeight,
   CHAPTER_PAGE_SPEC,
   type ChapterPaginationSnapshot,
 } from "./paginationModel.ts";
@@ -26,6 +27,7 @@ import {
   chapterPageContainsPosition,
   editablePositionInChapterPage,
 } from "./useChapterPagination.ts";
+import { chapterPaginationCssVariables } from "./paginationLayout.ts";
 import "./pagination.css";
 
 type PaginatedEditorSurfaceProps = {
@@ -74,9 +76,12 @@ export default function PaginatedEditorSurface({
   );
   activePageIndexRef.current = activePageIndex;
   const pageCount = Math.max(1, snapshot.pages.length);
+  const renderedPageCount = Math.max(
+    pageCount,
+    snapshot.capacityPageCount ?? pageCount,
+  );
   const pageStride = CHAPTER_PAGE_SPEC.height + CHAPTER_PAGE_SPEC.pageGap;
-  const stageHeight = pageCount * CHAPTER_PAGE_SPEC.height +
-    (pageCount - 1) * CHAPTER_PAGE_SPEC.pageGap;
+  const stageHeight = chapterPaginationStageHeight(renderedPageCount);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -161,6 +166,7 @@ export default function PaginatedEditorSurface({
       : stageHeight) * scale,
   } satisfies CSSProperties;
   const stageStyle = {
+    ...chapterPaginationCssVariables(),
     width: CHAPTER_PAGE_SPEC.width,
     height: stageHeight,
     minHeight: stageHeight,
@@ -348,11 +354,15 @@ export default function PaginatedEditorSurface({
       >
         <div
           ref={stageRef}
-          className="chapter-pagination-stage absolute left-0"
+          className={cn(
+            "chapter-pagination-stage absolute left-0",
+            snapshot.status === "pending" &&
+              "chapter-pagination-stage-pending",
+          )}
           style={stageStyle}
         >
           <div className="chapter-pagination-sheets" aria-hidden="true">
-            {Array.from({ length: pageCount }, (_, pageIndex) => (
+            {Array.from({ length: renderedPageCount }, (_, pageIndex) => (
               <div
                 className="chapter-pagination-sheet absolute left-0"
                 key={pageIndex}
@@ -361,7 +371,7 @@ export default function PaginatedEditorSurface({
                 <footer className="chapter-pagination-footer absolute inset-x-[72px] bottom-0 flex h-[54px] items-center justify-between border-t text-[10px]">
                   <span>第 {chapterNumber} 章</span>
                   <strong className="font-medium tabular-nums text-neutral-500">
-                    第 {pageIndex + 1} / {pageCount} 页
+                    第 {pageIndex + 1} / {renderedPageCount} 页
                   </strong>
                   <span>StoryOS</span>
                 </footer>

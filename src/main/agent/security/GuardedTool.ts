@@ -11,16 +11,18 @@ import ToolPolicy, {
 } from "./ToolPolicy.ts";
 
 export type ToolExecutionEvent =
-  | { readonly type: "tool_started"; readonly request: ToolApprovalRequest }
+  | { readonly type: "tool_started"; readonly toolCallId: string; readonly request: ToolApprovalRequest }
   | {
       readonly type: "tool_approval_requested";
+      readonly toolCallId: string;
       readonly request: ToolApprovalRequest;
     }
-  | { readonly type: "tool_approved"; readonly request: ToolApprovalRequest }
-  | { readonly type: "tool_rejected"; readonly request: ToolApprovalRequest }
-  | { readonly type: "tool_completed"; readonly request: ToolApprovalRequest }
+  | { readonly type: "tool_approved"; readonly toolCallId: string; readonly request: ToolApprovalRequest }
+  | { readonly type: "tool_rejected"; readonly toolCallId: string; readonly request: ToolApprovalRequest }
+  | { readonly type: "tool_completed"; readonly toolCallId: string; readonly request: ToolApprovalRequest }
   | {
       readonly type: "tool_failed";
+      readonly toolCallId: string;
       readonly request: ToolApprovalRequest;
       readonly error: string;
     };
@@ -57,7 +59,8 @@ function summarizeInput(toolName: string, input: unknown): string {
 
   if (
     toolName === "replace_book_chapter_text" ||
-    toolName === "rewrite_book_chapter_text"
+    toolName === "rewrite_book_chapter_text" ||
+    toolName === "generate_book_chapter_content"
   ) {
     const chapterId = typeof values.chapter_id === "string"
       ? values.chapter_id
@@ -121,6 +124,7 @@ export function guardTools(
       schema: originalTool.schema,
       returnDirect: originalTool.returnDirect,
       func: async (input, _runManager, config) => {
+        const toolCallId = `tool_call_${crypto.randomUUID()}`;
         const request: ToolApprovalRequest = Object.freeze({
           toolName: originalTool.name,
           summary: summarizeInput(originalTool.name, input),
@@ -129,19 +133,20 @@ export function guardTools(
         const permission = policy.getPermission(originalTool.name, input);
 
         if (permission === "deny") {
-          await emit(options.onEvent, { type: "tool_rejected", request });
+          await emit(options.onEvent, { type: "tool_rejected", toolCallId, request });
           return `Tool execution denied by policy: ${originalTool.name}`;
         }
 
         if (permission === "ask") {
           await emit(options.onEvent, {
             type: "tool_approval_requested",
+            toolCallId,
             request,
           });
           const decision = await approval(request);
 
           if (decision === "deny") {
-            await emit(options.onEvent, { type: "tool_rejected", request });
+            await emit(options.onEvent, { type: "tool_rejected", toolCallId, request });
             return `Tool execution denied by user: ${originalTool.name}`;
           }
 
@@ -149,19 +154,20 @@ export function guardTools(
             policy.allowForSession(originalTool.name);
           }
 
-          await emit(options.onEvent, { type: "tool_approved", request });
+          await emit(options.onEvent, { type: "tool_approved", toolCallId, request });
         }
 
         options.budget?.consumeToolCall(originalTool.name);
-        await emit(options.onEvent, { type: "tool_started", request });
+        await emit(options.onEvent, { type: "tool_started", toolCallId, request });
 
         try {
           const result = await originalTool.invoke(input, config);
-          await emit(options.onEvent, { type: "tool_completed", request });
+          await emit(options.onEvent, { type: "tool_completed", toolCallId, request });
           return result;
         } catch (error) {
           await emit(options.onEvent, {
             type: "tool_failed",
+            toolCallId,
             request,
             error: error instanceof Error ? error.message : String(error),
           });

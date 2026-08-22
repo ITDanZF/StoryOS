@@ -35,6 +35,7 @@ import type {
     UpdateBookRequest,
     UpdateBookChapterRequest,
 } from "../../main/agent/application/bookWorkspaceContracts.ts";
+import type { ChapterGenerationMode } from "../../main/agent/application/chapterGenerationEvents.ts";
 import type {
     NovelDto,
     VolumeDto,
@@ -153,6 +154,7 @@ export type {
     BookChapterRevisionResult,
     BookWorkspaceChapterDto,
     BookWorkspaceSnapshot,
+    ChapterGenerationMode,
     CreateBookRequest,
     ConversationApplicationEvent,
     ConversationRef,

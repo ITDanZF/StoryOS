@@ -8,16 +8,20 @@
 
 .chapter-rich-text {
   min-height: 650px;
-  padding: clamp(48px, 7vw, 88px) clamp(36px, 7vw, 84px);
+  padding: var(--chapter-page-margin-top, 72px)
+    var(--chapter-page-margin-right, 72px)
+    var(--chapter-page-margin-bottom, 72px)
+    var(--chapter-page-margin-left, 72px);
   outline: none;
   color: #292724;
   caret-color: #7c3aed;
-  font-family: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC",
-    STSong, SimSun, "Times New Roman", serif;
-  font-size: clamp(16px, calc(15px + 0.22vw), 18px);
+  font-family: var(--chapter-body-font-family,
+    "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC",
+    STSong, SimSun, "Times New Roman", serif);
+  font-size: var(--chapter-body-font-size, 17px);
   font-weight: 400;
-  letter-spacing: 0.02em;
-  line-height: 1.9;
+  letter-spacing: var(--chapter-body-letter-spacing, 0.02em);
+  line-height: var(--chapter-body-line-height, 1.9);
   overflow-wrap: break-word;
   text-rendering: optimizeLegibility;
 }
@@ -144,17 +148,6 @@
 
 .book-pagination-measure-host .book-pagination-rich-text {
   box-sizing: border-box;
-  width: 720px;
-  min-height: 960px;
-  padding: 72px;
-  font-size: 17px;
-  line-height: 1.9;
-}
-
-@media (max-width: 720px) {
-  .chapter-rich-text {
-    padding: 36px 28px 56px;
-    font-size: 16px;
-    line-height: 1.85;
-  }
+  width: var(--chapter-page-width, 720px);
+  min-height: var(--chapter-page-height, 960px);
 }

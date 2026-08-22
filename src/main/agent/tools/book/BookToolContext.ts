@@ -1,9 +1,11 @@
 import type NovelApplication from "../../application/NovelApplication.ts";
+import type ChapterGenerationService from "../../book-generation/ChapterGenerationService.ts";
 
 export default class BookToolContext {
   constructor(
     readonly projectId: string,
     readonly novels: NovelApplication,
+    readonly chapterGeneration?: ChapterGenerationService,
   ) {}
 
   requireBook() {

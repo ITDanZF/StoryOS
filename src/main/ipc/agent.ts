@@ -65,6 +65,11 @@ function requireContent(value: unknown): string {
     return value;
 }
 
+function requireNullableRevisionId(value: unknown): string | null {
+    if (value === null) return null;
+    return requireText(value, "Expected chapter revision id");
+}
+
 function requireConversationTurnContext(
     value: ConversationTurnContext,
 ): ConversationTurnContext {
@@ -256,6 +261,9 @@ export function registerAgentIpc(
         projectId: requireText(request?.projectId, "Project id"),
         chapterId: requireText(request?.chapterId, "Chapter id"),
         content: requireContent(request?.content),
+        expectedCurrentRevisionId: requireNullableRevisionId(
+            request?.expectedCurrentRevisionId,
+        ),
     }));
     handle(AGENT_IPC_CHANNELS.workspaceSnapshot, () => service.requireController().getWorkspaceSnapshot());
     handle(AGENT_IPC_CHANNELS.createProject, (request: CreateProjectRequest) => service.requireController().createProject(request));

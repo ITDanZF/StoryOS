@@ -189,6 +189,16 @@ export function createToolApprovalPreview(
     ].join("\n"));
   }
 
+  if (request.toolName === "generate_book_chapter_content") {
+    return [
+      `章节：${String(input.chapter_id ?? "未知")}`,
+      `模式：${input.mode === "append" ? "续写" : "重写"}`,
+      "",
+      "写作要求：",
+      String(input.instruction ?? ""),
+    ].join("\n");
+  }
+
   if (
     request.toolName === "edit_text_range" ||
     request.toolName === "batch_edit_text" ||

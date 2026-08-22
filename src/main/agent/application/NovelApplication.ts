@@ -14,6 +14,11 @@ import type {
   NovelStatus,
   VolumeRecord,
 } from "./novelPorts.ts";
+import {
+  createNovelMutation,
+  type NovelMutationHandler,
+  type NovelMutationKind,
+} from "./novelEvents.ts";
 
 const NOVEL_STATUSES = new Set<NovelStatus>([
   "planning", "writing", "completed", "archived",
@@ -23,7 +28,17 @@ const CHAPTER_STATUSES = new Set<ChapterStatus>([
 ]);
 
 export default class NovelApplication {
-  constructor(private readonly persistence: NovelPersistence) {}
+  constructor(
+    private readonly persistence: NovelPersistence,
+    private readonly onMutation?: NovelMutationHandler,
+  ) {}
+
+  private emitMutation(
+    kind: NovelMutationKind,
+    references: Parameters<typeof createNovelMutation>[1],
+  ): void {
+    this.onMutation?.(createNovelMutation(kind, references));
+  }
 
   getProjectBook(): NovelDto | null {
     const books = this.persistence.listNovels();
@@ -41,12 +56,14 @@ export default class NovelApplication {
     if (this.persistence.listNovels().length > 0) {
       throw new Error("Each project can contain only one book.");
     }
-    return this.toNovelDto(this.persistence.createNovel({
+    const created = this.toNovelDto(this.persistence.createNovel({
       id: `novel_${crypto.randomUUID()}`,
       title: this.requireTitle(input.title),
       synopsis: input.synopsis?.trim() ?? "",
       status: this.requireNovelStatus(input.status ?? "planning"),
     }));
+    this.emitMutation("novel_created", { novelId: created.id });
+    return created;
   }
 
   getNovel(novelId: string): NovelDto {
@@ -66,17 +83,20 @@ export default class NovelApplication {
     readonly status: NovelStatus;
   }): NovelDto {
     this.requireNovel(input.id);
-    return this.toNovelDto(this.persistence.updateNovel({
+    const updated = this.toNovelDto(this.persistence.updateNovel({
       id: input.id,
       title: this.requireTitle(input.title),
       synopsis: input.synopsis.trim(),
       status: this.requireNovelStatus(input.status),
     }));
+    this.emitMutation("novel_updated", { novelId: updated.id });
+    return updated;
   }
 
   deleteNovel(novelId: string): void {
     this.requireNovel(novelId);
     this.persistence.deleteNovel(novelId);
+    this.emitMutation("novel_deleted", { novelId });
   }
 
   createVolume(input: {
@@ -96,7 +116,7 @@ export default class NovelApplication {
       summary: input.summary?.trim() ?? "",
       sortOrder: appendOrder,
     });
-    return this.toVolumeDto(requestedOrder === appendOrder
+    const result = this.toVolumeDto(requestedOrder === appendOrder
       ? created
       : this.persistence.updateVolume({
           id: created.id,
@@ -104,6 +124,11 @@ export default class NovelApplication {
           summary: created.summary,
           sortOrder: requestedOrder,
         }));
+    this.emitMutation("volume_created", {
+      novelId: input.novelId,
+      volumeId: result.id,
+    });
+    return result;
   }
 
   listVolumes(novelId: string): readonly VolumeDto[] {
@@ -120,16 +145,22 @@ export default class NovelApplication {
     readonly summary: string;
     readonly sortOrder: number;
   }): VolumeDto {
-    return this.toVolumeDto(this.persistence.updateVolume({
+    const updated = this.toVolumeDto(this.persistence.updateVolume({
       id: input.id,
       title: this.requireTitle(input.title),
       summary: input.summary.trim(),
       sortOrder: this.requireSortOrder(input.sortOrder),
     }));
+    this.emitMutation("volume_updated", {
+      novelId: updated.novelId,
+      volumeId: updated.id,
+    });
+    return updated;
   }
 
   deleteVolume(volumeId: string): void {
     this.persistence.deleteVolume(volumeId);
+    this.emitMutation("volume_deleted", { volumeId });
   }
 
   createChapter(input: {
@@ -153,7 +184,7 @@ export default class NovelApplication {
       status: this.requireChapterStatus(input.status ?? "outline"),
       sortOrder: appendOrder,
     });
-    return this.toChapterDto(requestedOrder === appendOrder
+    const result = this.toChapterDto(requestedOrder === appendOrder
       ? created
       : this.persistence.updateChapter({
           id: created.id,
@@ -162,6 +193,12 @@ export default class NovelApplication {
           status: created.status,
           sortOrder: requestedOrder,
         }));
+    this.emitMutation("chapter_created", {
+      novelId: result.novelId,
+      ...(result.volumeId ? { volumeId: result.volumeId } : {}),
+      chapterId: result.id,
+    });
+    return result;
   }
 
   getChapter(chapterId: string): ChapterDto {
@@ -184,18 +221,29 @@ export default class NovelApplication {
     readonly sortOrder: number;
   }): ChapterDto {
     this.requireChapter(input.id);
-    return this.toChapterDto(this.persistence.updateChapter({
+    const updated = this.toChapterDto(this.persistence.updateChapter({
       id: input.id,
       volumeId: input.volumeId,
       title: this.requireTitle(input.title),
       status: this.requireChapterStatus(input.status),
       sortOrder: this.requireSortOrder(input.sortOrder),
     }));
+    this.emitMutation("chapter_updated", {
+      novelId: updated.novelId,
+      ...(updated.volumeId ? { volumeId: updated.volumeId } : {}),
+      chapterId: updated.id,
+    });
+    return updated;
   }
 
   deleteChapter(chapterId: string): void {
-    this.requireChapter(chapterId);
+    const chapter = this.requireChapter(chapterId);
     this.persistence.deleteChapter(chapterId);
+    this.emitMutation("chapter_deleted", {
+      novelId: chapter.novelId,
+      ...(chapter.volumeId ? { volumeId: chapter.volumeId } : {}),
+      chapterId,
+    });
   }
 
   getCurrentRevision(chapterId: string): ChapterRevisionDto | null {
@@ -235,7 +283,7 @@ export default class NovelApplication {
         return this.toRevisionDto(current);
       }
     }
-    return this.toRevisionDto(this.persistence.saveRevision({
+    const saved = this.toRevisionDto(this.persistence.saveRevision({
       id: `revision_${crypto.randomUUID()}`,
       chapterId: input.chapterId,
       content: input.content,
@@ -246,6 +294,14 @@ export default class NovelApplication {
       changeSummary: input.changeSummary?.trim() ?? "",
       expectedCurrentRevisionId: input.expectedCurrentRevisionId,
     }));
+    this.emitMutation("chapter_revision_saved", {
+      novelId: chapter.novelId,
+      ...(chapter.volumeId ? { volumeId: chapter.volumeId } : {}),
+      chapterId: chapter.id,
+      revisionId: saved.id,
+      revisionNumber: saved.revisionNumber,
+    });
+    return saved;
   }
 
   listRevisions(chapterId: string): readonly ChapterRevisionDto[] {

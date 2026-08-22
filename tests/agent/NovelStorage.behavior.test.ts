@@ -5,11 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import NovelApplication from "../../src/main/agent/application/NovelApplication.ts";
 import ProjectDatabase from "../../src/main/agent/storage/project/ProjectDatabase.ts";
 import SqliteNovelStore from "../../src/main/agent/storage/project/SqliteNovelStore.ts";
+import type { NovelMutation } from "../../src/main/agent/application/novelEvents.ts";
 
 const temporaryRoots: string[] = [];
 const databases: ProjectDatabase[] = [];
 
-function createDatabase(): {
+function createDatabase(onMutation?: (event: NovelMutation) => void): {
   readonly root: string;
   readonly path: string;
   readonly database: ProjectDatabase;
@@ -24,7 +25,10 @@ function createDatabase(): {
     root,
     path: databasePath,
     database,
-    novels: new NovelApplication(new SqliteNovelStore(database.handle)),
+    novels: new NovelApplication(
+      new SqliteNovelStore(database.handle),
+      onMutation,
+    ),
   };
 }
 
@@ -36,6 +40,39 @@ afterEach(() => {
 });
 
 describe("novel SQLite storage", () => {
+  it("emits domain mutations only after successful persistent changes", () => {
+    const mutations: NovelMutation[] = [];
+    const fixture = createDatabase((event) => mutations.push(event));
+    const novel = fixture.novels.createNovel({ title: "事件测试" });
+    const chapter = fixture.novels.createChapter({
+      novelId: novel.id,
+      title: "第一章",
+      sortOrder: 0,
+    });
+    const revision = fixture.novels.saveRevision({
+      chapterId: chapter.id,
+      content: "正文",
+      expectedCurrentRevisionId: null,
+    });
+    fixture.novels.saveRevision({
+      chapterId: chapter.id,
+      content: "正文",
+      expectedCurrentRevisionId: revision.id,
+    });
+
+    expect(mutations.map((event) => event.kind)).toEqual([
+      "novel_created",
+      "chapter_created",
+      "chapter_revision_saved",
+    ]);
+    expect(mutations[2]).toMatchObject({
+      chapterId: chapter.id,
+      revisionId: revision.id,
+      revisionNumber: 1,
+    });
+    fixture.database.close();
+  });
+
   it("persists novels, volumes, chapters, and immutable revisions", () => {
     const fixture = createDatabase();
     const novel = fixture.novels.createNovel({

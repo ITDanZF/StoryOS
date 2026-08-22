@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_RUN_LIMITS } from "../../src/main/agent/Agent/RunLimits.ts";
 import Memory from "../../src/main/agent/Memory/index.ts";
 import type { ModelSessionStore } from "../../src/main/agent/model/ModelSessionStore.ts";
+import { baseSystemPrompt } from "../../src/main/agent/model/prompts/system.ts";
 
 const langChainMocks = vi.hoisted(() => ({
   createAgent: vi.fn(),
@@ -43,6 +45,13 @@ describe("Model session store behavior", () => {
     });
     expect(sessions.getCheckpointer()).toBe(sessions.getCheckpointer());
     sessions.close();
+  });
+
+  it("budgets complex tool runs while instructing the model to terminate", () => {
+    expect(DEFAULT_RUN_LIMITS.maxTurns * 2 + 1).toBe(25);
+    expect(baseSystemPrompt).toContain("相同参数重复调用同一读取工具");
+    expect(baseSystemPrompt).toContain("立即停止调用工具并给出最终答复");
+    expect(baseSystemPrompt).toContain("不得反复搜索、读取或重试");
   });
 
   it("uses an injected session store without taking ownership of its lifecycle", async () => {

@@ -12,7 +12,7 @@ export type ChapterPageSpec = {
 };
 
 export const CHAPTER_PAGE_SPEC: ChapterPageSpec = Object.freeze({
-  layoutVersion: 2,
+  layoutVersion: 3,
   width: 720,
   height: 960,
   marginTop: 72,
@@ -36,6 +36,15 @@ export function chapterPageContentHeight(spec: ChapterPageSpec): number {
   return spec.height - spec.marginTop - spec.marginBottom;
 }
 
+export function chapterPaginationStageHeight(
+  pageCount: number,
+  spec: ChapterPageSpec = CHAPTER_PAGE_SPEC,
+): number {
+  const normalizedPageCount = Math.max(1, Math.floor(pageCount));
+  return normalizedPageCount * spec.height +
+    (normalizedPageCount - 1) * spec.pageGap;
+}
+
 export const CHAPTER_PAGE_MIN_SCALE = 0.7;
 export const CHAPTER_PAGE_MAX_SCALE = 1.15;
 
@@ -54,6 +63,9 @@ export type PaginationFragment = {
   readonly height: number;
   readonly kind: PaginationFragmentKind;
   readonly keepWithNext?: boolean;
+  readonly blockKey?: string;
+  readonly lineIndex?: number;
+  readonly lineCount?: number;
 };
 
 export type ChapterPage = {
@@ -70,6 +82,7 @@ export type ChapterPaginationSnapshot = {
   readonly layoutKey: string;
   readonly status: "pending" | "ready" | "failed";
   readonly pages: readonly ChapterPage[];
+  readonly capacityPageCount?: number;
   readonly error?: string;
 };
 
@@ -158,12 +171,13 @@ export function hashChapterContent(content: string): number {
 
 export function createChapterPaginationCacheKey(
   chapter: BookWorkspaceChapterDto,
+  layoutFingerprint = String(CHAPTER_PAGE_SPEC.layoutVersion),
 ): string {
   return [
     chapter.id,
     chapter.currentRevisionId ?? "draft",
     chapter.revisionNumber ?? 0,
-    CHAPTER_PAGE_SPEC.layoutVersion,
+    layoutFingerprint,
     chapter.content.length,
     hashChapterContent(chapter.content),
   ].join(":");

@@ -60,6 +60,7 @@ const DEFAULT_PERMISSIONS: Readonly<Record<string, ToolPermission>> =
     delete_book_chapter: "ask",
     replace_book_chapter_text: "ask",
     rewrite_book_chapter_text: "ask",
+    generate_book_chapter_content: "ask",
   });
 
 export default class ToolPolicy {

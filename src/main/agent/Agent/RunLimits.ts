@@ -17,7 +17,10 @@ function readTimeoutMsFromEnv(): number {
 }
 
 export const DEFAULT_RUN_LIMITS: RunLimits = Object.freeze({
-  maxTurns: 8,
+  // A book-writing task commonly needs several read, create, open, and write
+  // rounds. Keep this aligned with LangGraph's default 25-superstep budget:
+  // LangChainModelGateway maps 12 agent turns to 25 graph supersteps.
+  maxTurns: 12,
   maxToolCalls: 20,
   timeoutMs: readTimeoutMsFromEnv(),
   maxDelegationDepth: 1,

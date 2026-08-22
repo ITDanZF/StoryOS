@@ -334,9 +334,11 @@ export default class AgentApplication {
       return;
     }
 
-    if (event.agentType === "main" || event.type === "text_delta") {
+    if (event.type === "text_delta") {
       return;
     }
+
+    if (event.agentType === "main" && event.type.startsWith("run_")) return;
 
     switch (event.type) {
       case "tool_approval_requested":
@@ -349,6 +351,7 @@ export default class AgentApplication {
         await this.emit({
           type: "tool_status",
           runId: rootRunId,
+          toolCallId: event.toolCallId,
           toolName: event.toolName,
           summary: event.summary,
           status: event.type.replace("tool_", "") as

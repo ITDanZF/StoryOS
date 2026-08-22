@@ -1,6 +1,7 @@
 import path from "node:path";
 import { createAgentOrchestrator } from "../Agent/orchestration/index.ts";
 import AgentApplication from "../application/AgentApplication.ts";
+import type { ApplicationEvent } from "../application/contracts.ts";
 import type {
   ConversationApplicationEvent,
   ConversationApplicationEventHandler,
@@ -20,6 +21,7 @@ import SkillLoader from "../skills/SkillLoader.ts";
 import SkillScaffoldService from "../skills/SkillScaffoldService.ts";
 import WorkspaceToolContext from "../tools/WorkspaceToolContext.ts";
 import BookToolContext from "../tools/book/BookToolContext.ts";
+import ChapterGenerationService from "../book-generation/ChapterGenerationService.ts";
 import type { RendererEditorToolClient } from "../tools/editor/contracts.ts";
 import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
 import SqliteNovelStore from "../storage/project/SqliteNovelStore.ts";
@@ -183,6 +185,17 @@ export default class WorkspaceRuntimeManager {
       const conversationScope: ConversationScope = project
         ? Object.freeze({ kind: "project", projectId: project.id })
         : Object.freeze({ kind: "global" });
+      const publishScopedEvent = (event: ApplicationEvent): Promise<void> => {
+        const scopedEvent = Object.freeze({
+          ...event,
+          conversationScope,
+        }) as ConversationApplicationEvent;
+        return Promise.allSettled(
+          [...this.subscribers].map((subscriber) => subscriber(scopedEvent)),
+        ).then(() => {
+          // Subscriber failures are isolated from the active runtime.
+        });
+      };
 
       const projectDatabase = new ProjectDatabase(layout.databasePath);
       resources.projectDatabase = projectDatabase;
@@ -194,6 +207,17 @@ export default class WorkspaceRuntimeManager {
       }
       const novels = new NovelApplication(
         new SqliteNovelStore(projectDatabase.handle),
+        project
+          ? (mutation) => {
+              void publishScopedEvent({
+                type: "book_changed",
+                eventId: mutation.id,
+                projectId: project.id,
+                mutation,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          : undefined,
       );
       const modelSessions = new Memory({
         checkpointBackend: "sqlite",
@@ -204,6 +228,9 @@ export default class WorkspaceRuntimeManager {
         configuration: this.modelConfiguration,
         sessions: modelSessions,
       });
+      const chapterGeneration = project
+        ? new ChapterGenerationService(model, novels, publishScopedEvent)
+        : undefined;
       const skills = await SkillApplication.create({
         loader: new SkillLoader({ projectSkillRoot: layout.skillsRoot }),
         scaffold: new SkillScaffoldService({
@@ -231,7 +258,13 @@ export default class WorkspaceRuntimeManager {
           skillInstaller,
           workspaceContext,
           ...(project
-            ? { bookContext: new BookToolContext(project.id, novels) }
+            ? {
+                bookContext: new BookToolContext(
+                  project.id,
+                  novels,
+                  chapterGeneration,
+                ),
+              }
             : {}),
           ...(project && this.rendererEditorTools
             ? {
@@ -248,18 +281,7 @@ export default class WorkspaceRuntimeManager {
         },
       );
       resources.agent = agent;
-      const unsubscribe = agent.subscribe((event) => {
-        const scopedEvent = Object.freeze({
-          ...event,
-          conversationScope,
-        }) as ConversationApplicationEvent;
-        return Promise.allSettled(
-          [...this.subscribers].map((subscriber) =>
-            subscriber(scopedEvent)),
-        ).then(() => {
-          // Subscriber failures are isolated from the active agent run.
-        });
-      });
+      const unsubscribe = agent.subscribe(publishScopedEvent);
       resources.unsubscribe = unsubscribe;
       return Object.freeze({
         conversationScope,

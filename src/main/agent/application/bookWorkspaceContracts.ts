@@ -73,6 +73,7 @@ export type SaveBookChapterContentRequest = {
   readonly projectId: string;
   readonly chapterId: string;
   readonly content: string;
+  readonly expectedCurrentRevisionId: string | null;
 };
 
 export type BookChapterRevisionResult = {

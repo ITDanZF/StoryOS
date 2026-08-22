@@ -6,6 +6,7 @@ import {
 } from "../../../../shared/book/richText.ts";
 import {
   calculateChapterPageScale,
+  chapterPaginationStageHeight,
   clampChapterEditablePosition,
   createChapterPaginationCacheKey,
   numberBookPages,
@@ -57,6 +58,12 @@ describe("pagination model", () => {
     expect(calculateChapterPageScale(1440, 1200)).toBe(1.15);
     expect(calculateChapterPageScale(600, 800)).toBeCloseTo(5 / 6);
     expect(calculateChapterPageScale(320, 480)).toBe(0.7);
+  });
+
+  it("calculates paper capacity independently from visual scale", () => {
+    expect(chapterPaginationStageHeight(1)).toBe(960);
+    expect(chapterPaginationStageHeight(3)).toBe(2936);
+    expect(chapterPaginationStageHeight(0)).toBe(960);
   });
 
   it("round-trips a persisted manual page break", () => {

@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import type {
+  BookWorkspaceSnapshot,
   BookWorkspaceChapterDto,
   ReadyBookWorkspaceSnapshot,
 } from "../../../../shared/agent/contracts.ts";
@@ -18,6 +19,7 @@ type UseBookEditorToolHandlerOptions = {
   readonly pageNumber: number | null;
   readonly editorBridgeRef: RefObject<ChapterEditorBridge | null>;
   readonly openChapter: (chapterId: string, pageNumber: number) => void;
+  readonly reloadWorkspace: () => Promise<BookWorkspaceSnapshot | null>;
 };
 
 export default function useBookEditorToolHandler({
@@ -30,6 +32,7 @@ export default function useBookEditorToolHandler({
   pageNumber,
   editorBridgeRef,
   openChapter,
+  reloadWorkspace,
 }: UseBookEditorToolHandlerOptions): void {
   useEffect(() => window.storyOSAgent.onEditorToolRequest(async (request) => {
     if (!projectId || request.projectId !== projectId) {
@@ -41,9 +44,17 @@ export default function useBookEditorToolHandler({
 
     const operation = request.operation;
     if (operation.kind === "open_chapter") {
-      const chapter = workspace.chapters.find(
+      let chapter = workspace.chapters.find(
         (item) => item.id === operation.chapterId,
       );
+      if (!chapter) {
+        const refreshed = await reloadWorkspace();
+        if (refreshed?.state === "ready") {
+          chapter = refreshed.chapters.find(
+            (item) => item.id === operation.chapterId,
+          );
+        }
+      }
       if (!chapter) throw new Error(`Chapter not found: ${operation.chapterId}`);
       const requestedPageNumber = operation.pageNumber ?? 1;
       openChapter(chapter.id, requestedPageNumber);
@@ -140,6 +151,7 @@ export default function useBookEditorToolHandler({
     pageNumber,
     projectId,
     projectName,
+    reloadWorkspace,
     volumeTitle,
     workspace,
   ]);

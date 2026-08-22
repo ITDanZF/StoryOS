@@ -200,4 +200,57 @@ describe("AgentApplication behavior", () => {
       depth: 1,
     }));
   });
+
+  it("publishes main-agent tool lifecycle events with a stable call id", async () => {
+    const runner: AgentRunner = {
+      run: async (_input, options) => {
+        await options.onAgentEvent({
+          type: "tool_started",
+          runId: options.runId,
+          agentType: "main",
+          toolCallId: "tool-call-1",
+          toolName: "create_book_chapter",
+          summary: "Create chapter",
+        });
+        await options.onAgentEvent({
+          type: "tool_completed",
+          runId: options.runId,
+          agentType: "main",
+          toolCallId: "tool-call-1",
+          toolName: "create_book_chapter",
+          summary: "Create chapter",
+        });
+        return "done";
+      },
+      cancelRun: () => false,
+    };
+    const application = new AgentApplication(runner);
+    const events: ApplicationEvent[] = [];
+    application.subscribe((event) => {
+      events.push(event);
+    });
+
+    const runId = application.startRun({
+      threadId: "thread-main-tool",
+      input: "create a chapter",
+    });
+    await expect(application.waitForRun(runId)).resolves.toBe("done");
+
+    expect(events.filter((event) => event.type === "tool_status")).toEqual([
+      expect.objectContaining({
+        type: "tool_status",
+        runId,
+        toolCallId: "tool-call-1",
+        toolName: "create_book_chapter",
+        status: "started",
+      }),
+      expect.objectContaining({
+        type: "tool_status",
+        runId,
+        toolCallId: "tool-call-1",
+        toolName: "create_book_chapter",
+        status: "completed",
+      }),
+    ]);
+  });
 });

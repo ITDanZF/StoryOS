@@ -1,14 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   BookWorkspaceSnapshot,
   CreateBookRequest,
   ReadyBookWorkspaceSnapshot,
   UpdateBookRequest,
 } from "../../../shared/agent/contracts.ts";
-import {
-  countTiptapCharacters,
-  decodeStoredChapterContent,
-} from "../../../shared/book/richText.ts";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -27,20 +23,22 @@ export default function useBookWorkspace(projectId: string | undefined) {
   const [workspace, setWorkspace] = useState<BookWorkspaceSnapshot | null>(null);
   const [loading, setLoading] = useState(Boolean(projectId));
   const [error, setError] = useState<string | null>(null);
+  const loadRequestRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!projectId) return null;
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
       const snapshot = await window.storyOSAgent.getBookWorkspace(projectId);
-      setWorkspace(snapshot);
+      if (requestId === loadRequestRef.current) setWorkspace(snapshot);
       return snapshot;
     } catch (cause) {
-      setError(getErrorMessage(cause));
+      if (requestId === loadRequestRef.current) setError(getErrorMessage(cause));
       throw cause;
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [projectId]);
 
@@ -53,15 +51,20 @@ export default function useBookWorkspace(projectId: string | undefined) {
     }
     setLoading(true);
     setError(null);
+    const requestId = ++loadRequestRef.current;
     void window.storyOSAgent.getBookWorkspace(projectId)
       .then((snapshot) => {
-        if (!disposed) setWorkspace(snapshot);
+        if (!disposed && requestId === loadRequestRef.current) {
+          setWorkspace(snapshot);
+        }
       })
       .catch((cause) => {
-        if (!disposed) setError(getErrorMessage(cause));
+        if (!disposed && requestId === loadRequestRef.current) {
+          setError(getErrorMessage(cause));
+        }
       })
       .finally(() => {
-        if (!disposed) setLoading(false);
+        if (!disposed && requestId === loadRequestRef.current) setLoading(false);
       });
     return () => {
       disposed = true;
@@ -195,6 +198,7 @@ export default function useBookWorkspace(projectId: string | undefined) {
   const saveChapterContent = useCallback(async (
     chapterId: string,
     content: string,
+    expectedCurrentRevisionId: string | null,
   ) => {
     if (!projectId) throw new Error("Project id is required.");
     setError(null);
@@ -203,6 +207,7 @@ export default function useBookWorkspace(projectId: string | undefined) {
         projectId,
         chapterId,
         content,
+        expectedCurrentRevisionId,
       });
       setWorkspace((current) => current?.state === "ready"
         ? {
@@ -211,30 +216,12 @@ export default function useBookWorkspace(projectId: string | undefined) {
               chapter.id === result.chapter.id ? result.chapter : chapter),
           }
         : current);
+      return result;
     } catch (cause) {
       setError(getErrorMessage(cause));
       throw cause;
     }
   }, [projectId]);
-
-  const previewChapterContent = useCallback((chapterId: string, content: string) => {
-    setWorkspace((current) => {
-      if (current?.state !== "ready") return current;
-      let changed = false;
-      const chapters = current.chapters.map((chapter) => {
-        if (chapter.id !== chapterId || chapter.content === content) return chapter;
-        changed = true;
-        return {
-          ...chapter,
-          content,
-          characterCount: countTiptapCharacters(
-            decodeStoredChapterContent(content),
-          ),
-        };
-      });
-      return changed ? { ...current, chapters } : current;
-    });
-  }, []);
 
   return {
     workspace,
@@ -249,6 +236,5 @@ export default function useBookWorkspace(projectId: string | undefined) {
     updateBookProfile,
     updateChapterTitle,
     saveChapterContent,
-    previewChapterContent,
   };
 }

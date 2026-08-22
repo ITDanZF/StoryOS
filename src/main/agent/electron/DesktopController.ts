@@ -282,7 +282,7 @@ export default class DesktopController {
       content,
       characterCount: countTiptapCharacters(document),
       changeSummary: "自动保存",
-      expectedCurrentRevisionId: chapter.currentRevisionId,
+      expectedCurrentRevisionId: request.expectedCurrentRevisionId,
     });
     const updated = runtime.novels.getChapter(chapter.id);
     return Object.freeze({

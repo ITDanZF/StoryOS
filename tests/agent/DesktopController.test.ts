@@ -462,6 +462,7 @@ describe("DesktopController", () => {
       projectId: "prj-story",
       chapterId: "chapter-1",
       content,
+      expectedCurrentRevisionId: "revision-before-edit",
     });
 
     expect(harness.novels.saveRevision).toHaveBeenCalledWith({
@@ -469,12 +470,13 @@ describe("DesktopController", () => {
       content: serializeTiptapDocument(parseTiptapDocument(content)),
       characterCount: 2,
       changeSummary: "自动保存",
-      expectedCurrentRevisionId: null,
+      expectedCurrentRevisionId: "revision-before-edit",
     });
     await expect(harness.controller.saveBookChapterContent({
       projectId: "prj-story",
       chapterId: "chapter-1",
       content: "not-json",
+      expectedCurrentRevisionId: null,
     })).rejects.toThrow("valid Tiptap JSON");
   });
 

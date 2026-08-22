@@ -211,6 +211,7 @@ export function createBookChapterContentTools(context: BookToolContext) {
       name: "rewrite_book_chapter_text",
       description: [
         "Rewrite the full persisted plain text of a chapter and save it as a new revision, without requiring the live editor to be mounted.",
+        "Do not use this for drafting, continuing, or substantially expanding fictional prose; use generate_book_chapter_content so the user receives a live preview.",
         "Use this for AI focus mode or batch saved-content edits. Prefer live editor tools when the chapter editor is visible.",
         "Always call read_book_chapter first, pass its exact text as expected_current_text, and pass its revision.revisionNumber as expected_revision_number.",
         "This saves a plain-text Tiptap revision and may normalize rich-text formatting; do not use it for styling-only changes.",

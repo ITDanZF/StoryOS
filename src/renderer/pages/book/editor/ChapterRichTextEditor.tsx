@@ -43,18 +43,28 @@ import type {
   ChapterEditorLiveContext,
 } from "./chapterEditorContext.ts";
 import ChapterFindReplacePanel from "./search/ChapterFindReplacePanel.tsx";
+import {
+  EXTERNAL_CONTENT_META,
+  shouldPersistEditorTransaction,
+  synchronizeEditorEditable,
+} from "./editorUpdatePolicy.ts";
 
 type ChapterRichTextEditorProps = {
   readonly chapterNumber: number;
+  readonly aiGenerating: boolean;
   readonly content: string;
+  readonly previewContent: string | null;
+  readonly currentRevisionId: string | null;
   readonly pageTarget: BookPageNavigationTarget | null;
   readonly onPageChange: (chapterPageNumber: number) => void;
   readonly onPaginationChange?: (
     layoutKey: string,
     pages: readonly LiveChapterPage[],
   ) => void;
-  readonly onSave: (content: string) => Promise<void>;
-  readonly onLiveContentChange: (content: string) => void;
+  readonly onSave: (
+    content: string,
+    expectedCurrentRevisionId: string | null,
+  ) => Promise<{ readonly revision: { readonly id: string } }>;
   readonly onSaveStateChange: (state: BookSaveState) => void;
   readonly onCharacterCountChange: (count: number) => void;
   readonly onAskAiSelection: (selection: string | null) => void;
@@ -62,14 +72,35 @@ type ChapterRichTextEditorProps = {
   readonly onBridgeChange: (bridge: ChapterEditorBridge | null) => void;
 };
 
+function applyExternalContent(editor: Editor, serialized: string): boolean {
+  const document = decodeStoredChapterContent(serialized);
+  const nextDocument = editor.schema.nodeFromJSON(document);
+  const start = editor.state.doc.content.findDiffStart(nextDocument.content);
+  if (start === null) return false;
+  const end = editor.state.doc.content.findDiffEnd(nextDocument.content) ?? {
+    a: editor.state.doc.content.size,
+    b: nextDocument.content.size,
+  };
+  editor.view.dispatch(
+    editor.state.tr
+      .replace(start, end.a, nextDocument.slice(start, end.b))
+      .setMeta(EXTERNAL_CONTENT_META, true)
+      .setMeta("preventUpdate", true)
+      .setMeta("addToHistory", false),
+  );
+  return true;
+}
+
 export default function ChapterRichTextEditor({
   chapterNumber,
+  aiGenerating,
   content,
+  previewContent,
+  currentRevisionId,
   pageTarget,
   onPageChange,
   onPaginationChange,
   onSave,
-  onLiveContentChange,
   onSaveStateChange,
   onCharacterCountChange,
   onAskAiSelection,
@@ -90,9 +121,9 @@ export default function ChapterRichTextEditor({
   const saveTimer = useRef<number | null>(null);
   const pendingContent = useRef<string | null>(null);
   const lastSavedContent = useRef(content);
+  const lastSavedRevisionId = useRef(currentRevisionId);
   const saveSequence = useRef(Promise.resolve());
   const onSaveRef = useRef(onSave);
-  const onLiveContentChangeRef = useRef(onLiveContentChange);
   const onSaveStateChangeRef = useRef(onSaveStateChange);
   const onCharacterCountChangeRef = useRef(onCharacterCountChange);
   const onPageChangeRef = useRef(onPageChange);
@@ -100,7 +131,6 @@ export default function ChapterRichTextEditor({
   const onBridgeChangeRef = useRef(onBridgeChange);
   const documentVersionRef = useRef(0);
   onSaveRef.current = onSave;
-  onLiveContentChangeRef.current = onLiveContentChange;
   onSaveStateChangeRef.current = onSaveStateChange;
   onCharacterCountChangeRef.current = onCharacterCountChange;
   onPageChangeRef.current = onPageChange;
@@ -130,32 +160,42 @@ export default function ChapterRichTextEditor({
     onContextChangeRef.current(getContext(current));
   }, [getContext]);
 
-  const persist = useCallback((serialized: string) => {
+  const persist = useCallback((serialized: string): Promise<void> => {
     if (serialized === lastSavedContent.current) {
       pendingContent.current = null;
       onSaveStateChangeRef.current("saved");
-      return;
+      return Promise.resolve();
     }
     onSaveStateChangeRef.current("saving");
     saveSequence.current = saveSequence.current
       .catch((): void => undefined)
-      .then(() => onSaveRef.current(serialized))
-      .then(() => {
+      .then(() => onSaveRef.current(
+        serialized,
+        lastSavedRevisionId.current,
+      ))
+      .then((result) => {
         lastSavedContent.current = serialized;
+        lastSavedRevisionId.current = result.revision.id;
         if (pendingContent.current === serialized) {
           pendingContent.current = null;
           onSaveStateChangeRef.current("saved");
         }
       })
-      .catch(() => onSaveStateChangeRef.current("error"));
+      .catch((error: unknown) => {
+        onSaveStateChangeRef.current("error");
+        throw error;
+      });
+    return saveSequence.current;
   }, []);
 
-  const flush = useCallback(() => {
+  const flush = useCallback((): Promise<void> => {
     if (saveTimer.current !== null) {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    if (pendingContent.current !== null) persist(pendingContent.current);
+    return pendingContent.current !== null
+      ? persist(pendingContent.current)
+      : saveSequence.current;
   }, [persist]);
 
   const openFind = useCallback((replace: boolean) => {
@@ -179,13 +219,18 @@ export default function ChapterRichTextEditor({
       shortcuts: {
         onFind: openFind,
         onLink: () => setLinkRequestId((current) => current + 1),
-        onSave: flush,
+        onSave: () => {
+          void flush().catch((): void => undefined);
+        },
       },
     }),
-    content: decodeStoredChapterContent(content) as unknown as Content,
+    content: decodeStoredChapterContent(
+      previewContent ?? content,
+    ) as unknown as Content,
+    editable: !aiGenerating,
     editorProps: {
       attributes: {
-        class: "chapter-rich-text",
+        class: "chapter-rich-text chapter-pagination-layout-root",
         "aria-label": "章节正文",
         spellcheck: "false",
       },
@@ -196,19 +241,19 @@ export default function ChapterRichTextEditor({
       );
       publishContext(current);
     },
-    onUpdate: ({ editor: current }) => {
+    onUpdate: ({ editor: current, transaction }) => {
+      if (!shouldPersistEditorTransaction(transaction)) return;
       documentVersionRef.current += 1;
       const document = current.getJSON();
       const serialized = serializeTiptapDocument(document);
       pendingContent.current = serialized;
-      onLiveContentChangeRef.current(serialized);
       onCharacterCountChangeRef.current(countTiptapCharacters(document));
       onSaveStateChangeRef.current("saving");
       publishContext(current);
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => {
         saveTimer.current = null;
-        persist(serialized);
+        void persist(serialized).catch((): void => undefined);
       }, 800);
     },
     onSelectionUpdate: ({ editor: current }) => {
@@ -221,13 +266,27 @@ export default function ChapterRichTextEditor({
         current.state.selection.from,
       ));
     },
-    onBlur: flush,
+    onBlur: () => {
+      void flush().catch((): void => undefined);
+    },
   }, [flush, openFind, paginationController, publishContext]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
+    synchronizeEditorEditable(editor, !aiGenerating);
+  }, [aiGenerating, editor]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const displayedContent = previewContent ?? content;
     const editorContent = serializeTiptapDocument(editor.getJSON());
-    if (content === editorContent) return;
+    if (displayedContent === editorContent) {
+      if (previewContent === null) {
+        lastSavedContent.current = content;
+        lastSavedRevisionId.current = currentRevisionId;
+      }
+      return;
+    }
     const hasUnsavedLocalChange = pendingContent.current !== null &&
       pendingContent.current !== lastSavedContent.current;
     if (hasUnsavedLocalChange) return;
@@ -236,15 +295,17 @@ export default function ChapterRichTextEditor({
       window.clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    const document = decodeStoredChapterContent(content) as unknown as Content;
-    editor.commands.setContent(document, { emitUpdate: false });
-    lastSavedContent.current = content;
-    pendingContent.current = null;
+    applyExternalContent(editor, displayedContent);
+    if (previewContent === null) {
+      lastSavedContent.current = content;
+      lastSavedRevisionId.current = currentRevisionId;
+      pendingContent.current = null;
+    }
     documentVersionRef.current += 1;
     onCharacterCountChangeRef.current(countTiptapCharacters(editor.getJSON()));
     onSaveStateChangeRef.current("saved");
     publishContext(editor);
-  }, [content, editor, publishContext]);
+  }, [content, currentRevisionId, editor, previewContent, publishContext]);
 
   const pagination = useChapterPagination(
     paginationController,
@@ -260,6 +321,7 @@ export default function ChapterRichTextEditor({
       }
     };
     const bridge: ChapterEditorBridge = {
+      flushPending: flush,
       getContext: () => getContext(editor),
       inspectText: ({ queries }) => ({
         ...getContext(editor),
@@ -457,7 +519,7 @@ export default function ChapterRichTextEditor({
     if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
     const pending = pendingContent.current;
     if (pending !== null && pending !== lastSavedContent.current) {
-      void onSaveRef.current(pending);
+      void onSaveRef.current(pending, lastSavedRevisionId.current);
     }
   }, []);
 

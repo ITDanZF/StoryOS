@@ -18,6 +18,7 @@ export type ChapterEditorLiveContext = {
 };
 
 export type ChapterEditorBridge = {
+  readonly flushPending: () => Promise<void>;
   readonly getContext: () => ChapterEditorLiveContext;
   readonly inspectText: (request: {
     readonly queries: readonly EditorTextQuery[];

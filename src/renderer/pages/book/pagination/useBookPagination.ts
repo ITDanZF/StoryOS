@@ -4,10 +4,7 @@ import type { BookWorkspaceChapterDto } from "../../../../shared/agent/contracts
 import { decodeStoredChapterContent } from "../../../../shared/book/richText.ts";
 import { createChapterEditorExtensions } from "../editor/chapterEditorExtensions.ts";
 import "../editor/chapterEditor.css";
-import { measurePaginationFragments } from "./domPaginationMeasurer.ts";
-import { paginateFragments } from "./paginationEngine.ts";
 import {
-  CHAPTER_PAGE_CONTENT_HEIGHT,
   CHAPTER_PAGE_SPEC,
   createChapterPaginationCacheKey,
   numberBookPages,
@@ -16,6 +13,14 @@ import {
   type LiveChapterPagination,
 } from "./paginationModel.ts";
 import "./pagination.css";
+import {
+  applyChapterPaginationLayout,
+  createPaginationLayoutFingerprint,
+} from "./paginationLayout.ts";
+import {
+  paginateEditorView,
+  waitForPaginationAssets,
+} from "./paginationRuntime.ts";
 
 export type BookPaginationState = {
   readonly pages: readonly BookPageSlice[];
@@ -35,6 +40,7 @@ const measurementCache = new Map<
   string,
   readonly ChapterPageMeasurement[]
 >();
+const layoutFingerprint = createPaginationLayoutFingerprint();
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => {
@@ -48,6 +54,7 @@ async function measureChapter(
   const host = document.createElement("div");
   host.className = "book-pagination-measure-host";
   host.style.width = `${CHAPTER_PAGE_SPEC.width}px`;
+  applyChapterPaginationLayout(host);
   document.body.append(host);
 
   const editor = new Editor({
@@ -57,22 +64,15 @@ async function measureChapter(
     editable: false,
     editorProps: {
       attributes: {
-        class: "chapter-rich-text book-pagination-rich-text",
+        class: "chapter-rich-text book-pagination-rich-text chapter-pagination-layout-root",
         "aria-hidden": "true",
       },
     },
   });
 
   try {
-    await document.fonts.ready;
-    await nextFrame();
-    const documentEnd = Math.max(1, editor.state.doc.content.size - 1);
-    const pages = paginateFragments({
-      fragments: measurePaginationFragments(editor.view),
-      contentHeight: CHAPTER_PAGE_CONTENT_HEIGHT,
-      documentStart: 1,
-      documentEnd,
-    });
+    await waitForPaginationAssets();
+    const pages = paginateEditorView(editor.view, CHAPTER_PAGE_SPEC);
     return pages.map((page) => {
       const chapterPageNumber = page.index + 1;
       return {
@@ -106,7 +106,8 @@ export default function useBookPagination(
   useEffect(() => {
     let cancelled = false;
     const validCacheKeys = new Set(
-      chapters.map(createChapterPaginationCacheKey),
+      chapters.map((chapter) =>
+        createChapterPaginationCacheKey(chapter, layoutFingerprint)),
     );
     for (const cacheKey of measurementCache.keys()) {
       if (!validCacheKeys.has(cacheKey)) measurementCache.delete(cacheKey);
@@ -128,7 +129,10 @@ export default function useBookPagination(
     const run = async () => {
       for (const chapter of chapters) {
         if (cancelled) return;
-        const cacheKey = createChapterPaginationCacheKey(chapter);
+        const cacheKey = createChapterPaginationCacheKey(
+          chapter,
+          layoutFingerprint,
+        );
         try {
           let pages = measurementCache.get(cacheKey);
           if (!pages) {

@@ -1,20 +1,29 @@
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import {
+  EditorState,
+  Plugin,
+  PluginKey,
+  type Transaction,
+} from "@tiptap/pm/state";
 import {
   Decoration,
   DecorationSet,
-  type EditorView,
+  EditorView,
 } from "@tiptap/pm/view";
-import { paginateFragments } from "./paginationEngine.ts";
 import {
   CHAPTER_PAGE_SPEC,
   chapterPageContentHeight,
+  chapterPaginationStageHeight,
   type ChapterPaginationSnapshot,
   type ChapterPageSpec,
 } from "./paginationModel.ts";
 import {
-  measurePaginationFragments,
-} from "./domPaginationMeasurer.ts";
+  applyChapterPaginationLayout,
+  assertChapterPaginationLayoutParity,
+  createPaginationLayoutFingerprint,
+} from "./paginationLayout.ts";
+import { verifyPaginationProjection } from "./paginationVerifier.ts";
+import { paginateEditorView } from "./paginationRuntime.ts";
 
 type PaginationPluginState = {
   readonly snapshot: ChapterPaginationSnapshot;
@@ -25,10 +34,6 @@ type ApplyPaginationMeta = {
   readonly type: "apply";
   readonly snapshot: ChapterPaginationSnapshot;
   readonly decorations: DecorationSet;
-};
-
-type ClearPaginationMeta = {
-  readonly type: "clear-for-measurement";
 };
 
 const chapterPaginationKey = new PluginKey<PaginationPluginState>(
@@ -79,11 +84,7 @@ function mapPluginState(
 ): PaginationPluginState {
   const meta = transaction.getMeta(chapterPaginationKey) as
     | ApplyPaginationMeta
-    | ClearPaginationMeta
     | undefined;
-  if (meta?.type === "clear-for-measurement") {
-    return { ...current, decorations: DecorationSet.empty };
-  }
   if (meta?.type === "apply") {
     return {
       snapshot: meta.snapshot,
@@ -158,22 +159,58 @@ function createPaginationPlugin(
     view(view) {
       let generation = 0;
       let frame: number | null = null;
+      let reflowTimer: number | null = null;
       let settleFrame: number | null = null;
+      let verificationFrame: number | null = null;
       let disposed = false;
       let observedWidth = 0;
+      let firstDirtyAt = 0;
+      const measurementHost = document.createElement("div");
+      measurementHost.className = "book-pagination-measure-host";
+      measurementHost.style.width = `${options.pageSpec.width}px`;
+      applyChapterPaginationLayout(measurementHost);
+      document.body.append(measurementHost);
+      const measurementView = new EditorView(measurementHost, {
+        state: EditorState.create({ doc: view.state.doc }),
+        editable: () => false,
+        attributes: {
+          class: "chapter-rich-text book-pagination-rich-text chapter-pagination-layout-root",
+          "aria-hidden": "true",
+        },
+      });
 
       const publishPending = () => {
         const current = options.controller.getSnapshot();
+        const stablePageCount = Math.max(1, current.pages.length);
+        const currentCapacity = Math.max(
+          stablePageCount,
+          current.capacityPageCount ?? stablePageCount,
+        );
+        const currentStageHeight = chapterPaginationStageHeight(
+          currentCapacity,
+          options.pageSpec,
+        );
+        const overflow = Math.max(0, view.dom.scrollHeight - currentStageHeight);
+        const extraPages = overflow > 1
+          ? Math.max(
+              1,
+              Math.ceil(
+                overflow / chapterPageContentHeight(options.pageSpec),
+              ),
+            )
+          : 0;
         options.controller.publish({
           ...current,
           generation,
           status: "pending",
+          capacityPageCount: currentCapacity + extraPages,
           error: undefined,
         });
       };
 
       const run = () => {
         frame = null;
+        firstDirtyAt = 0;
         if (disposed) return;
         if (view.composing) {
           frame = window.requestAnimationFrame(run);
@@ -186,53 +223,81 @@ function createPaginationPlugin(
         }
         const requestedGeneration = generation;
         try {
-          const currentState = chapterPaginationKey.getState(view.state);
-          // Pagination gaps are presentation-only. Measuring while they are in
-          // the DOM creates a feedback loop where a later reflow can count or
-          // over-correct its own previous gaps and collapse multiple pages into
-          // one. Clear them synchronously, measure the clean document, then
-          // install a fresh decoration set in the same animation frame.
-          if (currentState && currentState.decorations.find().length > 0) {
-            view.dispatch(
-              view.state.tr
-                .setMeta(chapterPaginationKey, {
-                  type: "clear-for-measurement",
-                } satisfies ClearPaginationMeta)
-                .setMeta("addToHistory", false),
-            );
-          }
-          const fragments = measurePaginationFragments(view);
-          const documentEnd = Math.max(1, view.state.doc.content.size - 1);
-          const pages = paginateFragments({
-            fragments,
-            contentHeight: chapterPageContentHeight(options.pageSpec),
-            documentStart: 1,
-            documentEnd,
-          });
+          // Measure a clean offscreen view. The visible editor keeps its last
+          // stable page gaps until the next complete snapshot is ready.
+          measurementView.updateState(EditorState.create({
+            doc: view.state.doc,
+          }));
+          assertChapterPaginationLayoutParity(view.dom, measurementView.dom);
+          const pages = paginateEditorView(measurementView, options.pageSpec);
           if (disposed || requestedGeneration !== generation) return;
           const snapshot: ChapterPaginationSnapshot = {
             generation: requestedGeneration,
-            layoutKey: `${options.pageSpec.layoutVersion}:${view.state.doc.content.size}:${requestedGeneration}`,
+            layoutKey: `${createPaginationLayoutFingerprint()}:${view.state.doc.content.size}:${requestedGeneration}`,
             status: "ready",
             pages,
           };
-          const layout = createGapDecorations(view, snapshot, options.pageSpec);
-          const transaction = view.state.tr
-            .setMeta(chapterPaginationKey, {
-              type: "apply",
-              snapshot,
-              decorations: layout.decorations,
-            } satisfies ApplyPaginationMeta)
-            .setMeta("addToHistory", false);
-          view.dispatch(transaction);
-          options.controller.publish(snapshot);
+          const stable = chapterPaginationKey.getState(view.state)?.snapshot ??
+            EMPTY_SNAPSHOT;
+          options.controller.publish({
+            ...stable,
+            generation: requestedGeneration,
+            status: "pending",
+            capacityPageCount: Math.max(stable.pages.length, pages.length, 1),
+            error: undefined,
+          });
+          frame = window.requestAnimationFrame(() => {
+            frame = window.requestAnimationFrame(() => {
+              frame = null;
+              if (disposed) return;
+              if (requestedGeneration !== generation) {
+                schedule();
+                return;
+              }
+              const layout = createGapDecorations(
+                view,
+                snapshot,
+                options.pageSpec,
+              );
+              const transaction = view.state.tr
+                .setMeta(chapterPaginationKey, {
+                  type: "apply",
+                  snapshot,
+                  decorations: layout.decorations,
+                } satisfies ApplyPaginationMeta)
+                .setMeta("addToHistory", false);
+              view.dispatch(transaction);
+              options.controller.publish(snapshot);
+              verificationFrame = window.requestAnimationFrame(() => {
+                verificationFrame = null;
+                if (disposed || requestedGeneration !== generation) return;
+                const verification = verifyPaginationProjection(
+                  view,
+                  pages.length,
+                  options.pageSpec,
+                );
+                if (!verification.valid) {
+                  options.controller.publish({
+                    ...snapshot,
+                    status: "failed",
+                    capacityPageCount: pages.length + 1,
+                    error: verification.error,
+                  });
+                }
+              });
+            });
+          });
         } catch (cause) {
           if (disposed || requestedGeneration !== generation) return;
           options.controller.publish({
             generation: requestedGeneration,
             layoutKey: `failed:${requestedGeneration}`,
             status: "failed",
-            pages: [],
+            pages: options.controller.getSnapshot().pages,
+            capacityPageCount: Math.max(
+              1,
+              options.controller.getSnapshot().pages.length,
+            ),
             error: cause instanceof Error ? cause.message : String(cause),
           });
         }
@@ -241,8 +306,20 @@ function createPaginationPlugin(
       const schedule = () => {
         generation += 1;
         publishPending();
-        if (frame !== null) window.cancelAnimationFrame(frame);
-        frame = window.requestAnimationFrame(run);
+        if (frame !== null) return;
+        const now = performance.now();
+        if (firstDirtyAt === 0) firstDirtyAt = now;
+        if (reflowTimer !== null) window.clearTimeout(reflowTimer);
+        const quietDelay = 180;
+        const maximumDelay = 500;
+        const delay = Math.min(
+          quietDelay,
+          Math.max(0, maximumDelay - (now - firstDirtyAt)),
+        );
+        reflowTimer = window.setTimeout(() => {
+          reflowTimer = null;
+          frame = window.requestAnimationFrame(run);
+        }, delay);
       };
 
       // The editor can mount before its surrounding workspace has finished its
@@ -292,7 +369,13 @@ function createPaginationPlugin(
         destroy() {
           disposed = true;
           if (frame !== null) window.cancelAnimationFrame(frame);
+          if (reflowTimer !== null) window.clearTimeout(reflowTimer);
           if (settleFrame !== null) window.cancelAnimationFrame(settleFrame);
+          if (verificationFrame !== null) {
+            window.cancelAnimationFrame(verificationFrame);
+          }
+          measurementView.destroy();
+          measurementHost.remove();
           resizeObserver.disconnect();
           window.removeEventListener("focus", onWindowFocus);
           document.removeEventListener("visibilitychange", onVisibilityChange);

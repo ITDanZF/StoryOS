@@ -19,6 +19,7 @@ import type {
   ChatWorkspaceState,
   MessageView,
   PendingToolApprovalView,
+  ChapterGenerationView,
   ToolActivityView,
 } from "../types.ts";
 
@@ -55,6 +56,10 @@ export function useAgentWorkspace() {
     useState<readonly PendingToolApprovalView[]>([]);
   const [toolActivities, setToolActivities] =
     useState<readonly ToolActivityView[]>([]);
+  const [bookChangeVersions, setBookChangeVersions] =
+    useState<Readonly<Record<string, number>>>({});
+  const [chapterGenerations, setChapterGenerations] =
+    useState<Readonly<Record<string, ChapterGenerationView>>>({});
   const [error, setError] = useState<string | null>(null);
   const activeThreadIdRef = useRef("");
   const activeScopeRef = useRef<ConversationScope>({ kind: "global" });
@@ -223,12 +228,13 @@ export function useAgentWorkspace() {
     }
 
     if (event.type === "tool_status") {
-      const id = `${event.runId}:${event.toolName}`;
+      const id = `${event.runId}:${event.toolCallId}`;
       const threadId = runThreadIdsRef.current.get(event.runId) ?? "";
       setToolActivities((current) => [
         ...current.filter((item) => item.id !== id),
         {
           id,
+          toolCallId: event.toolCallId,
           runId: event.runId,
           threadId,
           toolName: event.toolName,
@@ -238,6 +244,90 @@ export function useAgentWorkspace() {
           updatedAt: event.timestamp,
         },
       ]);
+      return;
+    }
+
+    if (event.type === "book_changed") {
+      setBookChangeVersions((current) => ({
+        ...current,
+        [event.projectId]: (current[event.projectId] ?? 0) + 1,
+      }));
+      return;
+    }
+
+    if (event.type === "chapter_generation_started") {
+      setChapterGenerations((current) => ({
+        ...current,
+        [event.chapterId]: {
+          generationId: event.generationId,
+          projectId: event.projectId,
+          chapterId: event.chapterId,
+          mode: event.mode,
+          initialText: event.initialText,
+          generatedText: "",
+          sequence: 0,
+          status: "streaming",
+          updatedAt: event.timestamp,
+        },
+      }));
+      return;
+    }
+
+    if (event.type === "chapter_generation_delta") {
+      setChapterGenerations((current) => {
+        const existing = current[event.chapterId];
+        if (
+          !existing ||
+          existing.generationId !== event.generationId ||
+          event.sequence <= existing.sequence
+        ) return current;
+        return {
+          ...current,
+          [event.chapterId]: {
+            ...existing,
+            generatedText: `${existing.generatedText}${event.text}`,
+            sequence: event.sequence,
+            status: "streaming",
+            updatedAt: event.timestamp,
+          },
+        };
+      });
+      return;
+    }
+
+    if (event.type === "chapter_generation_completed") {
+      setChapterGenerations((current) => {
+        const existing = current[event.chapterId];
+        if (!existing || existing.generationId !== event.generationId) return current;
+        return {
+          ...current,
+          [event.chapterId]: {
+            ...existing,
+            status: "completed",
+            content: event.content,
+            revisionNumber: event.revisionNumber,
+            characterCount: event.characterCount,
+            updatedAt: event.timestamp,
+          },
+        };
+      });
+      return;
+    }
+
+    if (event.type === "chapter_generation_failed") {
+      setChapterGenerations((current) => {
+        const existing = current[event.chapterId];
+        if (!existing || existing.generationId !== event.generationId) return current;
+        return {
+          ...current,
+          [event.chapterId]: {
+            ...existing,
+            status: "failed",
+            error: event.error,
+            updatedAt: event.timestamp,
+          },
+        };
+      });
       return;
     }
 
@@ -571,6 +661,8 @@ export function useAgentWorkspace() {
     runs,
     pendingApprovals,
     toolActivities,
+    bookChangeVersions,
+    chapterGenerations,
     error,
   };
 

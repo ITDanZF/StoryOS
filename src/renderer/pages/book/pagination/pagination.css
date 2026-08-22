@@ -20,10 +20,14 @@
   isolation: isolate;
 }
 
+.chapter-pagination-stage-pending {
+  background: #fff;
+}
+
 .chapter-pagination-sheet {
   box-sizing: border-box;
-  width: 720px;
-  height: 960px;
+  width: var(--chapter-page-width, 720px);
+  height: var(--chapter-page-height, 960px);
   border: 1px solid #e4e2dd;
   border-radius: 6px;
   background: #fff;
@@ -37,10 +41,9 @@
 
 .chapter-pagination-editor .chapter-rich-text {
   box-sizing: border-box;
-  width: 720px;
+  width: var(--chapter-page-width, 720px);
   min-height: var(--chapter-pagination-stage-height);
   margin: 0;
-  padding: 72px;
   background: transparent;
 }
 
@@ -88,13 +91,4 @@
 .chapter-pagination-page-arrow:disabled {
   cursor: default;
   opacity: 0.25;
-}
-
-@media (max-width: 720px) {
-  .chapter-pagination-editor .chapter-rich-text {
-    width: 720px;
-    padding: 72px;
-    font-size: 16px;
-    line-height: 1.85;
-  }
 }

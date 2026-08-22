@@ -52,11 +52,13 @@ export type AgentEventPayload =
         | "tool_approved"
         | "tool_rejected"
         | "tool_completed";
+      readonly toolCallId: string;
       readonly toolName: string;
       readonly summary: string;
     }
   | {
       readonly type: "tool_failed";
+      readonly toolCallId: string;
       readonly toolName: string;
       readonly summary: string;
       readonly error: string;
@@ -96,6 +98,7 @@ export async function emitToolExecutionEvent(
       handler,
       createAgentEvent(source, {
         type: "tool_failed",
+        toolCallId: event.toolCallId,
         toolName: event.request.toolName,
         summary: event.request.summary,
         error: event.error,
@@ -108,6 +111,7 @@ export async function emitToolExecutionEvent(
     handler,
     createAgentEvent(source, {
       type: event.type,
+      toolCallId: event.toolCallId,
       toolName: event.request.toolName,
       summary: event.request.summary,
     }),

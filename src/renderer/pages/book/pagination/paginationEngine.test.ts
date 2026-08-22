@@ -130,4 +130,41 @@ describe("pagination engine", () => {
     expect(first).toHaveLength(3);
     expect(second).toEqual(first);
   });
+
+  it("avoids leaving a single paragraph line at either page edge", () => {
+    const paragraph = Array.from({ length: 6 }, (_, index) =>
+      fragment(`line-${index}`, 2 + index, 3 + index, 20, {
+        blockKey: "paragraph-1",
+        lineIndex: index,
+        lineCount: 6,
+      }));
+    const pages = paginateFragments({
+      fragments: [fragment("intro", 1, 2, 80), ...paragraph],
+      contentHeight: 100,
+      documentStart: 1,
+      documentEnd: 8,
+    });
+
+    expect(pages.map((page) => [page.from, page.to])).toEqual([
+      [1, 2],
+      [2, 6],
+      [6, 8],
+    ]);
+  });
+
+  it("terminates and reports an oversized line instead of looping", () => {
+    const pages = paginateFragments({
+      fragments: [fragment("oversized", 1, 2, 140, {
+        blockKey: "paragraph-1",
+        lineIndex: 0,
+        lineCount: 1,
+      })],
+      contentHeight: 100,
+      documentStart: 1,
+      documentEnd: 2,
+    });
+
+    expect(pages).toHaveLength(1);
+    expect(pages[0].overflow).toBe(true);
+  });
 });

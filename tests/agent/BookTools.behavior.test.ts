@@ -11,6 +11,9 @@ import { createBookMutationTools } from "../../src/main/agent/tools/book/mutateB
 import ToolPolicy from "../../src/main/agent/security/ToolPolicy.ts";
 import type { RegisteredTool } from "../../src/main/agent/tools/ToolResolver.ts";
 import { serializeTiptapDocument } from "../../src/shared/book/richText.ts";
+import ChapterGenerationService from "../../src/main/agent/book-generation/ChapterGenerationService.ts";
+import type { ChapterGenerationEvent } from "../../src/main/agent/application/chapterGenerationEvents.ts";
+import type { ModelGateway } from "../../src/main/agent/model/ModelGateway.ts";
 
 const roots: string[] = [];
 const databases: ProjectDatabase[] = [];
@@ -69,6 +72,119 @@ afterEach(() => {
 });
 
 describe("book read tools", () => {
+  it("streams generated prose and commits exactly one final revision", async () => {
+    const { chapter, novels } = createHarness();
+    const events: ChapterGenerationEvent[] = [];
+    const model: ModelGateway = {
+      async *stream() {
+        yield "门外站着";
+        yield "一个陌生人。";
+      },
+    };
+    const generation = new ChapterGenerationService(
+      model,
+      novels,
+      (event) => {
+        events.push(event);
+      },
+    );
+
+    const result = await generation.generate({
+      projectId: "project-story",
+      chapterId: chapter.id,
+      mode: "append",
+      instruction: "续写陌生人来访。",
+    });
+
+    expect(result.revisionNumber).toBe(2);
+    expect(novels.listRevisions(chapter.id)).toHaveLength(2);
+    expect(events.map((event) => event.type)).toEqual([
+      "chapter_generation_started",
+      "chapter_generation_delta",
+      "chapter_generation_completed",
+    ]);
+    expect(events[1]).toMatchObject({
+      sequence: 1,
+      text: "门外站着一个陌生人。",
+    });
+    expect(novels.getCurrentRevision(chapter.id)?.content)
+      .toContain("门外站着一个陌生人");
+  });
+
+  it("keeps canonical content unchanged when generation fails", async () => {
+    const { chapter, novels } = createHarness();
+    const originalRevision = novels.getCurrentRevision(chapter.id);
+    const events: ChapterGenerationEvent[] = [];
+    const model: ModelGateway = {
+      async *stream() {
+        yield "未完成的增量";
+        throw new Error("model disconnected");
+      },
+    };
+    const generation = new ChapterGenerationService(
+      model,
+      novels,
+      (event) => {
+        events.push(event);
+      },
+    );
+
+    await expect(generation.generate({
+      projectId: "project-story",
+      chapterId: chapter.id,
+      mode: "append",
+      instruction: "继续写。",
+    })).rejects.toThrow("model disconnected");
+
+    expect(novels.listRevisions(chapter.id)).toHaveLength(1);
+    expect(novels.getCurrentRevision(chapter.id)?.id).toBe(originalRevision?.id);
+    expect(events.at(-1)).toMatchObject({
+      type: "chapter_generation_failed",
+      error: "model disconnected",
+    });
+  });
+
+  it("rejects a final write when the chapter changes during generation", async () => {
+    const { chapter, novels } = createHarness();
+    const model: ModelGateway = {
+      async *stream() {
+        yield "AI 正在续写。";
+        const current = novels.getCurrentRevision(chapter.id);
+        novels.saveRevision({
+          chapterId: chapter.id,
+          content: serializeTiptapDocument({
+            type: "doc",
+            content: [{
+              type: "paragraph",
+              content: [{ type: "text", text: "用户在生成期间保存的内容。" }],
+            }],
+          }),
+          expectedCurrentRevisionId: current?.id ?? null,
+        });
+      },
+    };
+    const events: ChapterGenerationEvent[] = [];
+    const generation = new ChapterGenerationService(
+      model,
+      novels,
+      (event) => {
+        events.push(event);
+      },
+    );
+
+    await expect(generation.generate({
+      projectId: "project-story",
+      chapterId: chapter.id,
+      mode: "append",
+      instruction: "继续写。",
+    })).rejects.toThrow("Chapter revision conflict");
+
+    expect(novels.listRevisions(chapter.id)).toHaveLength(2);
+    expect(novels.getCurrentRevision(chapter.id)?.content)
+      .toContain("用户在生成期间保存的内容");
+    expect(events.at(-1)?.type).toBe("chapter_generation_failed");
+  });
+
   it("reads the outline and persisted chapter text", async () => {
     const { chapter, tools } = createHarness();
     const outline = JSON.parse(String(await tools.get_book_outline.invoke({}))) as {

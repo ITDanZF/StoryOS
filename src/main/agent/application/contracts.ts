@@ -1,5 +1,7 @@
 import type { ToolApprovalDecision } from "../security/ToolPolicy.ts";
 import type { OrchestrationEvent } from "../Agent/orchestration/contracts.ts";
+import type { NovelMutation } from "./novelEvents.ts";
+import type { ChapterGenerationEvent } from "./chapterGenerationEvents.ts";
 
 export type StartRunRequest = {
   readonly threadId: string;
@@ -86,10 +88,18 @@ export type ApplicationEvent =
   | {
       readonly type: "tool_status";
       readonly runId: string;
+      readonly toolCallId: string;
       readonly toolName: string;
       readonly summary: string;
       readonly status: "started" | "approved" | "rejected" | "completed" | "failed";
       readonly error?: string;
+      readonly timestamp: string;
+    }
+  | {
+      readonly type: "book_changed";
+      readonly eventId: string;
+      readonly projectId: string;
+      readonly mutation: NovelMutation;
       readonly timestamp: string;
     }
   | {
@@ -106,6 +116,7 @@ export type ApplicationEvent =
       readonly durationMs: number;
       readonly timestamp: string;
     }
+  | ChapterGenerationEvent
   | OrchestrationEvent;
 
 export type ApplicationEventHandler = (
