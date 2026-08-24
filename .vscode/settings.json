@@ -1,0 +1,31 @@
+{
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "所有 Git 提交信息必须使用简体中文描述改动，不得生成英文摘要或英文正文。"
+    },
+    {
+      "text": "严格遵循 Conventional Commits：<type>(<scope>): <中文摘要>；scope 可省略。"
+    },
+    {
+      "text": "type 只能使用 feat、fix、docs、refactor、test、chore、build、ci、perf、style、revert。"
+    },
+    {
+      "text": "type 和 scope 使用英文小写；scope 应简短表示实际模块，例如 editor、agent、project、storage、ui、readme。"
+    },
+    {
+      "text": "摘要使用动宾结构准确概括已完成的改动，例如：docs(readme): 优化项目首页说明与视觉结构。"
+    },
+    {
+      "text": "标题不要使用句号、表情、Markdown、引号或无意义表述，并控制在 72 个字符以内。"
+    },
+    {
+      "text": "简单改动只生成一行标题；复杂改动可以在空行后添加简体中文正文，说明改动内容和原因。"
+    },
+    {
+      "text": "如果存在破坏性变更，在 type 或 scope 后添加 !，并在正文中使用 BREAKING CHANGE: 后接简体中文说明。"
+    },
+    {
+      "text": "只输出最终提交信息，不添加解释、候选项、代码块或 Co-authored-by。"
+    }
+  ]
+}
