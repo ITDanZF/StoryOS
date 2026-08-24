@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AgentConfigurationRequest,
   AgentServiceStatus,
   ConversationApplicationEvent,
+  ConversationEvent,
   ConversationScope,
   ConversationTurnContext,
   CreateProjectRequest,
-  MessageDto,
   ProjectSnapshot,
   ProjectNavigationSnapshot,
   RenameProjectRequest,
@@ -17,11 +17,22 @@ import type {
 } from "../../../../shared/agent/contracts.ts";
 import type {
   ChatWorkspaceState,
-  MessageView,
   PendingToolApprovalView,
   ChapterGenerationView,
-  ToolActivityView,
 } from "../types.ts";
+import { ConversationEventBatcher } from "../conversation/store/conversationEventBatcher.ts";
+import { conversationStore } from "../conversation/store/conversationStore.ts";
+
+const conversationEventBatcher = new ConversationEventBatcher({
+  applyEvent: (event) => conversationStore.getState().applyEvent(event),
+  applyEvents: (events) => conversationStore.getState().applyEvents(events),
+});
+
+function isStructuredConversationEvent(
+  event: ConversationApplicationEvent,
+): event is ConversationApplicationEvent & ConversationEvent {
+  return "eventId" in event && "sequence" in event;
+}
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -49,13 +60,9 @@ export function useAgentWorkspace() {
   const [projectNavigations, setProjectNavigations] = useState<
     Readonly<Record<string, ProjectNavigationSnapshot>>
   >({});
-  const [messages, setMessages] = useState<readonly MessageView[]>([]);
   const [runs, setRuns] = useState<readonly RunSnapshot[]>([]);
-  const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
   const [pendingApprovals, setPendingApprovals] =
     useState<readonly PendingToolApprovalView[]>([]);
-  const [toolActivities, setToolActivities] =
-    useState<readonly ToolActivityView[]>([]);
   const [bookChangeVersions, setBookChangeVersions] =
     useState<Readonly<Record<string, number>>>({});
   const [chapterGenerations, setChapterGenerations] =
@@ -77,7 +84,7 @@ export function useAgentWorkspace() {
     threadId: string,
   ) => {
     const requestId = ++messageLoadRef.current;
-    const result = await window.storyOSAgent.listConversationMessages({
+    const conversationEvents = await window.storyOSAgent.listConversationEvents({
       scope,
       threadId,
     });
@@ -86,7 +93,8 @@ export function useAgentWorkspace() {
       !sameScope(scope, activeScopeRef.current) ||
       threadId !== activeThreadIdRef.current
     ) return;
-    setMessages(result.map((message: MessageDto) => ({ ...message })));
+    conversationEventBatcher.flush();
+    conversationStore.getState().hydrate(conversationEvents);
   }, []);
 
   const applyWorkspaceSnapshot = useCallback(async (
@@ -107,7 +115,7 @@ export function useAgentWorkspace() {
       await loadMessages(scope, snapshot.threads.activeThreadId);
     } else {
       messageLoadRef.current += 1;
-      setMessages([]);
+      conversationStore.getState().reset();
     }
     return true;
   }, [loadMessages]);
@@ -148,7 +156,7 @@ export function useAgentWorkspace() {
       await loadMessages(scope, snapshot.activeThreadId);
     } else {
       messageLoadRef.current += 1;
-      setMessages([]);
+      conversationStore.getState().reset();
     }
     return true;
   }, [cacheConversationSnapshot, loadMessages]);
@@ -183,6 +191,31 @@ export function useAgentWorkspace() {
   }, [applyWorkspaceSnapshot, beginConversationTransition, loadProjectNavigation]);
   const handleEvent = useCallback((event: ConversationApplicationEvent) => {
     if (!sameScope(event.conversationScope, activeScopeRef.current)) return;
+    if (isStructuredConversationEvent(event)) {
+      if (event.type === "approval.requested") {
+        setPendingApprovals((current) => [
+          ...current.filter((item) => item.approvalId !== event.payload.approvalId),
+          {
+            approvalId: event.payload.approvalId,
+            runId: event.runId,
+            threadId: event.threadId,
+            conversationScope: event.conversationScope,
+            toolName: event.payload.toolName,
+            summary: event.payload.summary,
+            preview: event.payload.preview,
+            requestedAt: event.timestamp,
+          },
+        ]);
+      } else if (event.type === "approval.resolved") {
+        setPendingApprovals((current) => current.filter(
+          (item) => item.approvalId !== event.payload.approvalId,
+        ));
+      }
+      if (event.threadId === activeThreadIdRef.current) {
+        conversationEventBatcher.enqueue(event);
+      }
+      return;
+    }
     if (event.type === "run_started") {
       runThreadIdsRef.current.set(event.runId, event.threadId);
       setRuns((current) => upsertRun(current, {
@@ -191,59 +224,6 @@ export function useAgentWorkspace() {
         status: "running",
         startedAt: event.timestamp,
       }));
-      return;
-    }
-
-    if (event.type === "text_delta") {
-      setDrafts((current) => ({
-        ...current,
-        [event.runId]: `${current[event.runId] ?? ""}${event.content}`,
-      }));
-      return;
-    }
-
-    if (event.type === "approval_requested") {
-      const threadId = runThreadIdsRef.current.get(event.runId) ?? "";
-      setPendingApprovals((current) => [
-        ...current.filter((item) => item.approvalId !== event.approvalId),
-        {
-          approvalId: event.approvalId,
-          runId: event.runId,
-          threadId,
-          conversationScope: event.conversationScope,
-          toolName: event.toolName,
-          summary: event.summary,
-          preview: event.preview,
-          requestedAt: event.timestamp,
-        },
-      ]);
-      return;
-    }
-
-    if (event.type === "approval_resolved") {
-      setPendingApprovals((current) => current.filter(
-        (item) => item.approvalId !== event.approvalId,
-      ));
-      return;
-    }
-
-    if (event.type === "tool_status") {
-      const id = `${event.runId}:${event.toolCallId}`;
-      const threadId = runThreadIdsRef.current.get(event.runId) ?? "";
-      setToolActivities((current) => [
-        ...current.filter((item) => item.id !== id),
-        {
-          id,
-          toolCallId: event.toolCallId,
-          runId: event.runId,
-          threadId,
-          toolName: event.toolName,
-          summary: event.summary,
-          status: event.status,
-          ...(event.error ? { error: event.error } : {}),
-          updatedAt: event.timestamp,
-        },
-      ]);
       return;
     }
 
@@ -345,23 +325,9 @@ export function useAgentWorkspace() {
           content: event.content,
         });
       });
-      setDrafts((current) => {
-        const next = { ...current };
-        delete next[event.runId];
-        return next;
-      });
       setPendingApprovals((current) => current.filter(
         (item) => item.runId !== event.runId,
       ));
-      if (threadId === activeThreadIdRef.current) {
-        setMessages((current) => [...current, {
-          id: `answer-${event.runId}`,
-          threadId,
-          role: "assistant",
-          content: event.content,
-          createdAt: event.timestamp,
-        }]);
-      }
       return;
     }
 
@@ -379,11 +345,6 @@ export function useAgentWorkspace() {
           durationMs: event.durationMs,
           error: event.error,
         });
-      });
-      setDrafts((current) => {
-        const next = { ...current };
-        delete next[event.runId];
-        return next;
       });
       setPendingApprovals((current) => current.filter(
         (item) => item.runId !== event.runId,
@@ -577,14 +538,6 @@ export function useAgentWorkspace() {
     const normalized = content.trim();
     if (!threadId || !normalized) return;
     setError(null);
-    const localMessageId = `local-${crypto.randomUUID()}`;
-    setMessages((current) => [...current, {
-      id: localMessageId,
-      threadId,
-      role: "user",
-      content: normalized,
-      createdAt: new Date().toISOString(),
-    }]);
     try {
       const { runId } = await window.storyOSAgent.sendConversationMessage({
         scope: activeScopeRef.current,
@@ -594,9 +547,6 @@ export function useAgentWorkspace() {
       });
       runThreadIdsRef.current.set(runId, threadId);
     } catch (cause) {
-      setMessages((current) => current.filter(
-        (message) => message.id !== localMessageId,
-      ));
       setError(getErrorMessage(cause));
       throw cause;
     }
@@ -632,20 +582,6 @@ export function useAgentWorkspace() {
   }, [pendingApprovals]);
 
   const activeThreadId = threads?.activeThreadId ?? "";
-  const draftMessages = Object.entries(drafts)
-    .filter(([runId]) => runThreadIdsRef.current.get(runId) === activeThreadId)
-    .map(([runId, content]): MessageView => ({
-      id: `draft-${runId}`,
-      threadId: activeThreadId,
-      role: "assistant",
-      content,
-      createdAt: new Date().toISOString(),
-      streaming: true,
-    }));
-  const visibleMessages = useMemo(
-    () => [...messages, ...draftMessages],
-    [messages, drafts, activeThreadId],
-  );
   const activeRun = runs.find((run) =>
     run.threadId === activeThreadId && (run.status === "running" || run.status === "cancelling"));
 
@@ -657,10 +593,8 @@ export function useAgentWorkspace() {
     conversationScope,
     globalThreads,
     projectNavigations,
-    messages: visibleMessages,
     runs,
     pendingApprovals,
-    toolActivities,
     bookChangeVersions,
     chapterGenerations,
     error,

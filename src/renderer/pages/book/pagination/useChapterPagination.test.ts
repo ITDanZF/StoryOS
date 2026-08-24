@@ -13,6 +13,7 @@ const snapshot: ChapterPaginationSnapshot = {
   generation: 1,
   layoutKey: "test",
   status: "ready",
+  renderPageCount: 3,
   pages: [
     {
       index: 0,
@@ -68,6 +69,7 @@ describe("chapter page selection", () => {
       generation: 1,
       layoutKey: "empty-page-test",
       status: "ready",
+      renderPageCount: 3,
       pages: [
         { index: 0, from: 1, to: 3, usedHeight: 10, breakReason: "manual", overflow: false },
         { index: 1, from: 4, to: 6, usedHeight: 10, breakReason: "manual", overflow: false },

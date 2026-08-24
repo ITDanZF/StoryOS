@@ -1,6 +1,7 @@
 import type { AgentEventHandler } from "../Agent/AgentEvent.ts";
 import type { ToolApprovalHandler } from "../security/ToolPolicy.ts";
 import type { OrchestrationEventHandler } from "../Agent/orchestration/contracts.ts";
+import type { AgentTurnInput } from "./contracts.ts";
 
 export type AgentRunnerRunOptions = {
   readonly runId: string;
@@ -13,6 +14,6 @@ export type AgentRunnerRunOptions = {
 };
 
 export interface AgentRunner {
-  run(input: string, options: AgentRunnerRunOptions): Promise<string>;
+  run(input: AgentTurnInput, options: AgentRunnerRunOptions): Promise<string>;
   cancelRun(runId: string, reason?: unknown): boolean;
 }

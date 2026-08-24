@@ -108,7 +108,21 @@ export default class AgentExecutor {
         );
       } else {
         for await (const chunk of model.stream(modelInput)) {
-          await this.appendChunk(chunk, input, chunks);
+          if (typeof chunk === "string" || chunk.channel === "answer") {
+            await this.appendChunk(
+              typeof chunk === "string" ? chunk : chunk.delta,
+              input,
+              chunks,
+            );
+          } else {
+            await emitAgentEvent(
+              input.onEvent,
+              createAgentEvent(context, {
+                type: "reasoning_delta",
+                content: chunk.delta,
+              }),
+            );
+          }
         }
       }
 

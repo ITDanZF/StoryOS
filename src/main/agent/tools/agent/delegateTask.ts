@@ -94,7 +94,7 @@ export function createDelegateTaskTool(
       }
 
       try {
-        registry.get(subagent_type);
+        const definition = registry.get(subagent_type);
         context.budget.consumeSubtask(description);
 
         const result = await runtime.run({
@@ -107,6 +107,7 @@ export function createDelegateTaskTool(
           onEvent: context.onEvent,
           budget: context.budget,
           approval: context.approval,
+          grantedToolIds: definition.allowedToolIds,
         });
 
         return formatDelegateTaskResult(description, result);

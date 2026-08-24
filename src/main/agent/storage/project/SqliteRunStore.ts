@@ -18,6 +18,9 @@ type RunRow = {
   readonly output: string | null;
   readonly error_name: string | null;
   readonly error_message: string | null;
+  readonly error_code: string | null;
+  readonly error_phase: "routing" | "planning" | "execution" | "review" | null;
+  readonly error_retryable: number | null;
 };
 
 export default class SqliteRunStore implements RunHistoryStore {
@@ -44,7 +47,10 @@ export default class SqliteRunStore implements RunHistoryStore {
           duration_ms = NULL,
           output = NULL,
           error_name = NULL,
-          error_message = NULL
+          error_message = NULL,
+          error_code = NULL,
+          error_phase = NULL,
+          error_retryable = NULL
       `).run(event.runId, event.threadId, Date.parse(event.timestamp));
       return;
     }
@@ -69,6 +75,9 @@ export default class SqliteRunStore implements RunHistoryStore {
         {
           errorName: terminal.error.name,
           errorMessage: terminal.error.message,
+          errorCode: terminal.error.code,
+          errorPhase: terminal.error.phase,
+          errorRetryable: terminal.error.retryable,
         },
       );
       this.prune();
@@ -95,7 +104,10 @@ export default class SqliteRunStore implements RunHistoryStore {
           completed_at = ?,
           duration_ms = MAX(0, ? - started_at),
           error_name = 'RunInterruptedError',
-          error_message = 'Application exited before the run completed.'
+          error_message = 'Application exited before the run completed.',
+          error_code = 'run.cancelled',
+          error_phase = 'execution',
+          error_retryable = 0
       WHERE status IN ('queued', 'running', 'cancelling')
     `).run(now, now);
   }
@@ -109,12 +121,16 @@ export default class SqliteRunStore implements RunHistoryStore {
       readonly output?: string;
       readonly errorName?: string;
       readonly errorMessage?: string;
+      readonly errorCode?: string;
+      readonly errorPhase?: "routing" | "planning" | "execution" | "review";
+      readonly errorRetryable?: boolean;
     },
   ): void {
     this.database.prepare(`
       UPDATE agent_runs
       SET status = ?, completed_at = ?, duration_ms = ?, output = ?,
-          error_name = ?, error_message = ?
+          error_name = ?, error_message = ?, error_code = ?,
+          error_phase = ?, error_retryable = ?
       WHERE id = ?
     `).run(
       status,
@@ -123,6 +139,9 @@ export default class SqliteRunStore implements RunHistoryStore {
       result.output ?? null,
       result.errorName ?? null,
       result.errorMessage ?? null,
+      result.errorCode ?? null,
+      result.errorPhase ?? null,
+      result.errorRetryable === undefined ? null : Number(result.errorRetryable),
       runId,
     );
   }
@@ -156,6 +175,9 @@ export default class SqliteRunStore implements RunHistoryStore {
         : { error: Object.freeze({
             name: row.error_name,
             message: row.error_message,
+            code: row.error_code ?? "run.failed",
+            phase: row.error_phase ?? "execution",
+            retryable: row.error_retryable === 1,
           }) }),
     });
   }

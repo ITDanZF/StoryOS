@@ -223,6 +223,75 @@ const migrations: readonly SqliteMigration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    up(database) {
+      database.exec(`
+        CREATE TABLE conversation_events (
+          row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          event_id TEXT NOT NULL UNIQUE,
+          thread_id TEXT NOT NULL
+            REFERENCES threads(id) ON DELETE CASCADE,
+          run_id TEXT NOT NULL,
+          sequence INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          step_id TEXT,
+          block_id TEXT,
+          payload_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          UNIQUE(run_id, sequence)
+        );
+
+        CREATE INDEX idx_conversation_events_thread_run
+          ON conversation_events(thread_id, run_id, sequence);
+
+        CREATE INDEX idx_conversation_events_thread_created
+          ON conversation_events(thread_id, created_at, run_id, sequence);
+
+        INSERT INTO conversation_events(
+          event_id, thread_id, run_id, sequence, type,
+          step_id, block_id, payload_json, created_at
+        )
+        SELECT
+          'migrated_message_' || id,
+          thread_id,
+          'migrated_run_' || id,
+          1,
+          CASE role
+            WHEN 'user' THEN 'user.message.created'
+            ELSE 'assistant.block.completed'
+          END,
+          CASE role WHEN 'assistant' THEN 'migrated-step' ELSE NULL END,
+          CASE role WHEN 'assistant' THEN 'migrated-answer' ELSE NULL END,
+          CASE role
+            WHEN 'user' THEN json_object('messageId', id, 'content', content)
+            ELSE json_object('channel', 'answer', 'content', content)
+          END,
+          created_at
+        FROM messages
+        WHERE role IN ('user', 'assistant')
+        ORDER BY thread_id, sequence;
+      `);
+    },
+  },
+  {
+    version: 6,
+    up(database) {
+      const columns = new Set(
+        (database.pragma("table_info(agent_runs)") as { readonly name: string }[])
+          .map((column) => column.name),
+      );
+      if (!columns.has("error_code")) {
+        database.exec("ALTER TABLE agent_runs ADD COLUMN error_code TEXT");
+      }
+      if (!columns.has("error_phase")) {
+        database.exec("ALTER TABLE agent_runs ADD COLUMN error_phase TEXT");
+      }
+      if (!columns.has("error_retryable")) {
+        database.exec("ALTER TABLE agent_runs ADD COLUMN error_retryable INTEGER");
+      }
+    },
+  },
 ];
 
 export default class ProjectDatabase extends SqliteDatabase {

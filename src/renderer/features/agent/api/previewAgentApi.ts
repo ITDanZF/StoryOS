@@ -5,6 +5,7 @@ import type {
   BookWorkspaceSnapshot,
   ReadyBookWorkspaceSnapshot,
   ConversationApplicationEvent,
+  ConversationEvent,
   ConversationScope,
   MessageDto,
   ProjectDto,
@@ -16,6 +17,12 @@ import {
   countTiptapCharacters,
   parseTiptapDocument,
 } from "../../../../shared/book/richText.ts";
+
+type PreviewConversationEventInput = ConversationEvent extends infer TEvent
+  ? TEvent extends ConversationEvent
+    ? Omit<TEvent, "eventId" | "sequence" | "runId" | "threadId" | "timestamp">
+    : never
+  : never;
 
 const previewEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
 
@@ -29,6 +36,7 @@ if (previewEnabled && !window.storyOSAgent) {
   const threadsByScope = new Map<string, ThreadDto[]>();
   const activeThreads = new Map<string, string>();
   const messages = new Map<string, MessageDto[]>();
+  const conversationEvents = new Map<string, ConversationEvent[]>();
   const scopeId = () => activeProjectId ?? "system-default";
   const keyForScope = (scope: ConversationScope) =>
     scope.kind === "global" ? "system-default" : scope.projectId;
@@ -97,10 +105,38 @@ if (previewEnabled && !window.storyOSAgent) {
   ) => {
     const { threadId, content } = request;
     const runId = `preview-${crypto.randomUUID()}`;
-    messages.set(threadId, [...(messages.get(threadId) ?? []), { id: crypto.randomUUID(), threadId, role: "user", content, createdAt: new Date().toISOString() }]);
+    const messageId = crypto.randomUUID();
+    messages.set(threadId, [...(messages.get(threadId) ?? []), { id: messageId, threadId, role: "user", content, createdAt: new Date().toISOString() }]);
+    let sequence = 0;
+    const publish = (event: PreviewConversationEventInput) => {
+      const structured = {
+        ...event,
+        eventId: `preview-event-${crypto.randomUUID()}`,
+        sequence: ++sequence,
+        runId,
+        threadId,
+        timestamp: new Date().toISOString(),
+      } as ConversationEvent;
+      conversationEvents.set(threadId, [...(conversationEvents.get(threadId) ?? []), structured]);
+      emit(structured, scope);
+    };
     queueMicrotask(() => emit({ type: "run_started", runId, threadId, timestamp: new Date().toISOString() }, scope));
-    window.setTimeout(() => emit({ type: "text_delta", runId, content: "这是一个基础的流式回复预览。", timestamp: new Date().toISOString() }, scope), 250);
-    window.setTimeout(() => emit({ type: "run_completed", runId, content: "这是一个基础的流式回复预览。", durationMs: 650, timestamp: new Date().toISOString() }, scope), 650);
+    queueMicrotask(() => {
+      publish({ type: "user.message.created", payload: { messageId, content } });
+      publish({ type: "turn.started", payload: {} });
+      publish({ type: "assistant.block.started", stepId: "step-1", blockId: "reasoning-1", payload: { channel: "reasoning" } });
+    });
+    window.setTimeout(() => publish({ type: "assistant.block.delta", stepId: "step-1", blockId: "reasoning-1", payload: { channel: "reasoning", delta: "正在理解你的目标并检查当前上下文…" } }), 120);
+    window.setTimeout(() => {
+      publish({ type: "assistant.block.completed", stepId: "step-1", blockId: "reasoning-1", payload: { channel: "reasoning" } });
+      publish({ type: "assistant.block.started", stepId: "step-1", blockId: "answer-1", payload: { channel: "answer" } });
+      publish({ type: "assistant.block.delta", stepId: "step-1", blockId: "answer-1", payload: { channel: "answer", delta: "这是一个基础的流式回复预览。" } });
+    }, 250);
+    window.setTimeout(() => {
+      publish({ type: "assistant.block.completed", stepId: "step-1", blockId: "answer-1", payload: { channel: "answer" } });
+      publish({ type: "turn.completed", payload: { content: "这是一个基础的流式回复预览。", durationMs: 650 } });
+      emit({ type: "run_completed", runId, content: "这是一个基础的流式回复预览。", durationMs: 650, timestamp: new Date().toISOString() }, scope);
+    }, 650);
     return { runId };
   };
 
@@ -114,6 +150,7 @@ if (previewEnabled && !window.storyOSAgent) {
     }),
     listMessages: async (threadId) => threadId ? messages.get(threadId) ?? [] : [],
     listConversationMessages: async ({ threadId }) => messages.get(threadId) ?? [],
+    listConversationEvents: async ({ threadId }) => conversationEvents.get(threadId) ?? [],
     createThread: async (title) => {
       const thread: ThreadDto = { id: crypto.randomUUID(), title, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), metadata: {} };
       threadsByScope.set(scopeId(), [thread, ...(threadsByScope.get(scopeId()) ?? [])]);
@@ -404,7 +441,7 @@ if (previewEnabled && !window.storyOSAgent) {
     sendConversationMessage: async ({ scope, threadId, content }) =>
       sendPreviewMessage({ threadId, content }, scope),
     cancelRun: async (runId) => {
-      emit({ type: "run_aborted", runId, error: { name: "Cancelled", message: "回复已停止" }, durationMs: 0, timestamp: new Date().toISOString() });
+      emit({ type: "run_aborted", runId, error: { name: "Cancelled", message: "回复已停止", code: "run.cancelled", phase: "execution", retryable: false }, durationMs: 0, timestamp: new Date().toISOString() });
       return true;
     },
     cancelConversationRun: async (_scope, runId) => api.cancelRun(runId),

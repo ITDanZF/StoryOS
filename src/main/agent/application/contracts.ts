@@ -1,16 +1,28 @@
-import type { ToolApprovalDecision } from "../security/ToolPolicy.ts";
-import type { OrchestrationEvent } from "../Agent/orchestration/contracts.ts";
 import type { NovelMutation } from "./novelEvents.ts";
 import type { ChapterGenerationEvent } from "./chapterGenerationEvents.ts";
+import type { ConversationEvent } from "./conversationEvents.ts";
+import type { ConversationTurnContext } from "./conversationTurnContext.ts";
 
-export type StartRunRequest = {
+export type AgentUserMessage = {
+  readonly messageId: string;
+  readonly content: string;
+};
+
+export type AgentTurnInput = {
+  readonly message: AgentUserMessage;
+  readonly context?: ConversationTurnContext;
+};
+
+export type AgentRunRequest = AgentTurnInput & {
   readonly threadId: string;
-  readonly input: string;
 };
 
 export type SerializableError = {
   readonly name: string;
   readonly message: string;
+  readonly code: string;
+  readonly phase: "routing" | "planning" | "execution" | "review";
+  readonly retryable: boolean;
 };
 
 export type RunStatus =
@@ -40,62 +52,6 @@ export type ApplicationEvent =
       readonly timestamp: string;
     }
   | {
-      readonly type: "text_delta";
-      readonly runId: string;
-      readonly content: string;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "approval_requested";
-      readonly runId: string;
-      readonly approvalId: string;
-      readonly toolName: string;
-      readonly summary: string;
-      readonly preview: string;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "approval_resolved";
-      readonly runId: string;
-      readonly approvalId: string;
-      readonly decision: ToolApprovalDecision;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "agent_status";
-      readonly runId: string;
-      readonly agentRunId: string;
-      readonly agentType: string;
-      readonly threadId?: string;
-      readonly parentRunId?: string;
-      readonly depth?: number;
-      readonly status: "started" | "completed" | "aborted" | "timed_out" | "failed";
-      readonly error?: string;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "skill_selected";
-      readonly runId: string;
-      readonly skills: readonly {
-        readonly id: string;
-        readonly name: string;
-        readonly score: number;
-        readonly reasons: readonly string[];
-        readonly matchedTerms: readonly string[];
-      }[];
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "tool_status";
-      readonly runId: string;
-      readonly toolCallId: string;
-      readonly toolName: string;
-      readonly summary: string;
-      readonly status: "started" | "approved" | "rejected" | "completed" | "failed";
-      readonly error?: string;
-      readonly timestamp: string;
-    }
-  | {
       readonly type: "book_changed";
       readonly eventId: string;
       readonly projectId: string;
@@ -117,7 +73,7 @@ export type ApplicationEvent =
       readonly timestamp: string;
     }
   | ChapterGenerationEvent
-  | OrchestrationEvent;
+  | ConversationEvent;
 
 export type ApplicationEventHandler = (
   event: ApplicationEvent,

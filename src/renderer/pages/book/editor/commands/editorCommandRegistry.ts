@@ -15,7 +15,6 @@ export type EditorCommandId =
   | "clearFormatting"
   | "undo"
   | "redo"
-  | "pageBreak"
   | "hardBreak";
 
 export type EditorCommandDefinition = {
@@ -41,7 +40,6 @@ export const EDITOR_COMMANDS: Readonly<
   clearFormatting: { id: "clearFormatting", label: "清除格式" },
   undo: { id: "undo", label: "撤销", shortcut: "Mod+Z" },
   redo: { id: "redo", label: "重做", shortcut: "Mod+Y" },
-  pageBreak: { id: "pageBreak", label: "分页符", shortcut: "Mod+Enter" },
   hardBreak: { id: "hardBreak", label: "硬换行", shortcut: "Shift+Enter" },
 });
 
@@ -73,11 +71,6 @@ export function runEditorCommand(
     case "clearFormatting": return chain.unsetAllMarks().clearNodes().run();
     case "undo": return chain.undo().run();
     case "redo": return chain.redo().run();
-    case "pageBreak":
-      return chain.insertContent([
-        { type: "pageBreak" },
-        { type: "paragraph" },
-      ]).run();
     case "hardBreak": return chain.setHardBreak().run();
   }
 }

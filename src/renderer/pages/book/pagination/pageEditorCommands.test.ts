@@ -47,6 +47,7 @@ const snapshot: ChapterPaginationSnapshot = {
   generation: 1,
   layoutKey: "move-test",
   status: "ready",
+  renderPageCount: 3,
   pages: [
     { index: 0, from: 1, to: 4, usedHeight: 10, breakReason: "automatic", overflow: false },
     { index: 1, from: 4, to: 7, usedHeight: 10, breakReason: "automatic", overflow: false },
@@ -93,6 +94,7 @@ describe("page editor commands", () => {
       generation: 1,
       layoutKey: "manual-delete-test",
       status: "ready",
+      renderPageCount: 2,
       pages: [
         { index: 0, from: 1, to: 3, usedHeight: 10, breakReason: "manual", overflow: false },
         { index: 1, from: 4, to: 6, usedHeight: 10, breakReason: "document-end", overflow: false },
@@ -118,6 +120,7 @@ describe("page editor commands", () => {
       generation: 1,
       layoutKey: "single-delete-test",
       status: "ready",
+      renderPageCount: 1,
       pages: [{
         index: 0,
         from: 1,

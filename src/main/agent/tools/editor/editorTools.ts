@@ -27,7 +27,6 @@ const editorCommandSchema = z.enum([
   "clearFormatting",
   "undo",
   "redo",
-  "pageBreak",
 ]);
 
 export function createEditorTools(

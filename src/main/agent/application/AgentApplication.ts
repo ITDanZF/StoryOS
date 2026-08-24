@@ -14,10 +14,20 @@ import type {
   RunSnapshot,
   RunStatus,
   SerializableError,
-  StartRunRequest,
+  AgentRunRequest,
+  AgentTurnInput,
 } from "./contracts.ts";
 import type { AgentRunner } from "./ports.ts";
 import type { ApplicationEventRecorder } from "./runPorts.ts";
+import type { ConversationEvent } from "./conversationEvents.ts";
+import type { OrchestrationEvent } from "../Agent/orchestration/contracts.ts";
+import AgentFailure from "../errors/AgentFailure.ts";
+
+type ConversationEventInput = ConversationEvent extends infer TEvent
+  ? TEvent extends ConversationEvent
+    ? Omit<TEvent, "eventId" | "sequence" | "threadId" | "runId" | "timestamp">
+    : never
+  : never;
 
 type RunRecord = {
   promise: Promise<string> | null;
@@ -35,6 +45,7 @@ type RunRecord = {
 
 type PendingApproval = {
   readonly runId: string;
+  readonly toolCallId: string;
   readonly resolve: (decision: ToolApprovalDecision) => void;
 };
 
@@ -46,11 +57,34 @@ class RunCancelledError extends Error {
 }
 
 function serializeError(error: unknown): SerializableError {
+  if (error instanceof AgentFailure) {
+    return {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      phase: error.phase,
+      retryable: error.retryable,
+    };
+  }
   if (error instanceof Error) {
-    return { name: error.name, message: error.message };
+    const timedOut = error instanceof RunTimedOutError;
+    const cancelled = error.name === "RunCancelledError";
+    return {
+      name: error.name,
+      message: error.message,
+      code: timedOut ? "run.timed_out" : cancelled ? "run.cancelled" : "run.failed",
+      phase: "execution",
+      retryable: timedOut,
+    };
   }
 
-  return { name: "Error", message: String(error) };
+  return {
+    name: "Error",
+    message: String(error),
+    code: "run.failed",
+    phase: "execution",
+    retryable: false,
+  };
 }
 
 export type AgentApplicationOptions = {
@@ -65,6 +99,17 @@ export default class AgentApplication {
   private readonly runs = new Map<string, RunRecord>();
   private readonly activeRunIdsByThread = new Map<string, string>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
+  private readonly conversationSequences = new Map<string, number>();
+  private readonly activeAnswerBlocks = new Map<string, {
+    readonly stepId: string;
+    readonly blockId: string;
+  }>();
+  private readonly answerBlockCounts = new Map<string, number>();
+  private readonly activeReasoningBlocks = new Map<string, {
+    readonly stepId: string;
+    readonly blockId: string;
+  }>();
+  private readonly reasoningBlockCounts = new Map<string, number>();
   private readonly maxRetainedRuns: number;
   private acceptingRuns = true;
   private shutdownPromise: Promise<void> | null = null;
@@ -106,17 +151,17 @@ export default class AgentApplication {
     return () => this.subscribers.delete(handler);
   }
 
-  startRun(request: StartRunRequest): string {
+  startRun(request: AgentRunRequest): string {
     if (!this.acceptingRuns) {
       throw new Error("Agent application is shutting down.");
     }
     const threadId = request.threadId.trim();
-    const input = request.input.trim();
+    const content = request.message.content.trim();
 
     if (!threadId) {
       throw new Error("Thread id is required.");
     }
-    if (!input) {
+    if (!content) {
       throw new Error("Agent input is required.");
     }
 
@@ -140,7 +185,15 @@ export default class AgentApplication {
     };
     this.runs.set(runId, record);
     this.activeRunIdsByThread.set(threadId, runId);
-    const promise = this.executeRun(runId, threadId, input, startedAt);
+    const promise = this.executeRun(
+      runId,
+      threadId,
+      {
+        message: { ...request.message, content },
+        ...(request.context ? { context: request.context } : {}),
+      },
+      startedAt,
+    );
     record.promise = promise;
     return runId;
   }
@@ -197,20 +250,24 @@ export default class AgentApplication {
 
     this.pendingApprovals.delete(approvalId);
     pending.resolve(decision);
-    await this.emit({
-      type: "approval_resolved",
-      runId: pending.runId,
-      approvalId,
-      decision,
-      timestamp: new Date().toISOString(),
-    });
+    const run = this.runs.get(pending.runId);
+    if (run) {
+      await this.emitConversation(pending.runId, run.threadId, {
+        type: "approval.resolved",
+        payload: {
+          approvalId,
+          toolCallId: pending.toolCallId,
+          decision,
+        },
+      });
+    }
     return true;
   }
 
   private async executeRun(
     runId: string,
     threadId: string,
-    input: string,
+    input: AgentTurnInput,
     startedAt: number,
   ): Promise<string> {
     await this.emit({
@@ -218,6 +275,14 @@ export default class AgentApplication {
       runId,
       threadId,
       timestamp: new Date(startedAt).toISOString(),
+    });
+    await this.emitConversation(runId, threadId, {
+      type: "user.message.created",
+      payload: input.message,
+    });
+    await this.emitConversation(runId, threadId, {
+      type: "turn.started",
+      payload: {},
     });
 
     try {
@@ -230,15 +295,10 @@ export default class AgentApplication {
         runId,
         threadId,
         approval: (request) => this.requestApproval(runId, request),
-        onChunk: (chunk) =>
-          this.emit({
-            type: "text_delta",
-            runId,
-            content: chunk,
-            timestamp: new Date().toISOString(),
-          }),
+        onChunk: (chunk) => this.handleTextChunk(runId, threadId, chunk),
         onAgentEvent: (event) => this.handleAgentEvent(runId, event),
-        onOrchestrationEvent: (event) => this.emit(event),
+        onOrchestrationEvent: (event) =>
+          this.handleOrchestrationEvent(runId, threadId, event),
       });
 
       const completedAt = new Date().toISOString();
@@ -249,6 +309,16 @@ export default class AgentApplication {
         run.completedAt = completedAt;
         run.durationMs = Date.now() - startedAt;
       }
+
+      await this.completeAnswerBlock(runId, threadId);
+      await this.completeReasoningBlock(runId, threadId);
+      await this.emitConversation(runId, threadId, {
+        type: "turn.completed",
+        payload: {
+          content,
+          durationMs: run?.durationMs ?? Date.now() - startedAt,
+        },
+      });
 
       await this.emit({
         type: "run_completed",
@@ -278,6 +348,19 @@ export default class AgentApplication {
         this.restoreCheckpoints(run.checkpointSnapshot);
       }
 
+
+      await this.completeAnswerBlock(runId, threadId);
+      await this.completeReasoningBlock(runId, threadId);
+      await this.emitConversation(runId, threadId, {
+        type: "turn.failed",
+        payload: {
+          error: serializedError.message,
+          code: serializedError.code,
+          retryable: serializedError.retryable,
+          durationMs: run?.durationMs ?? Date.now() - startedAt,
+        },
+      });
+
       await this.emit({
         type,
         runId,
@@ -295,8 +378,103 @@ export default class AgentApplication {
         this.activeRunIdsByThread.delete(threadId);
       }
       this.rejectPendingApprovals(runId);
+      this.activeAnswerBlocks.delete(runId);
+      this.answerBlockCounts.delete(runId);
+      this.activeReasoningBlocks.delete(runId);
+      this.reasoningBlockCounts.delete(runId);
+      this.conversationSequences.delete(runId);
       this.evictSettledRuns();
     }
+  }
+
+  private async handleTextChunk(
+    runId: string,
+    threadId: string,
+    chunk: string,
+  ): Promise<void> {
+    await this.completeReasoningBlock(runId, threadId);
+    let block = this.activeAnswerBlocks.get(runId);
+    if (!block) {
+      const blockNumber = (this.answerBlockCounts.get(runId) ?? 0) + 1;
+      this.answerBlockCounts.set(runId, blockNumber);
+      block = {
+        stepId: `step-${blockNumber}`,
+        blockId: `answer-${blockNumber}`,
+      };
+      this.activeAnswerBlocks.set(runId, block);
+      await this.emitConversation(runId, threadId, {
+        type: "assistant.block.started",
+        stepId: block.stepId,
+        blockId: block.blockId,
+        payload: { channel: "answer" },
+      });
+    }
+
+    await this.emitConversation(runId, threadId, {
+      type: "assistant.block.delta",
+      stepId: block.stepId,
+      blockId: block.blockId,
+      payload: { channel: "answer", delta: chunk },
+    });
+  }
+
+  private async completeAnswerBlock(
+    runId: string,
+    threadId: string,
+  ): Promise<void> {
+    const block = this.activeAnswerBlocks.get(runId);
+    if (!block) return;
+    this.activeAnswerBlocks.delete(runId);
+    await this.emitConversation(runId, threadId, {
+      type: "assistant.block.completed",
+      stepId: block.stepId,
+      blockId: block.blockId,
+      payload: { channel: "answer" },
+    });
+  }
+
+  private async handleReasoningChunk(
+    runId: string,
+    threadId: string,
+    chunk: string,
+  ): Promise<void> {
+    let block = this.activeReasoningBlocks.get(runId);
+    if (!block) {
+      const blockNumber = (this.reasoningBlockCounts.get(runId) ?? 0) + 1;
+      this.reasoningBlockCounts.set(runId, blockNumber);
+      block = {
+        stepId: `reasoning-step-${blockNumber}`,
+        blockId: `reasoning-${blockNumber}`,
+      };
+      this.activeReasoningBlocks.set(runId, block);
+      await this.emitConversation(runId, threadId, {
+        type: "assistant.block.started",
+        stepId: block.stepId,
+        blockId: block.blockId,
+        payload: { channel: "reasoning" },
+      });
+    }
+    await this.emitConversation(runId, threadId, {
+      type: "assistant.block.delta",
+      stepId: block.stepId,
+      blockId: block.blockId,
+      payload: { channel: "reasoning", delta: chunk },
+    });
+  }
+
+  private async completeReasoningBlock(
+    runId: string,
+    threadId: string,
+  ): Promise<void> {
+    const block = this.activeReasoningBlocks.get(runId);
+    if (!block) return;
+    this.activeReasoningBlocks.delete(runId);
+    await this.emitConversation(runId, threadId, {
+      type: "assistant.block.completed",
+      stepId: block.stepId,
+      blockId: block.blockId,
+      payload: { channel: "reasoning" },
+    });
   }
 
   private requestApproval(
@@ -305,18 +483,29 @@ export default class AgentApplication {
   ): Promise<ToolApprovalDecision> {
     const approvalId = `approval_${crypto.randomUUID()}`;
     const decision = new Promise<ToolApprovalDecision>((resolve) => {
-      this.pendingApprovals.set(approvalId, { runId, resolve });
+      this.pendingApprovals.set(approvalId, {
+        runId,
+        toolCallId: request.toolCallId,
+        resolve,
+      });
     });
 
-    void this.emit({
-      type: "approval_requested",
-      runId,
-      approvalId,
-      toolName: request.toolName,
-      summary: request.summary,
-      preview: createToolApprovalPreview(request),
-      timestamp: new Date().toISOString(),
-    });
+    const run = this.runs.get(runId);
+    const preview = createToolApprovalPreview(request);
+    void (async () => {
+      if (run) {
+        await this.emitConversation(runId, run.threadId, {
+          type: "approval.requested",
+          payload: {
+            approvalId,
+            toolCallId: request.toolCallId,
+            toolName: request.toolName,
+            summary: request.summary,
+            preview,
+          },
+        });
+      }
+    })();
     return decision;
   }
 
@@ -325,12 +514,6 @@ export default class AgentApplication {
     event: AgentEvent,
   ): Promise<void> {
     if (event.type === "skill_selected") {
-      await this.emit({
-        type: "skill_selected",
-        runId: rootRunId,
-        skills: event.skills,
-        timestamp: new Date().toISOString(),
-      });
       return;
     }
 
@@ -338,56 +521,141 @@ export default class AgentApplication {
       return;
     }
 
+    if (event.type === "reasoning_delta") {
+      const run = this.runs.get(rootRunId);
+      if (run) {
+        await this.handleReasoningChunk(rootRunId, run.threadId, event.content);
+      }
+      return;
+    }
+
     if (event.agentType === "main" && event.type.startsWith("run_")) return;
 
     switch (event.type) {
-      case "tool_approval_requested":
+      case "tool_approval_requested": {
+        const run = this.runs.get(rootRunId);
+        if (run) {
+          await this.completeAnswerBlock(rootRunId, run.threadId);
+          await this.completeReasoningBlock(rootRunId, run.threadId);
+        }
         return;
+      }
       case "tool_started":
       case "tool_approved":
       case "tool_rejected":
       case "tool_completed":
-      case "tool_failed":
-        await this.emit({
-          type: "tool_status",
-          runId: rootRunId,
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          summary: event.summary,
-          status: event.type.replace("tool_", "") as
-            | "started"
-            | "approved"
-            | "rejected"
-            | "completed"
-            | "failed",
-          ...(event.type === "tool_failed" ? { error: event.error } : {}),
-          timestamp: new Date().toISOString(),
+      case "tool_failed": {
+        const run = this.runs.get(rootRunId);
+        if (run && event.type === "tool_started") {
+          await this.completeAnswerBlock(rootRunId, run.threadId);
+          await this.completeReasoningBlock(rootRunId, run.threadId);
+        }
+        if (!run || event.type === "tool_approved") return;
+        if (event.type === "tool_started") {
+          await this.emitConversation(rootRunId, run.threadId, {
+            type: "tool.call.started",
+            payload: {
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              summary: event.summary,
+            },
+          });
+          return;
+        }
+        if (event.type === "tool_completed") {
+          await this.emitConversation(rootRunId, run.threadId, {
+            type: "tool.call.completed",
+            payload: { toolCallId: event.toolCallId },
+          });
+          return;
+        }
+        if (event.type === "tool_failed") {
+          await this.emitConversation(rootRunId, run.threadId, {
+            type: "tool.call.failed",
+            payload: {
+              toolCallId: event.toolCallId,
+              error: event.error,
+            },
+          });
+          return;
+        }
+        await this.emitConversation(rootRunId, run.threadId, {
+          type: "tool.call.rejected",
+          payload: {
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            summary: event.summary,
+            reason: "工具调用已被拒绝",
+          },
         });
         return;
+      }
       case "run_started":
       case "run_completed":
       case "run_aborted":
       case "run_timed_out":
       case "run_failed":
-        await this.emit({
-          type: "agent_status",
-          runId: rootRunId,
-          agentRunId: event.runId,
-          agentType: event.agentType,
-          status: event.type.replace("run_", "") as
-            | "started"
-            | "completed"
-            | "aborted"
-            | "timed_out"
-            | "failed",
-          ...(event.type === "run_started" ? {
-            threadId: event.threadId,
-            ...(event.parentRunId ? { parentRunId: event.parentRunId } : {}),
-            depth: event.depth,
-          } : {}),
-          ...(event.type === "run_failed" ? { error: event.error } : {}),
-          timestamp: new Date().toISOString(),
+        return;
+    }
+  }
+
+  private async handleOrchestrationEvent(
+    runId: string,
+    threadId: string,
+    event: OrchestrationEvent,
+  ): Promise<void> {
+    switch (event.type) {
+      case "task_started":
+        await this.emitConversation(runId, threadId, {
+          type: "task.started",
+          payload: {
+            taskId: event.taskId,
+            title: event.title,
+            agentId: event.agentType,
+            attempt: event.attempt,
+          },
         });
+        return;
+      case "task_reviewed":
+        await this.emitConversation(runId, threadId, {
+          type: "task.progress",
+          payload: {
+            taskId: event.taskId,
+            summary: `验收结果：${event.decision}（${Math.round(event.score * 100)}%）`,
+          },
+        });
+        return;
+      case "task_retrying":
+        await this.emitConversation(runId, threadId, {
+          type: "task.progress",
+          payload: {
+            taskId: event.taskId,
+            summary: `准备第 ${event.nextAttempt} 次执行`,
+          },
+        });
+        return;
+      case "task_completed":
+        await this.emitConversation(runId, threadId, {
+          type: "task.completed",
+          payload: { taskId: event.taskId, summary: "任务已完成" },
+        });
+        return;
+      case "task_failed":
+        await this.emitConversation(runId, threadId, {
+          type: "task.failed",
+          payload: { taskId: event.taskId, failure: event.failure },
+        });
+        return;
+      case "task_skipped":
+        await this.emitConversation(runId, threadId, {
+          type: "task.failed",
+          payload: { taskId: event.taskId, failure: event.failure },
+        });
+        return;
+      case "plan_created":
+      case "synthesis_started":
+      case "synthesis_completed":
+        return;
     }
   }
 
@@ -450,6 +718,11 @@ export default class AgentApplication {
     await this.options.eventRecorder?.close?.();
     this.subscribers.clear();
     this.pendingApprovals.clear();
+    this.activeAnswerBlocks.clear();
+    this.answerBlockCounts.clear();
+    this.activeReasoningBlocks.clear();
+    this.reasoningBlockCounts.clear();
+    this.conversationSequences.clear();
     this.activeRunIdsByThread.clear();
     this.runs.clear();
   }
@@ -475,6 +748,24 @@ export default class AgentApplication {
       ...(run.content !== undefined ? { content: run.content } : {}),
       ...(run.error ? { error: Object.freeze({ ...run.error }) } : {}),
     });
+  }
+
+  private async emitConversation(
+    runId: string,
+    threadId: string,
+    input: ConversationEventInput,
+  ): Promise<void> {
+    const sequence = (this.conversationSequences.get(runId) ?? 0) + 1;
+    this.conversationSequences.set(runId, sequence);
+    const event = Object.freeze({
+      ...input,
+      eventId: `conversation_event_${crypto.randomUUID()}`,
+      sequence,
+      runId,
+      threadId,
+      timestamp: new Date().toISOString(),
+    }) as ConversationEvent;
+    await this.emit(event);
   }
 
   private async emit(event: ApplicationEvent): Promise<void> {

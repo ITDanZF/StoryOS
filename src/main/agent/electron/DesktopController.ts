@@ -9,7 +9,6 @@ import type {
   CreateConversationRequest,
   SendConversationMessageRequest,
 } from "../application/conversationContracts.ts";
-import { formatConversationTurnInput } from "../application/conversationTurnContext.ts";
 import type { ToolApprovalDecision } from "../security/ToolPolicy.ts";
 import type WorkspaceRuntimeManager from "../runtime/WorkspaceRuntimeManager.ts";
 import type {
@@ -80,10 +79,14 @@ export default class DesktopController {
     if (!threadId) throw new Error("Thread id is required.");
     if (!content) throw new Error("Message content is required.");
     const { threads, agent } = runtime;
-    threads.appendMessage({ threadId, role: "user", content });
+    const userMessage = threads.appendMessage({ threadId, role: "user", content });
     const runId = agent.startRun({
       threadId,
-      input: formatConversationTurnInput(content, request.context),
+      message: {
+        messageId: userMessage.id,
+        content: userMessage.content,
+      },
+      ...(request.context ? { context: request.context } : {}),
     });
     void agent.waitForRun(runId).then((answer) => {
       threads.appendMessage({ threadId, role: "assistant", content: answer });
@@ -104,6 +107,11 @@ export default class DesktopController {
   async listConversationMessages(request: ConversationRef) {
     const runtime = await this.dependencies.runtime.resolve(request.scope);
     return runtime.threads.listMessages(request.threadId);
+  }
+
+  async listConversationEvents(request: ConversationRef) {
+    const runtime = await this.dependencies.runtime.resolve(request.scope);
+    return runtime.conversationEvents.listByThread(request.threadId);
   }
 
   async createConversation(request: CreateConversationRequest) {

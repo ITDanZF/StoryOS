@@ -4,6 +4,7 @@ import { useEditor } from "@tiptap/react";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -271,6 +272,11 @@ export default function ChapterRichTextEditor({
     },
   }, [flush, openFind, paginationController, publishContext]);
 
+  useLayoutEffect(() => {
+    paginationController.setContentStreaming(aiGenerating);
+    return () => paginationController.setContentStreaming(false);
+  }, [aiGenerating, paginationController]);
+
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     synchronizeEditorEditable(editor, !aiGenerating);
@@ -523,11 +529,6 @@ export default function ChapterRichTextEditor({
     }
   }, []);
 
-  const insertPageBreak = () => {
-    if (!editor || editor.isDestroyed) return;
-    runEditorCommand(editor, "pageBreak");
-  };
-
   const askAi = () => {
     if (!editor || editor.isDestroyed) return;
     const { from, to } = editor.state.selection;
@@ -564,7 +565,6 @@ export default function ChapterRichTextEditor({
             : pageTarget.chapterPageNumber) - 1
           : null}
         onActivePageChange={activatePage}
-        onInsertPageBreak={insertPageBreak}
       />
     </div>
   );

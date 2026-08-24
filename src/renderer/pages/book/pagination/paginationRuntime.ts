@@ -17,6 +17,7 @@ export function paginateEditorView(
     contentHeight: chapterPageContentHeight(pageSpec),
     documentStart: 1,
     documentEnd,
+    continuousFlow: true,
   });
 }
 

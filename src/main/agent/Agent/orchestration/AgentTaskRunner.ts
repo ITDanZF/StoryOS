@@ -1,5 +1,6 @@
 import AgentRuntime, { type AgentRunResult } from "../AgentRuntime.ts";
 import type { PlannedTaskRunner, TaskExecutionRequest } from "./ports.ts";
+import PromptCompiler from "../../runtime/PromptCompiler.ts";
 
 function buildTaskPrompt(request: TaskExecutionRequest): string {
   const dependencies = request.dependencyResults.length === 0
@@ -19,6 +20,8 @@ function buildTaskPrompt(request: TaskExecutionRequest): string {
     : "";
 
   return [
+    "ROOT REQUEST AND TRUSTED CONTEXT",
+    new PromptCompiler().compile(request.input),
     "TASK OBJECTIVE",
     request.task.objective,
     "EXPECTED OUTPUT",
@@ -36,7 +39,7 @@ export default class AgentTaskRunner implements PlannedTaskRunner {
 
   runTask(request: TaskExecutionRequest): Promise<AgentRunResult> {
     return this.runtime.run({
-      agentType: request.task.agentType,
+      agentType: request.task.assignedAgentId,
       prompt: buildTaskPrompt(request),
       parentThreadId: request.threadId,
       parentRunId: request.rootRunId,
@@ -45,6 +48,7 @@ export default class AgentTaskRunner implements PlannedTaskRunner {
       onEvent: request.onAgentEvent,
       budget: request.budget,
       approval: request.approval,
+      grantedToolIds: request.task.grantedToolIds,
     });
   }
 }

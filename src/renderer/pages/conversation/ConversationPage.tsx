@@ -2,6 +2,7 @@ import { ChevronDown, Menu, Settings2, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
+import ApprovalComposer from "../../features/agent/conversation/components/ApprovalComposer.tsx";
 import ConversationView from "./components/ConversationView.tsx";
 import MessageComposer from "./components/MessageComposer.tsx";
 
@@ -24,12 +25,9 @@ export default function ConversationPage() {
     : null;
   const globalActiveRun = globalConversationActive ? activeRun : undefined;
   const activeThreadId = activeThread?.id ?? "";
-  const pendingApprovals = state.pendingApprovals.filter(
+  const pendingApproval = state.pendingApprovals.find(
     (approval) => approval.threadId === activeThreadId,
-  );
-  const toolActivities = state.toolActivities.filter(
-    (activity) => activity.threadId === activeThreadId,
-  );
+  ) ?? null;
 
   useEffect(() => {
     if (state.conversationScope.kind !== "global") {
@@ -89,13 +87,7 @@ export default function ConversationPage() {
       </header>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <ConversationView
-          messages={globalConversationActive ? state.messages : []}
-          loading={state.loading || !globalConversationActive}
-          pendingApprovals={globalConversationActive ? pendingApprovals : []}
-          toolActivities={globalConversationActive ? toolActivities : []}
-          onResolveApproval={resolveApproval}
-        />
+        <ConversationView loading={state.loading || !globalConversationActive} />
         <MessageComposer
           disabled={
             !globalConversationActive ||
@@ -103,9 +95,17 @@ export default function ConversationPage() {
             !activeThread
           }
           activeRunId={globalActiveRun?.runId}
+          hidden={pendingApproval !== null}
           onSend={sendMessage}
           onCancel={cancelRun}
         />
+        {pendingApproval && (
+          <ApprovalComposer
+            approval={pendingApproval}
+            className="absolute inset-x-2 bottom-2 mx-auto w-auto max-w-3xl sm:inset-x-5 sm:bottom-4 2xl:max-w-4xl"
+            onResolve={resolveApproval}
+          />
+        )}
       </div>
     </section>
   );

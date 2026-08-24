@@ -34,7 +34,6 @@ const EditorShortcutExtension = Extension.create<EditorShortcutOptions>({
       "Mod-z": run("undo"),
       "Mod-y": run("redo"),
       "Shift-Mod-z": run("redo"),
-      "Mod-Enter": run("pageBreak"),
       "Shift-Enter": run("hardBreak"),
       "Mod-s": () => {
         this.options.onSave();

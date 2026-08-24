@@ -24,6 +24,7 @@ export type RunAgentInput = {
   readonly onEvent?: AgentEventHandler;
   readonly budget?: RunBudget;
   readonly approval?: ToolApprovalHandler;
+  readonly grantedToolIds: readonly string[];
 };
 
 export type AgentRunResult =
@@ -79,9 +80,15 @@ export default class AgentRuntime {
     });
     const budget = input.budget ?? new RunBudget({
       ...DEFAULT_RUN_LIMITS,
-      maxTurns: definition.maxTurns ?? DEFAULT_RUN_LIMITS.maxTurns,
+      maxTurns: definition.limits.maxTurns,
     });
-    const tools = guardTools(this.toolResolver.resolve(definition.tools), {
+    const allowedTools = new Set(definition.allowedToolIds);
+    for (const toolId of input.grantedToolIds) {
+      if (!allowedTools.has(toolId)) {
+        throw new Error(`Tool grant exceeds agent manifest: ${definition.id}/${toolId}`);
+      }
+    }
+    const tools = guardTools(this.toolResolver.resolve(input.grantedToolIds), {
       policy: this.toolPolicy,
       approval: input.approval ?? this.approval,
       budget,
@@ -93,7 +100,7 @@ export default class AgentRuntime {
       prompt: input.prompt,
       systemPrompt: definition.systemPrompt,
       tools,
-      maxTurns: definition.maxTurns ?? budget.limits.maxTurns,
+      maxTurns: definition.limits.maxTurns,
       modelReference: definition.model,
       visibility: "internal",
       mode: "text",

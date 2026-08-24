@@ -26,6 +26,7 @@ import type { RendererEditorToolClient } from "../tools/editor/contracts.ts";
 import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
 import SqliteNovelStore from "../storage/project/SqliteNovelStore.ts";
 import SqliteRunStore from "../storage/project/SqliteRunStore.ts";
+import SqliteConversationEventStore from "../storage/project/SqliteConversationEventStore.ts";
 import SqliteThreadStore from "../storage/project/SqliteThreadStore.ts";
 import SqliteTextIndexStore from "../storage/project/SqliteTextIndexStore.ts";
 import {
@@ -40,6 +41,7 @@ export type ActiveWorkspaceRuntime = {
   readonly threads: ThreadApplication;
   readonly novels: NovelApplication;
   readonly agent: AgentApplication;
+  readonly conversationEvents: SqliteConversationEventStore;
   readonly skills: SkillApplication;
   readonly model: Model;
   readonly modelSessions: Memory;
@@ -248,6 +250,7 @@ export default class WorkspaceRuntimeManager {
         new SqliteTextIndexStore(projectDatabase.handle),
       );
       const runStore = new SqliteRunStore(projectDatabase.handle);
+      const conversationEvents = new SqliteConversationEventStore(projectDatabase.handle);
       const initialRuns = await runStore.loadRunSnapshots(100);
       const agent = new AgentApplication(
         createAgentOrchestrator({
@@ -275,7 +278,14 @@ export default class WorkspaceRuntimeManager {
         }),
         {
           checkpointPath: layout.checkpointPath,
-          eventRecorder: runStore,
+          eventRecorder: {
+            record: async (event) => {
+              await Promise.all([
+                runStore.record(event),
+                conversationEvents.record(event),
+              ]);
+            },
+          },
           initialRuns,
           maxRetainedRuns: 100,
         },
@@ -290,6 +300,7 @@ export default class WorkspaceRuntimeManager {
         threads,
         novels,
         agent,
+        conversationEvents,
         skills,
         model,
         modelSessions,

@@ -18,11 +18,14 @@ import type {
 import type RunBudget from "../RunLimits.ts";
 import type { ToolApprovalHandler } from "../../security/ToolPolicy.ts";
 import type { AgentEventHandler } from "../AgentEvent.ts";
+import AgentFailure from "../../errors/AgentFailure.ts";
+import type { AgentTurnInput } from "../../application/contracts.ts";
 
 export type ScheduleRequest = {
   readonly runId: string;
   readonly threadId: string;
   readonly goal: string;
+  readonly input: AgentTurnInput;
   readonly plan: PlannedExecutionPlan;
   readonly signal?: AbortSignal;
   readonly budget: RunBudget;
@@ -30,6 +33,35 @@ export type ScheduleRequest = {
   readonly onAgentEvent: AgentEventHandler;
   readonly onEvent?: OrchestrationEventHandler;
 };
+
+type TaskExecutionOutcome =
+  | { readonly ok: true; readonly result: ApprovedTaskResult }
+  | { readonly ok: false; readonly failure: AgentFailure };
+
+function describeTaskFailure(
+  task: PlannedTask,
+  result: TaskResult,
+  review: ReviewResult,
+): AgentFailure {
+  const findings = review.findings
+    .filter((finding) => !finding.passed)
+    .map((finding) => finding.message.trim())
+    .filter(Boolean);
+  const details = [...new Set([
+    ...(result.error ? [result.error] : []),
+    ...findings,
+  ])];
+  const reason = details.length > 0
+    ? details.join("；")
+    : `执行状态为 ${result.status}，审查结论为 ${review.decision}`;
+  return new AgentFailure(
+    "review.criteria_failed",
+    "review",
+    `任务“${task.title}”未通过验收（${task.id}）：${reason}`,
+    review.decision === "retry",
+    { taskId: task.id, agentId: task.assignedAgentId },
+  );
+}
 
 async function emit(
   handler: OrchestrationEventHandler | undefined,
@@ -59,6 +91,13 @@ export default class TaskScheduler {
           continue;
         }
         if (task.dependsOn.some((dependencyId) => failed.has(dependencyId))) {
+          const dependencyFailure = new AgentFailure(
+            "review.criteria_failed",
+            "review",
+            `任务“${task.title}”因依赖任务未通过验收而跳过。`,
+            false,
+            { taskId: task.id, agentId: task.assignedAgentId },
+          );
           pending.delete(task.id);
           failed.add(task.id);
           progressed = true;
@@ -67,11 +106,17 @@ export default class TaskScheduler {
             runId: request.runId,
             planId: request.plan.planId,
             taskId: task.id,
-            error: "A dependency did not pass review.",
+            failure: {
+              code: dependencyFailure.code,
+              phase: dependencyFailure.phase,
+              message: dependencyFailure.message,
+              retryable: dependencyFailure.retryable,
+              ...dependencyFailure.details,
+            },
             timestamp: new Date().toISOString(),
           });
           if (task.required) {
-            throw new Error(`Required task was skipped: ${task.id}`);
+            throw dependencyFailure;
           }
           continue;
         }
@@ -82,13 +127,13 @@ export default class TaskScheduler {
         pending.delete(task.id);
         progressed = true;
         request.budget.consumeSubtask(task.id);
-        const result = await this.executeTask(request, task, approved);
-        if (result) {
-          approved.set(task.id, result);
+        const outcome = await this.executeTask(request, task, approved);
+        if (outcome.ok === true) {
+          approved.set(task.id, outcome.result);
         } else {
           failed.add(task.id);
           if (task.required) {
-            throw new Error(`Required task failed review: ${task.id}`);
+            throw outcome.failure;
           }
         }
       }
@@ -131,7 +176,7 @@ export default class TaskScheduler {
     request: ScheduleRequest,
     task: PlannedTask,
     approved: ReadonlyMap<string, ApprovedTaskResult>,
-  ): Promise<ApprovedTaskResult | null> {
+  ): Promise<TaskExecutionOutcome> {
     const dependencyResults = task.dependsOn.map((id) => {
       const result = approved.get(id);
       if (!result) {
@@ -149,7 +194,8 @@ export default class TaskScheduler {
         runId: request.runId,
         planId: request.plan.planId,
         taskId: task.id,
-        agentType: task.agentType,
+        title: task.title,
+        agentType: task.assignedAgentId,
         attempt,
         timestamp: new Date().toISOString(),
       });
@@ -162,6 +208,7 @@ export default class TaskScheduler {
           rootRunId: request.runId,
           threadId: request.threadId,
           task,
+          input: request.input,
           attempt,
           dependencyResults,
           ...(previousResult ? { previousResult } : {}),
@@ -176,7 +223,7 @@ export default class TaskScheduler {
           ? {
               taskId: task.id,
               agentRunId: agentResult.runId,
-              agentType: task.agentType,
+              agentType: task.assignedAgentId,
               attempt,
               status: "completed",
               content: agentResult.content,
@@ -187,7 +234,7 @@ export default class TaskScheduler {
           : {
               taskId: task.id,
               agentRunId: agentResult.runId,
-              agentType: task.agentType,
+              agentType: task.assignedAgentId,
               attempt,
               status: taskScope.timedOut() ? "timed_out" : agentResult.status,
               content: agentResult.partialContent,
@@ -205,7 +252,7 @@ export default class TaskScheduler {
         result = {
           taskId: task.id,
           agentRunId: "unknown",
-          agentType: task.agentType,
+          agentType: task.assignedAgentId,
           attempt,
           status: request.signal?.aborted
             ? "aborted"
@@ -250,7 +297,7 @@ export default class TaskScheduler {
           taskId: task.id,
           timestamp: new Date().toISOString(),
         });
-        return reviewedResult as ApprovedTaskResult;
+        return { ok: true, result: reviewedResult as ApprovedTaskResult };
       }
 
       if (review.decision === "retry" && attempt < task.maxAttempts) {
@@ -267,17 +314,33 @@ export default class TaskScheduler {
         continue;
       }
 
+      const failure = describeTaskFailure(task, result, review);
       await emit(request.onEvent, {
         type: "task_failed",
         runId: request.runId,
         planId: request.plan.planId,
         taskId: task.id,
-        error: review.findings.map((finding) => finding.message).join("; "),
         timestamp: new Date().toISOString(),
+        failure: {
+          code: failure.code,
+          phase: failure.phase,
+          message: failure.message,
+          retryable: failure.retryable,
+          ...failure.details,
+        },
       });
-      return null;
+      return { ok: false, failure };
     }
-    return null;
+    return {
+      ok: false,
+      failure: new AgentFailure(
+        "tool.execution_failed",
+        "execution",
+        `任务“${task.title}”未执行（${task.id}）。`,
+        false,
+        { taskId: task.id, agentId: task.assignedAgentId },
+      ),
+    };
   }
 
   private async safeReview(

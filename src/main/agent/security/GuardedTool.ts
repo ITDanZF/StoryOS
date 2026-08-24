@@ -126,6 +126,7 @@ export function guardTools(
       func: async (input, _runManager, config) => {
         const toolCallId = `tool_call_${crypto.randomUUID()}`;
         const request: ToolApprovalRequest = Object.freeze({
+          toolCallId,
           toolName: originalTool.name,
           summary: summarizeInput(originalTool.name, input),
           input,

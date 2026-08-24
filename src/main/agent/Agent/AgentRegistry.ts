@@ -1,5 +1,7 @@
 import { defineAgent } from "./AgentDefinition.ts";
 import type { AgentDefinition } from "./types.ts";
+import { coversAll } from "./capabilities.ts";
+import type ToolRegistry from "../tools/ToolRegistry.ts";
 
 export default class AgentRegistry {
   private readonly definitions = new Map<string, AgentDefinition>();
@@ -96,5 +98,31 @@ export default class AgentRegistry {
 
   list(): readonly AgentDefinition[] {
     return Object.freeze([...this.definitions.values()]);
+  }
+
+  validateAgainstTools(tools: ToolRegistry): void {
+    for (const definition of this.definitions.values()) {
+      for (const toolId of definition.allowedToolIds) {
+        const manifest = tools.getManifest(toolId);
+        if (!coversAll(definition.allowedEffects, manifest.effects)) {
+          throw new Error(
+            `Agent ${definition.id} does not allow effects required by tool ${toolId}.`,
+          );
+        }
+        if (!coversAll(definition.acceptedContexts, manifest.requiredContexts)) {
+          throw new Error(
+            `Agent ${definition.id} does not accept contexts required by tool ${toolId}.`,
+          );
+        }
+      }
+      if (
+        definition.executionModes.includes("planned")
+        && definition.allowedEffects.length > 0
+      ) {
+        throw new Error(
+          `Planned agent cannot declare side effects: ${definition.id}.`,
+        );
+      }
+    }
   }
 }

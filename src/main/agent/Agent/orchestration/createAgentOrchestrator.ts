@@ -6,6 +6,7 @@ import type { ModelGatewayRegistration } from "../../model/ModelRouter.ts";
 import ModelRouter from "../../model/ModelRouter.ts";
 import Model from "../../model/Model.ts";
 import ToolResolver from "../../tools/ToolResolver.ts";
+import ToolAccessResolver from "../../tools/ToolAccessResolver.ts";
 import type WorkspaceToolContext from "../../tools/WorkspaceToolContext.ts";
 import type BookToolContext from "../../tools/book/BookToolContext.ts";
 import type { RendererEditorToolClient } from "../../tools/editor/contracts.ts";
@@ -26,6 +27,10 @@ import AnswerSynthesizer from "./AnswerSynthesizer.ts";
 import ResultReviewer from "./ResultReviewer.ts";
 import TaskPlanner from "./TaskPlanner.ts";
 import TaskScheduler from "./TaskScheduler.ts";
+import AgentMatcher from "./AgentMatcher.ts";
+import PlanValidator from "./PlanValidator.ts";
+import RequirementResolver from "./RequirementResolver.ts";
+import ExecutionRouter from "./ExecutionRouter.ts";
 
 export type AgentOrchestratorFactoryOptions = {
   readonly limits?: RunLimits;
@@ -88,12 +93,13 @@ export function createAgentOrchestrator(
     rendererEditorProjectId,
   });
   const registry = new AgentRegistry(builtInAgents);
-  const syncSkillAgents = () => registry.replaceWhere(
-    isSkillAgent,
-    compileSkillAgents(skillDefinitionsProvider(), {
+  const syncSkillAgents = () => {
+    const result = registry.replaceWhere(isSkillAgent, compileSkillAgents(skillDefinitionsProvider(), {
       knownToolNames: toolResolver.listNames(),
-    }),
-  );
+    }));
+    registry.validateAgainstTools(toolResolver.registry);
+    return result;
+  };
   syncSkillAgents();
   skillInstaller?.onAfterInstall?.(() => {
     syncSkillAgents();
@@ -124,11 +130,18 @@ export function createAgentOrchestrator(
     new ResultReviewer(model),
     new AnswerSynthesizer(model),
   );
+  const toolAccess = new ToolAccessResolver(toolResolver.registry);
+  const matcher = new AgentMatcher(registry, toolAccess);
+  const validator = new PlanValidator(registry, toolResolver.registry);
+  const requirements = new RequirementResolver();
+  const router = new ExecutionRouter(matcher, toolAccess);
 
   return new AgentOrchestrator(
     directRunner,
-    new TaskPlanner(model, registry),
+    new TaskPlanner(model, matcher, validator),
     scheduler,
+    requirements,
+    router,
     limits,
   );
 }

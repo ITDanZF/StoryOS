@@ -24,6 +24,7 @@ const agentApi: AgentDesktopApi = {
     getConversationSnapshot: (scope) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.conversationSnapshot, scope),
     listMessages: (threadId) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.listMessages, threadId),
     listConversationMessages: (request) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.listConversationMessages, request),
+    listConversationEvents: (request) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.listConversationEvents, request),
     createThread: (title) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.createThread, title),
     createConversation: (request) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.createConversation, request),
     switchThread: (threadId) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.switchThread, threadId),

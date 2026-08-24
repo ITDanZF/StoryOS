@@ -10,7 +10,12 @@ export type ModelRunInput = {
   readonly visibility?: "public" | "internal";
 };
 
+export type ModelStreamPart = {
+  readonly channel: "reasoning" | "answer";
+  readonly delta: string;
+};
+
 export interface ModelGateway {
-  stream(input: ModelRunInput): AsyncIterable<string>;
+  stream(input: ModelRunInput): AsyncIterable<string | ModelStreamPart>;
   invokeText?(input: ModelRunInput): Promise<string>;
 }

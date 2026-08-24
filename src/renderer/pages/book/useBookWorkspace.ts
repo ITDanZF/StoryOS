@@ -28,7 +28,6 @@ export default function useBookWorkspace(projectId: string | undefined) {
   const load = useCallback(async () => {
     if (!projectId) return null;
     const requestId = ++loadRequestRef.current;
-    setLoading(true);
     setError(null);
     try {
       const snapshot = await window.storyOSAgent.getBookWorkspace(projectId);

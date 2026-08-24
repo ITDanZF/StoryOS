@@ -152,6 +152,33 @@ describe("pagination engine", () => {
     ]);
   });
 
+  it("continues a growing paragraph on the next page without moving prior lines", () => {
+    const paragraph = [
+      fragment("line-1", 2, 3, 20, {
+        blockKey: "streaming-paragraph",
+        lineIndex: 0,
+        lineCount: 2,
+      }),
+      fragment("line-2", 3, 4, 20, {
+        blockKey: "streaming-paragraph",
+        lineIndex: 1,
+        lineCount: 2,
+      }),
+    ];
+    const pages = paginateFragments({
+      fragments: [fragment("intro", 1, 2, 80), ...paragraph],
+      contentHeight: 100,
+      documentStart: 1,
+      documentEnd: 4,
+      continuousFlow: true,
+    });
+
+    expect(pages.map((page) => [page.from, page.to])).toEqual([
+      [1, 3],
+      [3, 4],
+    ]);
+  });
+
   it("terminates and reports an oversized line instead of looping", () => {
     const pages = paginateFragments({
       fragments: [fragment("oversized", 1, 2, 140, {

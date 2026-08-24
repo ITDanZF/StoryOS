@@ -6,6 +6,7 @@ import {
 } from "../../../../shared/book/richText.ts";
 import {
   calculateChapterPageScale,
+  chapterPageCountForStageHeight,
   chapterPaginationStageHeight,
   clampChapterEditablePosition,
   createChapterPaginationCacheKey,
@@ -64,6 +65,13 @@ describe("pagination model", () => {
     expect(chapterPaginationStageHeight(1)).toBe(960);
     expect(chapterPaginationStageHeight(3)).toBe(2936);
     expect(chapterPaginationStageHeight(0)).toBe(960);
+  });
+
+  it("derives a bounded paper projection from intrinsic content height", () => {
+    expect(chapterPageCountForStageHeight(0)).toBe(1);
+    expect(chapterPageCountForStageHeight(960)).toBe(1);
+    expect(chapterPageCountForStageHeight(961)).toBe(2);
+    expect(chapterPageCountForStageHeight(2936)).toBe(3);
   });
 
   it("round-trips a persisted manual page break", () => {

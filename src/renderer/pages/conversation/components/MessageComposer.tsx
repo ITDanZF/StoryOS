@@ -10,6 +10,7 @@ import { cn } from "../../../../lib/utils.ts";
 
 type MessageComposerProps = {
   readonly disabled: boolean;
+  readonly hidden?: boolean;
   readonly activeRunId?: string;
   readonly projectName?: string;
   readonly onSend: (content: string) => Promise<void>;
@@ -20,6 +21,7 @@ const MAX_TEXTAREA_HEIGHT = 144;
 
 export default function MessageComposer({
   disabled,
+  hidden = false,
   activeRunId,
   projectName,
   onSend,
@@ -57,7 +59,10 @@ export default function MessageComposer({
   };
 
   return (
-    <div className="absolute inset-x-2 bottom-2 z-10 mx-auto w-auto max-w-3xl rounded-[20px] border border-neutral-200 bg-white/95 px-3 pb-2.5 pt-2.5 shadow-[0_10px_32px_rgba(15,23,42,0.09)] backdrop-blur-xl transition-[border-color,box-shadow] duration-200 focus-within:border-neutral-400 focus-within:shadow-[0_14px_38px_rgba(15,23,42,0.11),0_0_0_3px_rgba(15,23,42,0.035)] sm:inset-x-5 sm:bottom-4 sm:px-3.5 sm:pb-3 sm:pt-3 2xl:max-w-4xl">
+    <div className={cn(
+      "absolute inset-x-2 bottom-2 z-10 mx-auto w-auto max-w-3xl rounded-[20px] border border-neutral-200 bg-white/95 px-3 pb-2.5 pt-2.5 shadow-[0_10px_32px_rgba(15,23,42,0.09)] backdrop-blur-xl transition-[border-color,box-shadow] duration-200 focus-within:border-neutral-400 focus-within:shadow-[0_14px_38px_rgba(15,23,42,0.11),0_0_0_3px_rgba(15,23,42,0.035)] sm:inset-x-5 sm:bottom-4 sm:px-3.5 sm:pb-3 sm:pt-3 2xl:max-w-4xl",
+      hidden && "invisible pointer-events-none",
+    )} aria-hidden={hidden}>
       <div className="mb-1.5 flex min-w-0 items-center">
         <span
           className={cn(

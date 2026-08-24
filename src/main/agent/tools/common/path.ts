@@ -2,6 +2,7 @@ import { realpathSync } from "node:fs";
 import path from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { STORYOS_DIRECTORY } from "../../workspace/ProjectLayout.ts";
+import AgentFailure from "../../errors/AgentFailure.ts";
 
 function isFileNotFound(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
@@ -22,7 +23,12 @@ function assertNotInternalState(workspaceRoot: string, candidate: string): void 
 
 function assertInsideWorkspace(workspaceRoot: string, candidate: string): void {
   if (isOutside(workspaceRoot, candidate) || candidate.startsWith("\\\\") || candidate.startsWith("//")) {
-    throw new Error(`Resolved path is outside the active project workspace. Workspace: ${workspaceRoot}`);
+    throw new AgentFailure(
+      "tool.path_outside_workspace",
+      "execution",
+      `Resolved path is outside the active project workspace. Workspace: ${workspaceRoot}`,
+      false,
+    );
   }
   assertNotInternalState(workspaceRoot, candidate);
 }
@@ -66,7 +72,12 @@ export default class WorkspacePathResolver {
       ? path.resolve(requestedPath)
       : path.resolve(this.workspaceRoot, requestedPath);
     if (isOutside(this.workspaceRoot, absolutePath) || absolutePath.startsWith("\\\\") || absolutePath.startsWith("//")) {
-      throw new Error(`Path is outside the active project workspace. Workspace: ${this.workspaceRoot}`);
+      throw new AgentFailure(
+        "tool.path_outside_workspace",
+        "execution",
+        `Path is outside the active project workspace. Workspace: ${this.workspaceRoot}`,
+        false,
+      );
     }
     assertNotInternalState(this.workspaceRoot, absolutePath);
     return absolutePath;

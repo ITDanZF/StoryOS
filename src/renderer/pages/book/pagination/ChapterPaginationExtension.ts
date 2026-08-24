@@ -13,7 +13,7 @@ import {
 import {
   CHAPTER_PAGE_SPEC,
   chapterPageContentHeight,
-  chapterPaginationStageHeight,
+  chapterPageCountForStageHeight,
   type ChapterPaginationSnapshot,
   type ChapterPageSpec,
 } from "./paginationModel.ts";
@@ -22,7 +22,10 @@ import {
   assertChapterPaginationLayoutParity,
   createPaginationLayoutFingerprint,
 } from "./paginationLayout.ts";
-import { verifyPaginationProjection } from "./paginationVerifier.ts";
+import {
+  measurePaginationContentHeight,
+  verifyPaginationProjection,
+} from "./paginationVerifier.ts";
 import { paginateEditorView } from "./paginationRuntime.ts";
 
 type PaginationPluginState = {
@@ -45,12 +48,14 @@ const EMPTY_SNAPSHOT: ChapterPaginationSnapshot = Object.freeze({
   layoutKey: "uninitialized",
   status: "pending",
   pages: Object.freeze([]),
+  renderPageCount: 1,
 });
 
 export class ChapterPaginationController {
   private snapshot: ChapterPaginationSnapshot = EMPTY_SNAPSHOT;
   private readonly listeners = new Set<() => void>();
   private requestReflowCallback: (() => void) | null = null;
+  private contentStreaming = false;
 
   getSnapshot = (): ChapterPaginationSnapshot => this.snapshot;
 
@@ -70,6 +75,16 @@ export class ChapterPaginationController {
 
   requestReflow(): void {
     this.requestReflowCallback?.();
+  }
+
+  setContentStreaming(streaming: boolean): void {
+    if (this.contentStreaming === streaming) return;
+    this.contentStreaming = streaming;
+    if (!streaming) this.requestReflow();
+  }
+
+  isContentStreaming(): boolean {
+    return this.contentStreaming;
   }
 }
 
@@ -159,12 +174,12 @@ function createPaginationPlugin(
     view(view) {
       let generation = 0;
       let frame: number | null = null;
-      let reflowTimer: number | null = null;
       let settleFrame: number | null = null;
       let verificationFrame: number | null = null;
       let disposed = false;
       let observedWidth = 0;
-      let firstDirtyAt = 0;
+      let verificationFailureDocument = view.state.doc;
+      let consecutiveVerificationFailures = 0;
       const measurementHost = document.createElement("div");
       measurementHost.className = "book-pagination-measure-host";
       measurementHost.style.width = `${options.pageSpec.width}px`;
@@ -179,38 +194,33 @@ function createPaginationPlugin(
         },
       });
 
-      const publishPending = () => {
+      const publishWorkingProjection = () => {
         const current = options.controller.getSnapshot();
-        const stablePageCount = Math.max(1, current.pages.length);
-        const currentCapacity = Math.max(
-          stablePageCount,
-          current.capacityPageCount ?? stablePageCount,
+        const contentHeight = measurePaginationContentHeight(view);
+        const renderPageCount = Math.max(
+          1,
+          current.pages.length,
+          chapterPageCountForStageHeight(
+            contentHeight,
+            options.pageSpec,
+          ),
         );
-        const currentStageHeight = chapterPaginationStageHeight(
-          currentCapacity,
-          options.pageSpec,
-        );
-        const overflow = Math.max(0, view.dom.scrollHeight - currentStageHeight);
-        const extraPages = overflow > 1
-          ? Math.max(
-              1,
-              Math.ceil(
-                overflow / chapterPageContentHeight(options.pageSpec),
-              ),
-            )
-          : 0;
+        if (
+          current.status === "pending" &&
+          current.renderPageCount === renderPageCount &&
+          current.generation === generation
+        ) return;
         options.controller.publish({
           ...current,
           generation,
           status: "pending",
-          capacityPageCount: currentCapacity + extraPages,
+          renderPageCount,
           error: undefined,
         });
       };
 
       const run = () => {
         frame = null;
-        firstDirtyAt = 0;
         if (disposed) return;
         if (view.composing) {
           frame = window.requestAnimationFrame(run);
@@ -222,6 +232,7 @@ function createPaginationPlugin(
           return;
         }
         const requestedGeneration = generation;
+        const requestedDocument = view.state.doc;
         try {
           // Measure a clean offscreen view. The visible editor keeps its last
           // stable page gaps until the next complete snapshot is ready.
@@ -236,56 +247,68 @@ function createPaginationPlugin(
             layoutKey: `${createPaginationLayoutFingerprint()}:${view.state.doc.content.size}:${requestedGeneration}`,
             status: "ready",
             pages,
+            renderPageCount: Math.max(1, pages.length),
           };
-          const stable = chapterPaginationKey.getState(view.state)?.snapshot ??
-            EMPTY_SNAPSHOT;
+          const layout = createGapDecorations(
+            view,
+            snapshot,
+            options.pageSpec,
+          );
+          const transaction = view.state.tr
+            .setMeta(chapterPaginationKey, {
+              type: "apply",
+              snapshot,
+              decorations: layout.decorations,
+            } satisfies ApplyPaginationMeta)
+            .setMeta("addToHistory", false);
+          view.dispatch(transaction);
           options.controller.publish({
-            ...stable,
-            generation: requestedGeneration,
+            ...snapshot,
             status: "pending",
-            capacityPageCount: Math.max(stable.pages.length, pages.length, 1),
-            error: undefined,
           });
-          frame = window.requestAnimationFrame(() => {
-            frame = window.requestAnimationFrame(() => {
-              frame = null;
-              if (disposed) return;
-              if (requestedGeneration !== generation) {
-                schedule();
+          verificationFrame = window.requestAnimationFrame(() => {
+            verificationFrame = null;
+            if (disposed || requestedGeneration !== generation) return;
+            const verification = verifyPaginationProjection(
+              view,
+              pages.length,
+              options.pageSpec,
+            );
+            if (!verification.valid) {
+              if (verificationFailureDocument === requestedDocument) {
+                consecutiveVerificationFailures += 1;
+              } else {
+                verificationFailureDocument = requestedDocument;
+                consecutiveVerificationFailures = 1;
+              }
+              if (
+                options.controller.isContentStreaming() ||
+                consecutiveVerificationFailures < 3
+              ) {
+                // A stream changes the document again before it can be considered
+                // geometrically stable. Do not carry a transient overflow into
+                // the final, post-stream verification pass.
+                if (options.controller.isContentStreaming()) {
+                  consecutiveVerificationFailures = 0;
+                }
+                options.controller.publish({
+                  ...snapshot,
+                  status: "pending",
+                  error: undefined,
+                });
+                if (!options.controller.isContentStreaming()) schedule();
                 return;
               }
-              const layout = createGapDecorations(
-                view,
-                snapshot,
-                options.pageSpec,
-              );
-              const transaction = view.state.tr
-                .setMeta(chapterPaginationKey, {
-                  type: "apply",
-                  snapshot,
-                  decorations: layout.decorations,
-                } satisfies ApplyPaginationMeta)
-                .setMeta("addToHistory", false);
-              view.dispatch(transaction);
-              options.controller.publish(snapshot);
-              verificationFrame = window.requestAnimationFrame(() => {
-                verificationFrame = null;
-                if (disposed || requestedGeneration !== generation) return;
-                const verification = verifyPaginationProjection(
-                  view,
-                  pages.length,
-                  options.pageSpec,
-                );
-                if (!verification.valid) {
-                  options.controller.publish({
-                    ...snapshot,
-                    status: "failed",
-                    capacityPageCount: pages.length + 1,
-                    error: verification.error,
-                  });
-                }
+              options.controller.publish({
+                ...snapshot,
+                status: "failed",
+                error: verification.error,
               });
-            });
+              return;
+            }
+            verificationFailureDocument = requestedDocument;
+            consecutiveVerificationFailures = 0;
+            options.controller.publish(snapshot);
           });
         } catch (cause) {
           if (disposed || requestedGeneration !== generation) return;
@@ -294,10 +317,7 @@ function createPaginationPlugin(
             layoutKey: `failed:${requestedGeneration}`,
             status: "failed",
             pages: options.controller.getSnapshot().pages,
-            capacityPageCount: Math.max(
-              1,
-              options.controller.getSnapshot().pages.length,
-            ),
+            renderPageCount: options.controller.getSnapshot().renderPageCount,
             error: cause instanceof Error ? cause.message : String(cause),
           });
         }
@@ -305,21 +325,11 @@ function createPaginationPlugin(
 
       const schedule = () => {
         generation += 1;
-        publishPending();
+        publishWorkingProjection();
         if (frame !== null) return;
-        const now = performance.now();
-        if (firstDirtyAt === 0) firstDirtyAt = now;
-        if (reflowTimer !== null) window.clearTimeout(reflowTimer);
-        const quietDelay = 180;
-        const maximumDelay = 500;
-        const delay = Math.min(
-          quietDelay,
-          Math.max(0, maximumDelay - (now - firstDirtyAt)),
-        );
-        reflowTimer = window.setTimeout(() => {
-          reflowTimer = null;
-          frame = window.requestAnimationFrame(run);
-        }, delay);
+        // Reflow on the next paint. The working projection has already prepared
+        // enough paper without feeding that visual height back into measurement.
+        frame = window.requestAnimationFrame(run);
       };
 
       // The editor can mount before its surrounding workspace has finished its
@@ -364,12 +374,15 @@ function createPaginationPlugin(
       return {
         update(nextView, previousState) {
           view = nextView;
-          if (nextView.state.doc !== previousState.doc) schedule();
+          if (nextView.state.doc !== previousState.doc) {
+            verificationFailureDocument = nextView.state.doc;
+            consecutiveVerificationFailures = 0;
+            schedule();
+          }
         },
         destroy() {
           disposed = true;
           if (frame !== null) window.cancelAnimationFrame(frame);
-          if (reflowTimer !== null) window.clearTimeout(reflowTimer);
           if (settleFrame !== null) window.cancelAnimationFrame(settleFrame);
           if (verificationFrame !== null) {
             window.cancelAnimationFrame(verificationFrame);

@@ -106,9 +106,14 @@ export default class ChapterGenerationService {
         maxTurns: 1,
         visibility: "internal",
       })) {
-        if (!chunk) continue;
-        chunks.push(chunk);
-        pendingDelta += chunk;
+        const text = typeof chunk === "string"
+          ? chunk
+          : chunk.channel === "answer"
+            ? chunk.delta
+            : "";
+        if (!text) continue;
+        chunks.push(text);
+        pendingDelta += text;
         if (Date.now() - lastDeltaAt >= 60) await flushDelta();
       }
       await flushDelta();

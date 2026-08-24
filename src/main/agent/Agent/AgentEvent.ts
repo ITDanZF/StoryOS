@@ -18,6 +18,10 @@ export type AgentEventPayload =
       readonly content: string;
     }
   | {
+      readonly type: "reasoning_delta";
+      readonly content: string;
+    }
+  | {
       readonly type: "skill_selected";
       readonly skills: readonly {
         readonly id: string;

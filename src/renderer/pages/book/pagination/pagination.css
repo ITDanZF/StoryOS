@@ -20,10 +20,6 @@
   isolation: isolate;
 }
 
-.chapter-pagination-stage-pending {
-  background: #fff;
-}
-
 .chapter-pagination-sheet {
   box-sizing: border-box;
   width: var(--chapter-page-width, 720px);
@@ -55,10 +51,6 @@
   padding: 0;
   pointer-events: none;
   user-select: none;
-}
-
-.chapter-pagination-insert-break {
-  transform: translateX(-100%);
 }
 
 .chapter-pagination-page-arrow {

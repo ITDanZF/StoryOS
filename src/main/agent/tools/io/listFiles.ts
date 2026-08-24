@@ -43,12 +43,12 @@ export function createListFilesTool(context: WorkspaceToolContext) {
     {
       name: "list_files",
       description:
-        "List files inside the workspace. Supports a simple wildcard pattern such as *.ts or src/**/*.ts.",
+        "List files inside the active project workspace. Omit path or use . for the workspace root; relative paths are resolved from that root. Never use / or repeat the project directory name. Supports a simple wildcard pattern such as *.ts or src/**/*.ts.",
       schema: z.object({
         path: z
           .string()
           .optional()
-          .describe("Directory or file path. Defaults to the workspace root."),
+          .describe("Workspace-relative directory or file path. Omit it or use . for the workspace root."),
         pattern: z
           .string()
           .optional()

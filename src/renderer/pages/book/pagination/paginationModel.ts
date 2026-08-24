@@ -45,6 +45,17 @@ export function chapterPaginationStageHeight(
     (normalizedPageCount - 1) * spec.pageGap;
 }
 
+export function chapterPageCountForStageHeight(
+  contentHeight: number,
+  spec: ChapterPageSpec = CHAPTER_PAGE_SPEC,
+): number {
+  if (!Number.isFinite(contentHeight) || contentHeight <= spec.height) return 1;
+  return Math.max(
+    1,
+    Math.ceil((contentHeight + spec.pageGap) / (spec.height + spec.pageGap)),
+  );
+}
+
 export const CHAPTER_PAGE_MIN_SCALE = 0.7;
 export const CHAPTER_PAGE_MAX_SCALE = 1.15;
 
@@ -82,7 +93,7 @@ export type ChapterPaginationSnapshot = {
   readonly layoutKey: string;
   readonly status: "pending" | "ready" | "failed";
   readonly pages: readonly ChapterPage[];
-  readonly capacityPageCount?: number;
+  readonly renderPageCount: number;
   readonly error?: string;
 };
 

@@ -87,7 +87,6 @@ export default function BookWorkspacePage() {
   } = useWorkspaceOutlet();
   const {
     workspace,
-    loading: bookLoading,
     error: bookError,
     load: reloadBookWorkspace,
     createBookProfile,
@@ -167,9 +166,6 @@ export default function BookWorkspacePage() {
   const activeConversationThreadId = projectConversationSnapshot?.activeThreadId ?? "";
   const pendingApprovals = state.pendingApprovals.filter(
     (approval) => approval.threadId === activeConversationThreadId,
-  );
-  const toolActivities = state.toolActivities.filter(
-    (activity) => activity.threadId === activeConversationThreadId,
   );
   const currentChapterGeneration = useMemo(() => Object.values(
     state.chapterGenerations,
@@ -316,7 +312,7 @@ export default function BookWorkspacePage() {
     );
   }
 
-  if (!project || bookLoading || !workspace) {
+  if (!project || !workspace) {
     return (
       <section className="m-1.5 grid min-h-0 min-w-0 flex-1 place-items-center rounded-xl border border-border bg-white text-sm text-neutral-400">
         {bookError ?? "正在载入书籍工作区…"}
@@ -755,15 +751,13 @@ export default function BookWorkspacePage() {
               chapterTitle={activeChapter?.title ?? null}
               conversationSnapshot={projectConversationSnapshot}
               runningThreadIds={runningThreadIds}
-              messages={projectConversationActive ? state.messages : []}
-              pendingApprovals={pendingApprovals}
-              toolActivities={toolActivities}
               connected={Boolean(state.status?.initialized)}
               running={projectConversationActive && Boolean(activeRun)}
               focused={assistantFocused}
               width={assistantWidth}
               draft={assistantDraft}
               contextEnabled={assistantContextEnabled}
+              pendingApproval={pendingApprovals[0] ?? null}
               onDraftChange={setAssistantDraft}
               onContextEnabledChange={setAssistantContextEnabled}
               onSend={sendAssistantMessage}

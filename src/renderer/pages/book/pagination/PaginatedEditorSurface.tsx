@@ -5,7 +5,6 @@ import {
   ArrowLeftRight,
   ChevronLeft,
   ChevronRight,
-  Plus,
 } from "lucide-react";
 import {
   useCallback,
@@ -38,7 +37,6 @@ type PaginatedEditorSurfaceProps = {
   readonly navigationRequestId: number | null;
   readonly navigationPageIndex: number | null;
   readonly onActivePageChange: (pageIndex: number) => void;
-  readonly onInsertPageBreak: () => void;
 };
 
 type ChapterPageLayoutMode = "horizontal" | "vertical";
@@ -60,7 +58,6 @@ export default function PaginatedEditorSurface({
   navigationRequestId,
   navigationPageIndex,
   onActivePageChange,
-  onInsertPageBreak,
 }: PaginatedEditorSurfaceProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -76,12 +73,9 @@ export default function PaginatedEditorSurface({
   );
   activePageIndexRef.current = activePageIndex;
   const pageCount = Math.max(1, snapshot.pages.length);
-  const renderedPageCount = Math.max(
-    pageCount,
-    snapshot.capacityPageCount ?? pageCount,
-  );
+  const renderPageCount = Math.max(pageCount, snapshot.renderPageCount);
   const pageStride = CHAPTER_PAGE_SPEC.height + CHAPTER_PAGE_SPEC.pageGap;
-  const stageHeight = chapterPaginationStageHeight(renderedPageCount);
+  const stageHeight = chapterPaginationStageHeight(renderPageCount);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -354,15 +348,11 @@ export default function PaginatedEditorSurface({
       >
         <div
           ref={stageRef}
-          className={cn(
-            "chapter-pagination-stage absolute left-0",
-            snapshot.status === "pending" &&
-              "chapter-pagination-stage-pending",
-          )}
+          className="chapter-pagination-stage absolute left-0"
           style={stageStyle}
         >
           <div className="chapter-pagination-sheets" aria-hidden="true">
-            {Array.from({ length: renderedPageCount }, (_, pageIndex) => (
+            {Array.from({ length: renderPageCount }, (_, pageIndex) => (
               <div
                 className="chapter-pagination-sheet absolute left-0"
                 key={pageIndex}
@@ -371,7 +361,7 @@ export default function PaginatedEditorSurface({
                 <footer className="chapter-pagination-footer absolute inset-x-[72px] bottom-0 flex h-[54px] items-center justify-between border-t text-[10px]">
                   <span>第 {chapterNumber} 章</span>
                   <strong className="font-medium tabular-nums text-neutral-500">
-                    第 {pageIndex + 1} / {renderedPageCount} 页
+                    第 {pageIndex + 1} / {renderPageCount} 页
                   </strong>
                   <span>StoryOS</span>
                 </footer>
@@ -384,36 +374,19 @@ export default function PaginatedEditorSurface({
             editor={editor}
           />
 
-          <button
-            className="chapter-pagination-insert-break absolute z-20 inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-500 shadow-sm transition hover:border-violet-300 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"
-            style={{
-              left: CHAPTER_PAGE_SPEC.width - CHAPTER_PAGE_SPEC.marginRight - 48,
-              top: activePageIndex * pageStride + CHAPTER_PAGE_SPEC.height - 42,
-            }}
-            type="button"
-            title="从光标处换页（Ctrl/Cmd + Enter）"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={onInsertPageBreak}
-          >
-            <Plus size={10} />
-            换页
-          </button>
         </div>
       </div>
 
-      <div className={cn(
-        "z-30 mx-auto w-fit rounded-full border border-neutral-200 bg-white/95 px-3 py-1 text-[10px] tabular-nums text-neutral-500 shadow-sm backdrop-blur",
-        snapshot.status === "failed" &&
-          "border-red-200 bg-red-50/95 text-red-700",
-        layoutMode === "horizontal"
-          ? "absolute bottom-2 left-1/2 -translate-x-1/2"
-          : "sticky bottom-2 mt-2",
-      )}>
-        {snapshot.status === "failed"
-          ? `排版失败：${snapshot.error ?? "未知错误"}`
-          : `第 ${activePageIndex + 1} 页，共 ${pageCount} 页${
-            snapshot.status === "pending" ? " · 正在排版" : ""
-          }`}
+      <div
+        className={cn(
+          "z-30 mx-auto w-fit rounded-full border border-neutral-200 bg-white/95 px-3 py-1 text-[10px] tabular-nums text-neutral-500 shadow-sm backdrop-blur",
+          layoutMode === "horizontal"
+            ? "absolute bottom-2 left-1/2 -translate-x-1/2"
+            : "sticky bottom-2 mt-2",
+        )}
+        data-pagination-status={snapshot.status}
+      >
+        第 {activePageIndex + 1} 页，共 {pageCount} 页
       </div>
     </div>
   );

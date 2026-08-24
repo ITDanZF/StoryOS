@@ -56,26 +56,73 @@ try {
   const paragraphs = Array.from({ length: 48 }, (_, index) =>
     `第${index + 1}段，夜色沿着旧城墙缓慢铺开，风从河面带来潮湿的气息。人物停下脚步，重新确认远处那盏微弱却始终没有熄灭的灯。`);
   const editor = page.locator('[contenteditable="true"][aria-label="章节正文"]');
-  const streamViolations = [];
-  for (let count = 8; count <= paragraphs.length; count += 8) {
+  await page.evaluate(() => {
+    const trace = {
+      failedStatuses: 0,
+      maxPageCount: 0,
+      maxStageHeight: 0,
+      visibleInternalStatuses: 0,
+    };
+    const sample = () => {
+      const stage = document.querySelector(".chapter-pagination-stage");
+      const status = document.querySelector("[data-pagination-status]");
+      trace.maxPageCount = Math.max(
+        trace.maxPageCount,
+        document.querySelectorAll(".chapter-pagination-sheet").length,
+      );
+      if (stage instanceof HTMLElement) {
+        trace.maxStageHeight = Math.max(trace.maxStageHeight, stage.offsetHeight);
+      }
+      if (status instanceof HTMLElement) {
+        if (status.dataset.paginationStatus === "failed") {
+          trace.failedStatuses += 1;
+        }
+        if (/正在排版|排版失败/.test(status.innerText)) {
+          trace.visibleInternalStatuses += 1;
+        }
+      }
+    };
+    new MutationObserver(sample).observe(document.body, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+    window.__paginationTrace = trace;
+    sample();
+  });
+  const streamContentViolations = [];
+  for (let count = 1; count <= paragraphs.length; count += 1) {
     await editor.fill(paragraphs.slice(0, count).join("\n\n"));
-    await page.waitForTimeout(35);
-    const overflow = await page.evaluate(() => {
+    await page.waitForTimeout(20);
+    const layoutState = await page.evaluate(() => {
       const editorRoot = document.querySelector(".chapter-rich-text");
       const stage = document.querySelector(".chapter-pagination-stage");
       if (!(editorRoot instanceof HTMLElement) ||
-          !(stage instanceof HTMLElement)) return Number.POSITIVE_INFINITY;
-      return editorRoot.scrollHeight - stage.offsetHeight;
+          !(stage instanceof HTMLElement)) {
+        return { overflow: Number.POSITIVE_INFINITY };
+      }
+      const contentHeight = editorRoot.lastElementChild instanceof HTMLElement
+          ? editorRoot.lastElementChild.getBoundingClientRect().bottom -
+            editorRoot.getBoundingClientRect().top +
+            Number.parseFloat(getComputedStyle(editorRoot.lastElementChild).marginBottom) +
+            Number.parseFloat(getComputedStyle(editorRoot).paddingBottom)
+          : 0;
+      return {
+        contentOverflow: contentHeight - stage.offsetHeight,
+        stageHeight: stage.offsetHeight,
+        pageCount: document.querySelectorAll(".chapter-pagination-sheet").length,
+      };
     });
-    if (overflow > 1) streamViolations.push({ count, overflow });
+    if (layoutState.contentOverflow > 1) {
+      streamContentViolations.push({ count, ...layoutState });
+    }
   }
-  assert.deepEqual(streamViolations, []);
+  assert.deepEqual(streamContentViolations, []);
 
   const waitForStablePagination = async () => {
     await page.waitForFunction(() => {
-      const status = document.body.innerText;
       return document.querySelectorAll(".chapter-pagination-sheet").length >= 3 &&
-        !status.includes("正在排版") && !status.includes("排版失败");
+        document.querySelector('[data-pagination-status="ready"]') !== null;
     }, undefined, { timeout: 15_000 });
   };
   const readGeometry = () => page.evaluate(() => {
@@ -112,6 +159,11 @@ try {
   assert.equal(wide.lineHeight, wide.replicaLineHeight);
   assert.ok(wide.editorScrollHeight <= wide.stageHeight + 1);
   assert.ok(wide.lastContentBottom <= wide.footerTop + 1);
+  const trace = await page.evaluate(() => window.__paginationTrace);
+  assert.equal(trace.failedStatuses, 0);
+  assert.equal(trace.visibleInternalStatuses, 0);
+  assert.ok(trace.maxPageCount <= wide.pageCount + 1);
+  assert.ok(trace.maxStageHeight <= wide.stageHeight + 988);
 
   await page.setViewportSize({ width: 700, height: 900 });
   await waitForStablePagination();
@@ -121,7 +173,7 @@ try {
   assert.ok(narrow.editorScrollHeight <= narrow.stageHeight + 1);
   assert.ok(narrow.lastContentBottom <= narrow.footerTop + 1);
 
-  console.log(JSON.stringify({ wide, narrow }, null, 2));
+  console.log(JSON.stringify({ trace, wide, narrow }, null, 2));
 } finally {
   await application?.close();
   server.kill();

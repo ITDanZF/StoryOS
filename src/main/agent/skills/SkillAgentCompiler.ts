@@ -1,6 +1,12 @@
 import { defineAgent } from "../Agent/AgentDefinition.ts";
 import type { AgentDefinition } from "../Agent/types.ts";
 import type { SkillDefinition } from "./SkillTypes.ts";
+import { describeToolSecurity } from "../tools/ToolManifest.ts";
+import type {
+  AgentContextKind,
+  CapabilityId,
+  EffectId,
+} from "../Agent/capabilities.ts";
 
 export type SkillAgentCompilerOptions = {
   readonly knownToolNames?: readonly string[];
@@ -8,11 +14,6 @@ export type SkillAgentCompilerOptions = {
 };
 
 const DEFAULT_MAX_BODY_CHARS = 5000;
-
-function metadataBoolean(skill: SkillDefinition, key: string): boolean | null {
-  const value = skill.manifest.metadata?.[key];
-  return typeof value === "boolean" ? value : null;
-}
 
 function truncateBody(body: string, maxChars: number): string {
   if (body.length <= maxChars) {
@@ -77,8 +78,18 @@ export function compileSkillAgent(
   ]);
   validateTools(skill, tools, options.knownToolNames);
 
-  const readOnly = metadataBoolean(skill, "readOnly") === true;
-  const planningEligible = readOnly;
+  const toolProfiles = tools.map(describeToolSecurity);
+  const effects = [...new Set(toolProfiles.flatMap((profile) => profile.effects))] as EffectId[];
+  const provided = [...new Set(toolProfiles.flatMap((profile) => profile.provides))] as CapabilityId[];
+  const capabilities: CapabilityId[] = provided.length > 0
+    ? provided
+    : ["text.inspect"];
+  const requiredContexts = [...new Set(
+    toolProfiles.flatMap((profile) => profile.requiredContexts),
+  )] as AgentContextKind[];
+  const acceptedContexts: AgentContextKind[] = requiredContexts.length > 0
+    ? requiredContexts
+    : ["global", "book-editor"];
   const agentId = skill.manifest.agent.id ?? skill.manifest.id;
   const agentName = skill.manifest.agent.name ?? skill.manifest.name;
   const category = skill.manifest.metadata?.category;
@@ -91,15 +102,18 @@ export function compileSkillAgent(
       skill,
       options.maxBodyChars ?? DEFAULT_MAX_BODY_CHARS,
     ),
-    tools,
+    capabilities,
+    allowedToolIds: tools,
+    allowedEffects: effects,
+    acceptedContexts,
+    executionModes: effects.length === 0 ? ["planned"] : ["direct"],
+    outputKinds: ["text"],
     model: "inherit",
-    maxTurns: skill.manifest.agent.maxTurns ?? 6,
+    limits: { maxTurns: skill.manifest.agent.maxTurns ?? 6 },
     metadata: {
       source: "skill",
       skillId: skill.manifest.id,
       skillSource: skill.source.type,
-      readOnly,
-      planningEligible,
       ...(typeof category === "string" ? { category } : {}),
     },
   });

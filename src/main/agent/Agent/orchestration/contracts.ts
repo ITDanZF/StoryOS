@@ -1,33 +1,58 @@
-export type TaskSideEffect = "none";
+import type {
+  AgentContextKind,
+  AgentOutputKind,
+  CapabilityId,
+  EffectId,
+} from "../capabilities.ts";
+import type { AgentFailureCode, AgentFailurePhase } from "../../errors/AgentFailure.ts";
 
-export type PlannedTask = {
+export type ExecutionRequirements = {
+  readonly capabilities: readonly CapabilityId[];
+  readonly effects: readonly EffectId[];
+  readonly contextKinds: readonly AgentContextKind[];
+  readonly outputKind: AgentOutputKind;
+  readonly decomposition: "forbidden" | "optional" | "required";
+};
+
+export type ProposedTask = {
   readonly id: string;
   readonly title: string;
   readonly objective: string;
-  readonly agentType: string;
   readonly dependsOn: readonly string[];
   readonly required: boolean;
   readonly expectedOutput: string;
   readonly acceptanceCriteria: readonly string[];
-  readonly sideEffect: TaskSideEffect;
+  readonly requirements: ExecutionRequirements;
   readonly timeoutMs: number;
   readonly maxAttempts: number;
 };
 
+export type PlannedTask = ProposedTask & {
+  readonly assignedAgentId: string;
+  readonly grantedToolIds: readonly string[];
+};
+
 export type DirectExecutionPlan = {
-  readonly version: 1;
+  readonly version: 2;
   readonly planId: string;
   readonly mode: "direct";
   readonly goal: string;
+  readonly requirements: ExecutionRequirements;
+  readonly grantedToolIds: readonly string[];
 };
 
-export type PlannedExecutionPlan = {
-  readonly version: 1;
+export type ProposedExecutionPlan = {
+  readonly version: 2;
   readonly planId: string;
   readonly mode: "planned";
   readonly goal: string;
-  readonly tasks: readonly PlannedTask[];
+  readonly requirements: ExecutionRequirements;
+  readonly tasks: readonly ProposedTask[];
   readonly finalAcceptanceCriteria: readonly string[];
+};
+
+export type PlannedExecutionPlan = Omit<ProposedExecutionPlan, "tasks"> & {
+  readonly tasks: readonly PlannedTask[];
 };
 
 export type ExecutionPlan = DirectExecutionPlan | PlannedExecutionPlan;
@@ -65,54 +90,25 @@ export type ApprovedTaskResult = TaskResult & {
   readonly review: ReviewResult & { readonly decision: "pass" };
 };
 
+export type SerializableTaskFailure = {
+  readonly code: AgentFailureCode;
+  readonly phase: AgentFailurePhase;
+  readonly message: string;
+  readonly retryable: boolean;
+  readonly taskId?: string;
+  readonly agentId?: string;
+  readonly toolId?: string;
+};
+
 export type OrchestrationEvent =
-  | {
-      readonly type: "plan_created";
-      readonly runId: string;
-      readonly plan: ExecutionPlan;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "task_started";
-      readonly runId: string;
-      readonly planId: string;
-      readonly taskId: string;
-      readonly agentType: string;
-      readonly attempt: number;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "task_reviewed";
-      readonly runId: string;
-      readonly planId: string;
-      readonly taskId: string;
-      readonly attempt: number;
-      readonly decision: ReviewResult["decision"];
-      readonly score: number;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "task_retrying";
-      readonly runId: string;
-      readonly planId: string;
-      readonly taskId: string;
-      readonly nextAttempt: number;
-      readonly timestamp: string;
-    }
-  | {
-      readonly type: "task_completed" | "task_failed" | "task_skipped";
-      readonly runId: string;
-      readonly planId: string;
-      readonly taskId: string;
-      readonly timestamp: string;
-      readonly error?: string;
-    }
-  | {
-      readonly type: "synthesis_started" | "synthesis_completed";
-      readonly runId: string;
-      readonly planId: string;
-      readonly timestamp: string;
-    };
+  | { readonly type: "plan_created"; readonly runId: string; readonly plan: ExecutionPlan; readonly timestamp: string }
+  | { readonly type: "task_started"; readonly runId: string; readonly planId: string; readonly taskId: string; readonly title: string; readonly agentType: string; readonly attempt: number; readonly timestamp: string }
+  | { readonly type: "task_reviewed"; readonly runId: string; readonly planId: string; readonly taskId: string; readonly attempt: number; readonly decision: ReviewResult["decision"]; readonly score: number; readonly timestamp: string }
+  | { readonly type: "task_retrying"; readonly runId: string; readonly planId: string; readonly taskId: string; readonly nextAttempt: number; readonly timestamp: string }
+  | { readonly type: "task_completed"; readonly runId: string; readonly planId: string; readonly taskId: string; readonly timestamp: string }
+  | { readonly type: "task_skipped"; readonly runId: string; readonly planId: string; readonly taskId: string; readonly timestamp: string; readonly failure: SerializableTaskFailure }
+  | { readonly type: "task_failed"; readonly runId: string; readonly planId: string; readonly taskId: string; readonly timestamp: string; readonly failure: SerializableTaskFailure }
+  | { readonly type: "synthesis_started" | "synthesis_completed"; readonly runId: string; readonly planId: string; readonly timestamp: string };
 
 export type OrchestrationEventHandler = (
   event: OrchestrationEvent,

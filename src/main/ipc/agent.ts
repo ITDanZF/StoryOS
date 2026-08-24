@@ -186,6 +186,8 @@ export function registerAgentIpc(
     handle(AGENT_IPC_CHANNELS.listMessages, (threadId?: string) => service.requireController().listMessages(threadId));
     handle(AGENT_IPC_CHANNELS.listConversationMessages, (request: ConversationRef) =>
         service.requireController().listConversationMessages(requireConversationRef(request)));
+    handle(AGENT_IPC_CHANNELS.listConversationEvents, (request: ConversationRef) =>
+        service.requireController().listConversationEvents(requireConversationRef(request)));
     handle(AGENT_IPC_CHANNELS.createThread, (title: string) => service.requireController().createThread(title));
     handle(AGENT_IPC_CHANNELS.createConversation, (request: CreateConversationRequest) =>
         service.requireController().createConversation({

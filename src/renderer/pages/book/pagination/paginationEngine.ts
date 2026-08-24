@@ -10,6 +10,7 @@ type PaginateFragmentsInput = {
   readonly documentEnd: number;
   readonly orphanLines?: number;
   readonly widowLines?: number;
+  readonly continuousFlow?: boolean;
 };
 
 type MutablePage = {
@@ -67,8 +68,14 @@ export function paginateFragments(
   input: PaginateFragmentsInput,
 ): readonly ChapterPage[] {
   requirePaginationInput(input);
-  const orphanLines = Math.max(1, input.orphanLines ?? 2);
-  const widowLines = Math.max(1, input.widowLines ?? 2);
+  const orphanLines = Math.max(
+    1,
+    input.orphanLines ?? (input.continuousFlow ? 1 : 2),
+  );
+  const widowLines = Math.max(
+    1,
+    input.widowLines ?? (input.continuousFlow ? 1 : 2),
+  );
   const groups = fragmentGroups(input.fragments);
   const pages: ChapterPage[] = [];
   let current: MutablePage = {
@@ -125,7 +132,19 @@ export function paginateFragments(
         nextGroup?.[0]?.kind !== "manual-break"
       ? sumHeight(nextGroup.slice(0, Math.max(1, widowLines)))
       : 0;
+    const splitAcrossCurrentPage = Boolean(
+      input.continuousFlow &&
+        current.hasContent &&
+        group.length > 1 &&
+        group.every((item) =>
+          item.kind === "paragraph-line" ||
+          item.kind === "list-item" ||
+          item.kind === "blockquote") &&
+        current.usedHeight + groupHeight >
+          input.contentHeight + LAYOUT_EPSILON,
+    );
     if (
+      !splitAcrossCurrentPage &&
       current.hasContent &&
       current.usedHeight + groupHeight + keepWithNextHeight >
         input.contentHeight + LAYOUT_EPSILON &&
@@ -135,7 +154,10 @@ export function paginateFragments(
       finishPage(first.from, "automatic");
     }
 
-    if (groupHeight <= input.contentHeight + LAYOUT_EPSILON) {
+    if (
+      !splitAcrossCurrentPage &&
+      groupHeight <= input.contentHeight + LAYOUT_EPSILON
+    ) {
       if (
         current.hasContent &&
         current.usedHeight + groupHeight >

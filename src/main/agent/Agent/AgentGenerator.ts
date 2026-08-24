@@ -9,6 +9,8 @@ import ToolPolicy, {
   type ToolApprovalHandler,
 } from "../security/ToolPolicy.ts";
 import type { SkillContextProvider } from "../skills/SkillContextProvider.ts";
+import type { AgentTurnInput } from "../application/contracts.ts";
+import PromptCompiler from "../runtime/PromptCompiler.ts";
 import AgentExecutor from "./AgentExecutor.ts";
 import AgentRuntime from "./AgentRuntime.ts";
 import AgentRegistry from "./AgentRegistry.ts";
@@ -36,6 +38,7 @@ export type AgentGeneratorRunOptions = {
   readonly approval?: ToolApprovalHandler;
   readonly onChunk?: (chunk: string) => void | Promise<void>;
   readonly onAgentEvent?: AgentEventHandler;
+  readonly grantedToolIds: readonly string[];
 };
 
 export type AgentGeneratorOptions = {
@@ -70,6 +73,7 @@ export default class AgentGenerator {
   private readonly limits: RunLimits;
   private readonly skillContextProvider?: SkillContextProvider;
   private readonly activeRuns = new Map<string, RunAbortScope>();
+  private readonly promptCompiler = new PromptCompiler();
 
   constructor(options: AgentGeneratorOptions = {}) {
     const model = options.model ?? new AgentModel().getActiveAgent().model;
@@ -104,7 +108,7 @@ export default class AgentGenerator {
   }
 
   async run(
-    input: string,
+    input: AgentTurnInput,
     options: AgentGeneratorRunOptions,
   ): Promise<string> {
     const abortScope = createRunAbortScope(
@@ -131,7 +135,7 @@ export default class AgentGenerator {
       },
     );
     const tools = guardTools([
-      ...this.toolResolver.resolve(this.toolResolver.listNames()),
+      ...this.toolResolver.resolve(options.grantedToolIds),
       delegateTaskTool,
     ], {
       policy: this.policy,
@@ -150,9 +154,9 @@ export default class AgentGenerator {
     try {
       const result = await this.executor.execute({
         context,
-        prompt: input,
+        prompt: this.promptCompiler.compile(input),
         systemPrompt: async () => {
-          const skillContext = await this.skillContextProvider?.getSkillContext(input, {
+          const skillContext = await this.skillContextProvider?.getSkillContext(input.message.content, {
             threadId: options.threadId,
           });
           if (skillContext && skillContext.selections.length > 0) {

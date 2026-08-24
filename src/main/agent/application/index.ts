@@ -7,7 +7,9 @@ export type {
   RunSnapshot,
   RunStatus,
   SerializableError,
-  StartRunRequest,
+  AgentRunRequest,
+  AgentTurnInput,
+  AgentUserMessage,
 } from "./contracts.ts";
 export type {
   ConversationApplicationEvent,
@@ -18,6 +20,11 @@ export type {
   CreateConversationRequest,
   SendConversationMessageRequest,
 } from "./conversationContracts.ts";
+export type {
+  AssistantBlockChannel,
+  ConversationEvent,
+  ConversationEventType,
+} from "./conversationEvents.ts";
 export type { AgentRunner, AgentRunnerRunOptions } from "./ports.ts";
 export type { ApplicationEventRecorder, RunHistoryStore } from "./runPorts.ts";
 export type {

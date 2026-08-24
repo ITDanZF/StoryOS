@@ -3,9 +3,10 @@ import type RunBudget from "../RunLimits.ts";
 import type { ToolApprovalHandler } from "../../security/ToolPolicy.ts";
 import type { AgentEventHandler } from "../AgentEvent.ts";
 import type { ModelRunInput } from "../../model/ModelGateway.ts";
+import type { AgentTurnInput } from "../../application/contracts.ts";
 import type {
   ApprovedTaskResult,
-  ExecutionPlan,
+  ExecutionRequirements,
   PlannedExecutionPlan,
   PlannedTask,
   ReviewResult,
@@ -15,13 +16,14 @@ import type {
 export type PlanningRequest = {
   readonly runId: string;
   readonly threadId: string;
-  readonly goal: string;
+  readonly input: AgentTurnInput;
+  readonly requirements: ExecutionRequirements;
   readonly signal?: AbortSignal;
   readonly budget?: RunBudget;
 };
 
 export interface PlanProvider {
-  createPlan(request: PlanningRequest): Promise<ExecutionPlan>;
+  createPlan(request: PlanningRequest): Promise<PlannedExecutionPlan>;
 }
 
 export interface OrchestrationTextModel {
@@ -32,6 +34,7 @@ export type TaskExecutionRequest = {
   readonly rootRunId: string;
   readonly threadId: string;
   readonly task: PlannedTask;
+  readonly input: AgentTurnInput;
   readonly attempt: number;
   readonly dependencyResults: readonly ApprovedTaskResult[];
   readonly previousResult?: TaskResult;

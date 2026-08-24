@@ -3,38 +3,52 @@ import { z } from "zod";
 const nonEmptyText = z.string().trim().min(1);
 const taskId = z.string().regex(/^[a-z][a-z0-9_-]*$/);
 
-export const plannedTaskSchema = z.object({
+export const executionRequirementsSchema = z.object({
+  capabilities: z.array(z.enum([
+    "conversation.respond",
+    "workspace.read",
+    "workspace.write",
+    "text.inspect",
+    "text.search",
+    "text.rewrite",
+    "text.review",
+    "book.read",
+    "book.write",
+    "editor.read",
+    "editor.write",
+    "skill.write",
+  ])).min(1),
+  effects: z.array(z.enum([
+    "workspace.write",
+    "book.write",
+    "editor.write",
+    "skill.write",
+  ])),
+  contextKinds: z.array(z.enum(["global", "book-editor"])).min(1),
+  outputKind: z.literal("text"),
+  decomposition: z.enum(["forbidden", "optional", "required"]),
+}).strict();
+
+export const proposedTaskSchema = z.object({
   id: taskId,
   title: nonEmptyText,
   objective: nonEmptyText,
-  agentType: taskId,
   dependsOn: z.array(taskId).max(6),
   required: z.boolean(),
   expectedOutput: nonEmptyText,
   acceptanceCriteria: z.array(nonEmptyText).min(1).max(6),
-  sideEffect: z.literal("none"),
+  requirements: executionRequirementsSchema,
   timeoutMs: z.number().int().min(1_000).max(60_000),
   maxAttempts: z.number().int().min(1).max(2),
 }).strict();
 
-const directPlanDraftSchema = z.object({
-  version: z.literal(1),
-  mode: z.literal("direct"),
-  goal: nonEmptyText,
-}).strict();
-
-const plannedPlanDraftSchema = z.object({
-  version: z.literal(1),
+export const proposedPlanDraftSchema = z.object({
+  version: z.literal(2),
   mode: z.literal("planned"),
   goal: nonEmptyText,
-  tasks: z.array(plannedTaskSchema).min(1).max(6),
+  tasks: z.array(proposedTaskSchema).min(1).max(6),
   finalAcceptanceCriteria: z.array(nonEmptyText).min(1).max(8),
 }).strict();
-
-export const executionPlanDraftSchema = z.discriminatedUnion("mode", [
-  directPlanDraftSchema,
-  plannedPlanDraftSchema,
-]);
 
 export const reviewResultSchema = z.object({
   decision: z.enum(["pass", "retry", "fail"]),

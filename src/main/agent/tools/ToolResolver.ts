@@ -1,6 +1,6 @@
 import { createTools, type CreateToolsOptions } from "./index.ts";
-
 import type { ClientTool } from '@langchain/core/tools';
+import ToolRegistry from "./ToolRegistry.ts";
 
 export type RegisteredTool = ClientTool;
 
@@ -9,42 +9,25 @@ function isToolArray(value: unknown): value is readonly RegisteredTool[] {
 }
 
 export default class ToolResolver {
-  private readonly toolsByName = new Map<string, RegisteredTool>();
+  readonly registry: ToolRegistry;
 
   constructor(toolsOrOptions?: readonly RegisteredTool[] | CreateToolsOptions) {
     const tools = isToolArray(toolsOrOptions)
       ? toolsOrOptions
       : createTools(toolsOrOptions);
 
-    for (const tool of tools) {
-      if (this.toolsByName.has(tool.name)) {
-        throw new Error(`Tool already registered: ${tool.name}`);
-      }
-
-      this.toolsByName.set(tool.name, tool);
-    }
+    this.registry = new ToolRegistry(tools);
   }
 
   resolve(toolNames: readonly string[]): RegisteredTool[] {
-    return toolNames.map((toolName) => {
-      const tool = this.toolsByName.get(toolName);
-
-      if (!tool) {
-        const available = [...this.toolsByName.keys()].join(", ") || "none";
-        throw new Error(
-          `Unknown tool: ${toolName}. Available tools: ${available}.`,
-        );
-      }
-
-      return tool;
-    });
+    return this.registry.resolve(toolNames);
   }
 
   has(toolName: string): boolean {
-    return this.toolsByName.has(toolName);
+    return this.registry.has(toolName);
   }
 
   listNames(): readonly string[] {
-    return Object.freeze([...this.toolsByName.keys()]);
+    return this.registry.listNames();
   }
 }

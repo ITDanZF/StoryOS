@@ -10,9 +10,17 @@ import type { ToolApprovalHandler } from "../../security/ToolPolicy.ts";
 import type { OrchestrationEventHandler } from "./contracts.ts";
 import type { PlanProvider } from "./ports.ts";
 import TaskScheduler from "./TaskScheduler.ts";
+import type { AgentTurnInput } from "../../application/contracts.ts";
+import RequirementResolver from "./RequirementResolver.ts";
+import ExecutionRouter from "./ExecutionRouter.ts";
 
 export interface DirectAgentRunner {
-  run(input: string, options: Omit<AgentOrchestratorRunOptions, "onOrchestrationEvent">): Promise<string>;
+  run(
+    input: AgentTurnInput,
+    options: Omit<AgentOrchestratorRunOptions, "onOrchestrationEvent"> & {
+      readonly grantedToolIds: readonly string[];
+    },
+  ): Promise<string>;
   cancelRun(runId: string, reason?: unknown): boolean;
 }
 
@@ -38,11 +46,13 @@ export default class AgentOrchestrator {
     private readonly directRunner: DirectAgentRunner,
     private readonly planner: PlanProvider,
     private readonly scheduler: PlanScheduler,
+    private readonly requirements: RequirementResolver,
+    private readonly router: ExecutionRouter,
     private readonly limits: RunLimits = DEFAULT_RUN_LIMITS,
   ) {}
 
   async run(
-    input: string,
+    input: AgentTurnInput,
     options: AgentOrchestratorRunOptions,
   ): Promise<string> {
     if (this.activeRuns.has(options.runId)) {
@@ -54,13 +64,18 @@ export default class AgentOrchestrator {
     this.activeRuns.set(options.runId, scope);
 
     try {
-      const plan = await this.planner.createPlan({
-        runId: options.runId,
-        threadId: options.threadId,
-        goal: input,
-        signal: scope.signal,
-        budget,
-      });
+      const requirements = this.requirements.resolve(input);
+      const route = this.router.decide(requirements);
+      const plan = route === "direct"
+        ? this.router.createDirectPlan(input, requirements)
+        : await this.planner.createPlan({
+            runId: options.runId,
+            threadId: options.threadId,
+            input,
+            requirements,
+            signal: scope.signal,
+            budget,
+          });
       await options.onOrchestrationEvent?.({
         type: "plan_created",
         runId: options.runId,
@@ -77,13 +92,15 @@ export default class AgentOrchestrator {
           approval: options.approval,
           onChunk: options.onChunk,
           onAgentEvent: options.onAgentEvent,
+          grantedToolIds: plan.grantedToolIds,
         });
       }
 
       const content = await this.scheduler.run({
         runId: options.runId,
         threadId: options.threadId,
-        goal: input,
+        goal: input.message.content,
+        input,
         plan,
         signal: scope.signal,
         budget,

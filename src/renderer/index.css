@@ -22,3 +22,18 @@
   --color-ring: hsl(0 0% 3.9%);
   --radius: 0.5rem;
 }
+
+@keyframes conversation-wash {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  90%,
+  100% {
+    transform: translateX(calc(100vw + 18rem));
+    opacity: 0;
+  }
+}

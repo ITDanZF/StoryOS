@@ -7,13 +7,18 @@ export { createAgentOrchestrator } from "./createAgentOrchestrator.ts";
 export type {
   ApprovedTaskResult,
   ExecutionPlan,
+  ExecutionRequirements,
   OrchestrationEvent,
   OrchestrationEventHandler,
   PlannedExecutionPlan,
   PlannedTask,
+  ProposedTask,
   ReviewResult,
   TaskResult,
 } from "./contracts.ts";
+export { default as AgentMatcher } from "./AgentMatcher.ts";
+export { default as ExecutionRouter } from "./ExecutionRouter.ts";
+export { default as RequirementResolver } from "./RequirementResolver.ts";
 export type {
   AnswerSynthesisProvider,
   PlannedTaskRunner,

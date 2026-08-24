@@ -12,8 +12,7 @@ export type EditorCommandName =
   | "alignJustify"
   | "clearFormatting"
   | "undo"
-  | "redo"
-  | "pageBreak";
+  | "redo";
 
 export type EditorStyleChange =
   | {

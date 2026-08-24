@@ -12,23 +12,15 @@ import {
 import { useEffect, useRef, type CSSProperties, type FormEvent } from "react";
 import { cn } from "../../../../lib/utils.ts";
 import type { ThreadSnapshot } from "../../../../shared/agent/contracts.ts";
-import AgentActivityTimeline from "../../../features/agent/components/AgentActivityTimeline.tsx";
-import ChatViewport from "../../../features/agent/components/ChatViewport.tsx";
+import ConversationViewport from "../../../features/agent/conversation/components/ConversationViewport.tsx";
+import ApprovalComposer from "../../../features/agent/conversation/components/ApprovalComposer.tsx";
 import type {
-  MessageView,
   PendingToolApprovalView,
   ResolveToolApproval,
-  ToolActivityView,
 } from "../../../features/agent/types.ts";
 import ProjectConversationSwitcher from "./ProjectConversationSwitcher.tsx";
 
 const MAX_TEXTAREA_HEIGHT = 156;
-
-function getRunIdFromMessageId(messageId: string): string | null {
-  if (messageId.startsWith("answer-")) return messageId.slice("answer-".length);
-  if (messageId.startsWith("draft-")) return messageId.slice("draft-".length);
-  return null;
-}
 
 type BookAssistantPanelProps = {
   readonly projectName: string;
@@ -37,15 +29,13 @@ type BookAssistantPanelProps = {
   readonly chapterTitle: string | null;
   readonly conversationSnapshot: ThreadSnapshot | null;
   readonly runningThreadIds: ReadonlySet<string>;
-  readonly messages: readonly MessageView[];
-  readonly pendingApprovals: readonly PendingToolApprovalView[];
-  readonly toolActivities: readonly ToolActivityView[];
   readonly connected: boolean;
   readonly running: boolean;
   readonly focused: boolean;
   readonly width: number;
   readonly draft: string;
   readonly contextEnabled: boolean;
+  readonly pendingApproval: PendingToolApprovalView | null;
   readonly onDraftChange: (value: string) => void;
   readonly onContextEnabledChange: (enabled: boolean) => void;
   readonly onSend: (content: string) => Promise<void>;
@@ -64,15 +54,13 @@ export default function BookAssistantPanel({
   chapterTitle,
   conversationSnapshot,
   runningThreadIds,
-  messages,
-  pendingApprovals,
-  toolActivities,
   connected,
   running,
   focused,
   width,
   draft,
   contextEnabled,
+  pendingApproval,
   onDraftChange,
   onContextEnabledChange,
   onSend,
@@ -103,10 +91,6 @@ export default function BookAssistantPanel({
       onDraftChange(normalized);
     }
   };
-
-  const messageRunIds = new Set(messages.map((message) => getRunIdFromMessageId(message.id)).filter((runId): runId is string => Boolean(runId)));
-  const orphanApprovals = pendingApprovals.filter((approval) => !messageRunIds.has(approval.runId));
-  const orphanActivities = toolActivities.filter((activity) => !messageRunIds.has(activity.runId));
 
   return (
     <aside
@@ -171,50 +155,31 @@ export default function BookAssistantPanel({
         )}
       </div>
 
-      <ChatViewport
-        assistantName="StoryOS"
+      <ConversationViewport
         bottomPaddingClassName="pb-4"
         compact
         emptyDescription={chapterNumber === null
           ? "这是属于当前书籍的项目对话，适合做设定梳理、结构规划和整体节奏讨论。"
           : "当前章节会作为本次项目对话的上下文，适合续写、润色、检查冲突和提取伏笔。"}
         emptyTitle={chapterNumber === null ? "和 AI 一起规划这本书" : "和 AI 一起打磨这一章"}
-        footer={(orphanApprovals.length > 0 || orphanActivities.length > 0) && (
-          <AgentActivityTimeline
-            approvals={orphanApprovals}
-            activities={orphanActivities}
-            compact
-            defaultOpen={orphanApprovals.length > 0 || orphanActivities.some((activity) => activity.status === "started")}
-            title="当前执行过程"
-            onResolveApproval={onResolveApproval}
-          />
-        )}
-        messages={messages}
-        renderMessageFooter={(message) => {
-          const runId = getRunIdFromMessageId(message.id);
-          if (!runId) return null;
-          const messageApprovals = pendingApprovals.filter((approval) => approval.runId === runId);
-          const messageActivities = toolActivities.filter((activity) => activity.runId === runId);
-          if (messageApprovals.length === 0 && messageActivities.length === 0) return null;
-          return (
-            <AgentActivityTimeline
-              approvals={messageApprovals}
-              activities={messageActivities}
-              compact
-              defaultOpen={message.streaming || messageApprovals.length > 0 || messageActivities.some((activity) => activity.status === "started")}
-              title={message.streaming ? "正在执行" : "本次执行过程"}
-              onResolveApproval={onResolveApproval}
-            />
-          );
-        }}
         suggestions={chapterNumber === null
           ? ["梳理整本书的主线冲突", "检查人物动机是否成立", "规划下一卷的节奏"]
           : ["检查本章节奏和冲突", "续写下一段并保持风格", "提取本章伏笔和回收点"]}
         onPickSuggestion={onDraftChange}
-        onQuote={(content) => onDraftChange(`${draft ? `${draft}\n\n` : ""}> ${content.slice(0, 320).replace(/\n/g, "\n> ")}\n\n`)}
       />
 
-      <form className="mx-3 mb-3 shrink-0 rounded-[18px] border border-neutral-200 bg-white/95 p-3 shadow-[0_14px_34px_rgba(30,28,20,0.09)] backdrop-blur-xl transition focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100" onSubmit={(event) => void submit(event)}>
+      {pendingApproval && (
+        <ApprovalComposer
+          approval={pendingApproval}
+          className="mx-3 mb-3 shrink-0"
+          onResolve={onResolveApproval}
+        />
+      )}
+
+      <form className={cn(
+        "mx-3 mb-3 shrink-0 rounded-[18px] border border-neutral-200 bg-white/95 p-3 shadow-[0_14px_34px_rgba(30,28,20,0.09)] backdrop-blur-xl transition focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100",
+        pendingApproval && "hidden",
+      )} onSubmit={(event) => void submit(event)}>
         <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[9px] text-neutral-400">
           <span className="flex min-w-0 items-center gap-1"><Folder className="shrink-0" size={11} />项目 / <b className="truncate">{projectName}</b></span>
           <span>·</span>

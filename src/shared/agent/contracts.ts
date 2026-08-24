@@ -14,6 +14,11 @@ import type { ThreadSkillState } from "../../main/agent/application/threadPorts.
 import type { ToolApprovalDecision } from "../../main/agent/security/ToolPolicy.ts";
 import type { ConversationTurnContext } from "../../main/agent/application/conversationTurnContext.ts";
 import type {
+    AssistantBlockChannel,
+    ConversationEvent,
+    ConversationEventType,
+} from "../../main/agent/application/conversationEvents.ts";
+import type {
     RendererEditorToolRequest,
     RendererEditorToolResponse,
 } from "../../main/agent/tools/editor/contracts.ts";
@@ -56,6 +61,7 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     conversationSnapshot: "agent:conversation-snapshot",
     listMessages: "agent:list-messages",
     listConversationMessages: "agent:conversation-list-messages",
+    listConversationEvents: "agent:conversation-list-events",
     createThread: "agent:create-thread",
     createConversation: "agent:conversation-create",
     switchThread: "agent:switch-thread",
@@ -111,6 +117,7 @@ export type AgentDesktopApi = {
     getConversationSnapshot(scope: ConversationScope): Promise<ConversationSnapshot>;
     listMessages(threadId?: string): Promise<readonly MessageDto[]>;
     listConversationMessages(request: ConversationRef): Promise<readonly MessageDto[]>;
+    listConversationEvents(request: ConversationRef): Promise<readonly ConversationEvent[]>;
     createThread(title: string): Promise<ThreadDto>;
     createConversation(request: CreateConversationRequest): Promise<ThreadDto>;
     switchThread(threadId: string): Promise<ThreadSnapshot>;
@@ -150,6 +157,7 @@ export type AgentDesktopApi = {
 export type {
     AgentConfigurationRequest,
     AgentServiceStatus,
+    AssistantBlockChannel,
     ApplicationEvent,
     BookChapterRevisionResult,
     BookWorkspaceChapterDto,
@@ -157,6 +165,8 @@ export type {
     ChapterGenerationMode,
     CreateBookRequest,
     ConversationApplicationEvent,
+    ConversationEvent,
+    ConversationEventType,
     ConversationRef,
     ConversationScope,
     ConversationSnapshot,
