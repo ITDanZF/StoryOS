@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import started from 'electron-squirrel-startup';
 import AppWindowManager from './window/index';
 import StoryAgentService from './agent/StoryAgentService';
@@ -22,10 +23,15 @@ let shutdownComplete = false;
 const rendererEditorTools = new RendererEditorToolBridge();
 
 app.whenReady().then(async () => {
+    const unpackedSkillRoot = path.join(
+        path.dirname(app.getAppPath()),
+        'app.asar.unpacked',
+        'skills',
+    );
     agentService = new StoryAgentService({
         agentHome: getAgentHome(),
-        bundledSkillRoot: app.isPackaged
-            ? path.join(process.resourcesPath, 'app.asar.unpacked', 'skills')
+        bundledSkillRoot: existsSync(unpackedSkillRoot)
+            ? unpackedSkillRoot
             : path.join(app.getAppPath(), 'skills'),
         rendererEditorTools,
     });

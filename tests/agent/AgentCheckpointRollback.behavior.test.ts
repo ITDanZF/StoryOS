@@ -128,6 +128,13 @@ vi.mock("better-sqlite3", () => ({
 import AgentApplication from "../../src/main/agent/application/AgentApplication.ts";
 import type { AgentRunner } from "../../src/main/agent/application/ports.ts";
 
+function runRequest(threadId: string, content: string) {
+  return {
+    threadId,
+    message: { messageId: `message-${threadId}-${content}`, content },
+  };
+}
+
 function checkpoint(
   threadId: string,
   checkpointId: string,
@@ -242,10 +249,9 @@ describe("Agent checkpoint rollback behavior", () => {
     };
     const application = new AgentApplication(runner, { checkpointPath });
 
-    const runId = application.startRun({
-      threadId: "thread-a",
-      input: "run a failing task",
-    });
+    const runId = application.startRun(
+      runRequest("thread-a", "run a failing task"),
+    );
 
     await expect(application.waitForRun(runId)).rejects.toThrow("model failed");
     expect(snapshotState(state)).toEqual(before);
@@ -261,35 +267,24 @@ describe("Agent checkpoint rollback behavior", () => {
       ["next", next.promise],
     ]);
     const runner: AgentRunner = {
-      run: (input) => runs.get(input) ?? Promise.reject(new Error("Unknown run")),
+      run: (input) => runs.get(input.message.content)
+        ?? Promise.reject(new Error("Unknown run")),
       cancelRun: () => false,
     };
     const application = new AgentApplication(runner);
 
-    const firstRunId = application.startRun({
-      threadId: "thread-a",
-      input: "first",
-    });
+    const firstRunId = application.startRun(runRequest("thread-a", "first"));
     expect(() =>
-      application.startRun({
-        threadId: "thread-a",
-        input: "duplicate",
-      }),
+      application.startRun(runRequest("thread-a", "duplicate")),
     ).toThrow("Thread already has an active run");
 
-    const otherRunId = application.startRun({
-      threadId: "thread-b",
-      input: "other",
-    });
+    const otherRunId = application.startRun(runRequest("thread-b", "other"));
     first.resolve("first done");
     other.resolve("other done");
     await expect(application.waitForRun(firstRunId)).resolves.toBe("first done");
     await expect(application.waitForRun(otherRunId)).resolves.toBe("other done");
 
-    const nextRunId = application.startRun({
-      threadId: "thread-a",
-      input: "next",
-    });
+    const nextRunId = application.startRun(runRequest("thread-a", "next"));
     next.resolve("next done");
     await expect(application.waitForRun(nextRunId)).resolves.toBe("next done");
   });

@@ -19,6 +19,10 @@ function asModel(model: AgentModelRunner): Model {
   return model as unknown as Model;
 }
 
+function turnInput(content: string) {
+  return { message: { messageId: `message-${content}`, content } };
+}
+
 describe("AgentGenerator behavior", () => {
   it("preserves root streaming and completion events through AgentExecutor", async () => {
     const generator = new AgentGenerator({
@@ -34,9 +38,10 @@ describe("AgentGenerator behavior", () => {
     const events: AgentEvent[] = [];
     const chunks: string[] = [];
 
-    await expect(generator.run("answer", {
+    await expect(generator.run(turnInput("answer"), {
       runId: "root-run",
       threadId: "thread-1",
+      grantedToolIds: [],
       onChunk: (chunk) => {
         chunks.push(chunk);
       },
@@ -66,9 +71,10 @@ describe("AgentGenerator behavior", () => {
     });
     const events: AgentEvent[] = [];
 
-    await expect(generator.run("answer", {
+    await expect(generator.run(turnInput("answer"), {
       runId: "root-failure",
       threadId: "thread-1",
+      grantedToolIds: [],
       onAgentEvent: (event) => {
         events.push(event);
       },
@@ -104,17 +110,23 @@ describe("AgentGenerator behavior", () => {
         name: "Text Analyzer",
         description: "Analyze text.",
         systemPrompt: "Analyze text.",
-        tools: [],
-        maxTurns: 3,
+        capabilities: ["text.inspect"],
+        allowedToolIds: [],
+        allowedEffects: [],
+        acceptedContexts: ["global"],
+        executionModes: ["planned"],
+        outputKinds: ["text"],
+        limits: { maxTurns: 3 },
       }]),
       toolResolver: new ToolResolver([]),
       limits,
     });
     const events: AgentEvent[] = [];
 
-    await expect(generator.run("delegate this", {
+    await expect(generator.run(turnInput("delegate this"), {
       runId: "root-run",
       threadId: "thread-1",
+      grantedToolIds: [],
       onAgentEvent: (event) => {
         events.push(event);
       },

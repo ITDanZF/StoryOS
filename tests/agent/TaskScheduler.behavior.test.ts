@@ -38,22 +38,32 @@ const passReview: ReviewResult = {
   ],
 };
 
+const textRequirements = {
+  capabilities: ["text.inspect" as const],
+  effects: [] as const,
+  contextKinds: ["global" as const],
+  outputKind: "text" as const,
+  decomposition: "optional" as const,
+};
+
 const plan: PlannedExecutionPlan = {
-  version: 1,
+  version: 2,
   planId: "plan-1",
   mode: "planned",
   goal: "analyze then review",
+  requirements: textRequirements,
   tasks: [
     {
       id: "analyze",
       title: "Analyze",
       objective: "Analyze the text",
-      agentType: "text-analyzer",
+      assignedAgentId: "text-analyzer",
+      grantedToolIds: [],
       dependsOn: [],
       required: true,
       expectedOutput: "Analysis",
       acceptanceCriteria: ["complete"],
-      sideEffect: "none",
+      requirements: textRequirements,
       timeoutMs: 1_000,
       maxAttempts: 1,
     },
@@ -61,12 +71,13 @@ const plan: PlannedExecutionPlan = {
       id: "review",
       title: "Review",
       objective: "Review the analysis",
-      agentType: "text-reviewer",
+      assignedAgentId: "text-reviewer",
+      grantedToolIds: [],
       dependsOn: ["analyze"],
       required: true,
       expectedOutput: "Review",
       acceptanceCriteria: ["complete"],
-      sideEffect: "none",
+      requirements: { ...textRequirements, capabilities: ["text.review"] },
       timeoutMs: 1_000,
       maxAttempts: 1,
     },
@@ -93,6 +104,9 @@ function createScheduleRequest(events: OrchestrationEvent[]) {
     runId: "run-1",
     threadId: "thread-1",
     goal: plan.goal,
+    input: {
+      message: { messageId: "message-1", content: plan.goal },
+    },
     plan,
     budget: new RunBudget(limits),
     approval: async () => "deny" as const,
@@ -116,7 +130,7 @@ describe("TaskScheduler behavior", () => {
         }
         return completedResult(
           request.task.id,
-          request.task.agentType,
+          request.task.assignedAgentId,
           request.attempt,
         );
       }),
@@ -161,7 +175,7 @@ describe("TaskScheduler behavior", () => {
       runTask: vi.fn(async (request: TaskExecutionRequest) =>
         completedResult(
           request.task.id,
-          request.task.agentType,
+          request.task.assignedAgentId,
           request.attempt,
         )),
     };
@@ -214,7 +228,7 @@ describe("TaskScheduler behavior", () => {
       runTask: vi.fn(async (request: TaskExecutionRequest) =>
         completedResult(
           request.task.id,
-          request.task.agentType,
+          request.task.assignedAgentId,
           request.attempt,
         )),
     };
@@ -243,7 +257,7 @@ describe("TaskScheduler behavior", () => {
       runTask: vi.fn(async (request: TaskExecutionRequest) =>
         completedResult(
           request.task.id,
-          request.task.agentType,
+          request.task.assignedAgentId,
           request.attempt,
         )),
     };
@@ -279,7 +293,7 @@ describe("TaskScheduler behavior", () => {
       runTask: vi.fn(async (request: TaskExecutionRequest) =>
         completedResult(
           request.task.id,
-          request.task.agentType,
+          request.task.assignedAgentId,
           request.attempt,
         )),
     };
@@ -304,7 +318,7 @@ describe("TaskScheduler behavior", () => {
     await expect(scheduler.run({
       ...createScheduleRequest(events),
       plan: dependencyPlan,
-    })).rejects.toThrow("Required task was skipped: review");
+    })).rejects.toThrow("任务“Review”因依赖任务未通过验收而跳过。");
     expect(events.map((event) => event.type)).toEqual([
       "task_started",
       "task_reviewed",
@@ -323,7 +337,7 @@ describe("TaskScheduler behavior", () => {
       runTask: vi.fn(async (request: TaskExecutionRequest) =>
         completedResult(
           request.task.id,
-          request.task.agentType,
+          request.task.assignedAgentId,
           request.attempt,
         )),
     };
@@ -349,7 +363,7 @@ describe("TaskScheduler behavior", () => {
     await expect(scheduler.run({
       ...createScheduleRequest(events),
       plan: retryPlan,
-    })).rejects.toThrow("Required task failed review: analyze");
+    })).rejects.toThrow("任务“Analyze”未通过验收");
     expect(runner.runTask).toHaveBeenCalledTimes(2);
     expect(events.map((event) => event.type)).toEqual([
       "task_started",

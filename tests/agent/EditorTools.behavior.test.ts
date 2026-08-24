@@ -136,6 +136,7 @@ describe("live editor tools", () => {
     });
 
     const preview = createToolApprovalPreview({
+      toolCallId: "tool-call-style-preview",
       toolName: "apply_active_editor_styles",
       summary: "",
       input: {

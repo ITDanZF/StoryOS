@@ -8,7 +8,6 @@ import AgentOrchestrator, {
 } from "../../src/main/agent/Agent/orchestration/AgentOrchestrator.ts";
 import { createAgentOrchestrator } from "../../src/main/agent/Agent/orchestration/createAgentOrchestrator.ts";
 import type {
-  DirectExecutionPlan,
   OrchestrationEvent,
   PlannedExecutionPlan,
 } from "../../src/main/agent/Agent/orchestration/contracts.ts";
@@ -17,6 +16,12 @@ import type { AgentModelRunner } from "../../src/main/agent/Agent/AgentRuntime.t
 import type { RunLimits } from "../../src/main/agent/Agent/RunLimits.ts";
 import type Model from "../../src/main/agent/model/Model.ts";
 import WorkspaceToolContext from "../../src/main/agent/tools/WorkspaceToolContext.ts";
+import AgentRegistry from "../../src/main/agent/Agent/AgentRegistry.ts";
+import AgentMatcher from "../../src/main/agent/Agent/orchestration/AgentMatcher.ts";
+import RequirementResolver from "../../src/main/agent/Agent/orchestration/RequirementResolver.ts";
+import ExecutionRouter from "../../src/main/agent/Agent/orchestration/ExecutionRouter.ts";
+import ToolAccessResolver from "../../src/main/agent/tools/ToolAccessResolver.ts";
+import ToolRegistry from "../../src/main/agent/tools/ToolRegistry.ts";
 
 const limits: RunLimits = {
   maxTurns: 8,
@@ -42,35 +47,64 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-const directPlan: DirectExecutionPlan = {
-  version: 1,
-  planId: "plan-direct",
-  mode: "direct",
-  goal: "answer directly",
+const textReviewRequirements = {
+  capabilities: ["text.review" as const],
+  effects: [] as const,
+  contextKinds: ["global" as const],
+  outputKind: "text" as const,
+  decomposition: "optional" as const,
 };
 
 const plannedPlan: PlannedExecutionPlan = {
-  version: 1,
+  version: 2,
   planId: "plan-planned",
   mode: "planned",
   goal: "analyze and review",
+  requirements: textReviewRequirements,
   tasks: [
     {
       id: "analyze",
       title: "Analyze",
       objective: "Analyze the supplied text",
-      agentType: "text-analyzer",
+      assignedAgentId: "text-reviewer",
+      grantedToolIds: [],
       dependsOn: [],
       required: true,
       expectedOutput: "Analysis",
       acceptanceCriteria: ["Includes the central idea"],
-      sideEffect: "none",
+      requirements: textReviewRequirements,
       timeoutMs: 1_000,
       maxAttempts: 1,
     },
   ],
   finalAcceptanceCriteria: ["Provide a concise answer"],
 };
+
+function turnInput(content: string) {
+  return { message: { messageId: `message-${content}`, content } };
+}
+
+function createRouting() {
+  const registry = new AgentRegistry([{
+    id: "test-specialist",
+    name: "Test Specialist",
+    description: "Handles read-only test tasks.",
+    systemPrompt: "Complete the assigned test task.",
+    capabilities: ["text.inspect", "text.review"],
+    allowedToolIds: [],
+    allowedEffects: [],
+    acceptedContexts: ["global"],
+    executionModes: ["planned"],
+    outputKinds: ["text"],
+    limits: { maxTurns: 3 },
+  }]);
+  const tools = new ToolAccessResolver(new ToolRegistry([]));
+  const matcher = new AgentMatcher(registry, tools);
+  return {
+    requirements: new RequirementResolver(),
+    router: new ExecutionRouter(matcher, tools),
+  };
+}
 
 function createOptions(events: OrchestrationEvent[], chunks: string[]) {
   return {
@@ -90,7 +124,7 @@ function createOptions(events: OrchestrationEvent[], chunks: string[]) {
 describe("AgentOrchestrator behavior", () => {
   it("routes direct plans to the direct runner without invoking the scheduler", async () => {
     const planner: PlanProvider = {
-      createPlan: vi.fn(async () => directPlan),
+      createPlan: vi.fn(async () => plannedPlan),
     };
     const directRunner: DirectAgentRunner = {
       run: vi.fn(async (_input, options) => {
@@ -102,17 +136,20 @@ describe("AgentOrchestrator behavior", () => {
     const scheduler: PlanScheduler = {
       run: vi.fn(async () => "unexpected"),
     };
+    const routing = createRouting();
     const orchestrator = new AgentOrchestrator(
       directRunner,
       planner,
       scheduler,
+      routing.requirements,
+      routing.router,
       limits,
     );
     const events: OrchestrationEvent[] = [];
     const chunks: string[] = [];
 
     await expect(
-      orchestrator.run("answer directly", createOptions(events, chunks)),
+      orchestrator.run(turnInput("answer directly"), createOptions(events, chunks)),
     ).resolves.toBe("direct answer");
     expect(directRunner.run).toHaveBeenCalledOnce();
     expect(scheduler.run).not.toHaveBeenCalled();
@@ -120,7 +157,11 @@ describe("AgentOrchestrator behavior", () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       type: "plan_created",
-      plan: directPlan,
+      plan: expect.objectContaining({
+        version: 2,
+        mode: "direct",
+        goal: "answer directly",
+      }),
     });
   });
 
@@ -135,17 +176,23 @@ describe("AgentOrchestrator behavior", () => {
     const scheduler: PlanScheduler = {
       run: vi.fn(async () => "synthesized answer"),
     };
+    const routing = createRouting();
     const orchestrator = new AgentOrchestrator(
       directRunner,
       planner,
       scheduler,
+      routing.requirements,
+      routing.router,
       limits,
     );
     const events: OrchestrationEvent[] = [];
     const chunks: string[] = [];
 
     await expect(
-      orchestrator.run("analyze and review", createOptions(events, chunks)),
+      orchestrator.run(
+        turnInput("analyze and review"),
+        createOptions(events, chunks),
+      ),
     ).resolves.toBe("synthesized answer");
     expect(directRunner.run).not.toHaveBeenCalled();
     expect(scheduler.run).toHaveBeenCalledOnce();
@@ -164,7 +211,7 @@ describe("AgentOrchestrator behavior", () => {
     let rejectRun: (reason: unknown) => void = () => undefined;
     let directRunStarted = false;
     const planner: PlanProvider = {
-      createPlan: vi.fn(async () => directPlan),
+      createPlan: vi.fn(async () => plannedPlan),
     };
     const directRunner: DirectAgentRunner = {
       run: () =>
@@ -180,13 +227,19 @@ describe("AgentOrchestrator behavior", () => {
     const scheduler: PlanScheduler = {
       run: vi.fn(async () => "unexpected"),
     };
+    const routing = createRouting();
     const orchestrator = new AgentOrchestrator(
       directRunner,
       planner,
       scheduler,
+      routing.requirements,
+      routing.router,
       limits,
     );
-    const run = orchestrator.run("answer directly", createOptions([], []));
+    const run = orchestrator.run(
+      turnInput("answer directly"),
+      createOptions([], []),
+    );
     await vi.waitFor(() => expect(directRunStarted).toBe(true));
 
     const reason = new Error("stop now");
@@ -205,19 +258,24 @@ describe("AgentOrchestrator behavior", () => {
         if (input.threadId.includes("/orchestration/planner/")) {
           calls.push("planner");
           return JSON.stringify({
-            version: 1,
+            version: 2,
             mode: "planned",
             goal: "analyze text",
             tasks: [{
               id: "analyze",
               title: "Analyze",
               objective: "Analyze the supplied text",
-              agentType: "text-analyzer",
               dependsOn: [],
               required: true,
               expectedOutput: "Analysis",
               acceptanceCriteria: ["Complete"],
-              sideEffect: "none",
+              requirements: {
+                capabilities: ["text.inspect"],
+                effects: [],
+                contextKinds: ["global"],
+                outputKind: "text",
+                decomposition: "forbidden",
+              },
               timeoutMs: 1_000,
               maxAttempts: 1,
             }],
@@ -258,7 +316,7 @@ describe("AgentOrchestrator behavior", () => {
     const chunks: string[] = [];
 
     await expect(orchestrator.run(
-      "analyze text",
+      turnInput("analyze text"),
       createOptions(events, chunks),
     )).resolves.toBe("final answer");
     expect(calls).toEqual(["planner", "task", "reviewer", "synthesizer"]);

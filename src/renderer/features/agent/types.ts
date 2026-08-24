@@ -1,5 +1,6 @@
 import type {
   AgentServiceStatus,
+  ChapterGenerationMode,
   ConversationScope,
   ProjectNavigationSnapshot,
   ProjectSnapshot,
@@ -7,7 +8,6 @@ import type {
   ThreadSnapshot,
   ToolApprovalDecision,
 } from "../../../shared/agent/contracts.ts";
-import type { ChapterGenerationMode } from "../../../shared/agent/contracts.ts";
 
 export type PendingToolApprovalView = {
   readonly approvalId: string;

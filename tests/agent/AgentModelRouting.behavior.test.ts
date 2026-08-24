@@ -27,7 +27,13 @@ describe("Agent model routing behavior", () => {
       name: "Routed Agent",
       description: "Uses a named model gateway.",
       systemPrompt: "Return the routed result.",
-      tools: [],
+      capabilities: ["text.inspect"],
+      allowedToolIds: [],
+      allowedEffects: [],
+      acceptedContexts: ["global"],
+      executionModes: ["planned"],
+      outputKinds: ["text"],
+      limits: { maxTurns: 3 },
       model: "specialist-model",
     }]);
     const runtime = new AgentRuntime(
@@ -43,6 +49,7 @@ describe("Agent model routing behavior", () => {
       agentType: "routed-agent",
       prompt: "perform routed task",
       parentThreadId: "thread-routing",
+      grantedToolIds: [],
     })).resolves.toMatchObject({
       status: "completed",
       content: "specialist",

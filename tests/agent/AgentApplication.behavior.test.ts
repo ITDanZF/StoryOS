@@ -6,6 +6,13 @@ import type {
 import type { AgentRunner } from "../../src/main/agent/application/ports.ts";
 import { RunTimedOutError } from "../../src/main/agent/Agent/RunLimits.ts";
 
+function runRequest(threadId: string, content: string) {
+  return {
+    threadId,
+    message: { messageId: `message-${threadId}`, content },
+  };
+}
+
 function waitForEvent(
   events: readonly ApplicationEvent[],
   predicate: (event: ApplicationEvent) => boolean,
@@ -33,16 +40,18 @@ describe("AgentApplication behavior", () => {
       events.push(event);
     });
 
-    const runId = application.startRun({
-      threadId: "thread-1",
-      input: "say hello",
-    });
+    const runId = application.startRun(runRequest("thread-1", "say hello"));
 
     await expect(application.waitForRun(runId)).resolves.toBe("hello world");
     expect(events.map((event) => event.type)).toEqual([
       "run_started",
-      "text_delta",
-      "text_delta",
+      "user.message.created",
+      "turn.started",
+      "assistant.block.started",
+      "assistant.block.delta",
+      "assistant.block.delta",
+      "assistant.block.completed",
+      "turn.completed",
       "run_completed",
     ]);
     expect(application.getRun(runId)).toMatchObject({
@@ -57,6 +66,7 @@ describe("AgentApplication behavior", () => {
     const runner: AgentRunner = {
       run: async (_input, options) => {
         const decision = await options.approval({
+          toolCallId: "tool-call-approval",
           toolName: "write_file",
           summary: "Write file: story.md",
           input: { path: "story.md", content: "Once upon a time" },
@@ -71,31 +81,35 @@ describe("AgentApplication behavior", () => {
       events.push(event);
     });
 
-    const runId = application.startRun({
-      threadId: "thread-approval",
-      input: "write the story",
-    });
+    const runId = application.startRun(
+      runRequest("thread-approval", "write the story"),
+    );
     const requested = await waitForEvent(
       events,
-      (event) => event.type === "approval_requested",
+      (event) => event.type === "approval.requested",
     );
     expect(requested).toMatchObject({
-      type: "approval_requested",
+      type: "approval.requested",
       runId,
-      toolName: "write_file",
-      summary: "Write file: story.md",
+      payload: {
+        approvalId: expect.any(String),
+        toolCallId: "tool-call-approval",
+        toolName: "write_file",
+        summary: "Write file: story.md",
+        preview: expect.any(String),
+      },
     });
-    if (requested.type !== "approval_requested") {
+    if (requested.type !== "approval.requested") {
       throw new Error("Expected an approval request.");
     }
 
     await expect(
-      application.resolveApproval(requested.approvalId, "allow_once"),
+      application.resolveApproval(requested.payload.approvalId, "allow_once"),
     ).resolves.toBe(true);
     await expect(application.waitForRun(runId)).resolves.toBe(
       "decision:allow_once",
     );
-    expect(events.some((event) => event.type === "approval_resolved")).toBe(
+    expect(events.some((event) => event.type === "approval.resolved")).toBe(
       true,
     );
   });
@@ -118,10 +132,9 @@ describe("AgentApplication behavior", () => {
       events.push(event);
     });
 
-    const runId = application.startRun({
-      threadId: "thread-cancel",
-      input: "keep working",
-    });
+    const runId = application.startRun(
+      runRequest("thread-cancel", "keep working"),
+    );
     expect(application.cancelRun(runId)).toBe(true);
 
     await expect(application.waitForRun(runId)).rejects.toThrow(
@@ -147,10 +160,9 @@ describe("AgentApplication behavior", () => {
       events.push(event);
     });
 
-    const runId = application.startRun({
-      threadId: "thread-timeout",
-      input: "slow task",
-    });
+    const runId = application.startRun(
+      runRequest("thread-timeout", "slow task"),
+    );
 
     await expect(application.waitForRun(runId)).rejects.toThrow(
       "Agent run timed out after 250ms.",
@@ -162,7 +174,7 @@ describe("AgentApplication behavior", () => {
     expect(events.some((event) => event.type === "run_timed_out")).toBe(true);
   });
 
-  it("publishes subagent lineage fields for run log reconstruction", async () => {
+  it("keeps private subagent lifecycle events out of the conversation stream", async () => {
     const runner: AgentRunner = {
       run: async (_input, options) => {
         await options.onAgentEvent({
@@ -183,22 +195,19 @@ describe("AgentApplication behavior", () => {
       events.push(event);
     });
 
-    const runId = application.startRun({
-      threadId: "thread-lineage",
-      input: "delegate",
-    });
+    const runId = application.startRun(
+      runRequest("thread-lineage", "delegate"),
+    );
 
     await expect(application.waitForRun(runId)).resolves.toBe("done");
-    expect(events).toContainEqual(expect.objectContaining({
-      type: "agent_status",
-      runId,
-      agentRunId: "subagent-run",
-      agentType: "text-analyzer",
-      status: "started",
-      threadId: "thread-lineage/agents/text-analyzer/subagent-run",
-      parentRunId: runId,
-      depth: 1,
-    }));
+    expect(events.some((event) => "agentRunId" in event)).toBe(false);
+    expect(events.map((event) => event.type)).toEqual([
+      "run_started",
+      "user.message.created",
+      "turn.started",
+      "turn.completed",
+      "run_completed",
+    ]);
   });
 
   it("publishes main-agent tool lifecycle events with a stable call id", async () => {
@@ -230,26 +239,24 @@ describe("AgentApplication behavior", () => {
       events.push(event);
     });
 
-    const runId = application.startRun({
-      threadId: "thread-main-tool",
-      input: "create a chapter",
-    });
+    const runId = application.startRun(
+      runRequest("thread-main-tool", "create a chapter"),
+    );
     await expect(application.waitForRun(runId)).resolves.toBe("done");
 
-    expect(events.filter((event) => event.type === "tool_status")).toEqual([
+    expect(events.filter((event) => event.type.startsWith("tool.call."))).toEqual([
       expect.objectContaining({
-        type: "tool_status",
+        type: "tool.call.started",
         runId,
-        toolCallId: "tool-call-1",
-        toolName: "create_book_chapter",
-        status: "started",
+        payload: expect.objectContaining({
+          toolCallId: "tool-call-1",
+          toolName: "create_book_chapter",
+        }),
       }),
       expect.objectContaining({
-        type: "tool_status",
+        type: "tool.call.completed",
         runId,
-        toolCallId: "tool-call-1",
-        toolName: "create_book_chapter",
-        status: "completed",
+        payload: { toolCallId: "tool-call-1" },
       }),
     ]);
   });

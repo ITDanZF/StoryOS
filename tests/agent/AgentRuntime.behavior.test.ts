@@ -17,8 +17,13 @@ function createRegistry() {
       name: "Test Agent",
       description: "Agent used by runtime behavior tests.",
       systemPrompt: "Return the test result.",
-      tools: [],
-      maxTurns: 3,
+      capabilities: ["text.inspect"],
+      allowedToolIds: [],
+      allowedEffects: [],
+      acceptedContexts: ["global"],
+      executionModes: ["planned"],
+      outputKinds: ["text"],
+      limits: { maxTurns: 3 },
     },
   ]);
 }
@@ -52,6 +57,7 @@ describe("AgentRuntime behavior", () => {
       parentThreadId: "thread-1",
       parentRunId: "root-run",
       depth: 1,
+      grantedToolIds: [],
       onEvent: (event) => {
         events.push(event);
       },
@@ -91,6 +97,7 @@ describe("AgentRuntime behavior", () => {
       prompt: "perform task",
       parentThreadId: "thread-1",
       signal: controller.signal,
+      grantedToolIds: [],
       onEvent: (event) => {
         events.push(event);
       },
@@ -126,6 +133,7 @@ describe("AgentRuntime behavior", () => {
       agentType: "test-agent",
       prompt: "perform task",
       parentThreadId: "thread-1",
+      grantedToolIds: [],
     })).resolves.toMatchObject({
       status: "failed",
       agentType: "test-agent",
@@ -161,6 +169,7 @@ describe("AgentRuntime behavior", () => {
         parentThreadId: "thread-parent",
         parentRunId: "root-run",
         depth: 1,
+        grantedToolIds: [],
         onEvent: (event) => {
           events.push(event);
         },
@@ -171,6 +180,7 @@ describe("AgentRuntime behavior", () => {
         parentThreadId: "thread-parent",
         parentRunId: "root-run",
         depth: 1,
+        grantedToolIds: [],
         onEvent: (event) => {
           events.push(event);
         },
@@ -225,12 +235,14 @@ describe("AgentRuntime behavior", () => {
       prompt: "first task",
       parentThreadId: "thread-1",
       budget,
+      grantedToolIds: [],
     })).resolves.toMatchObject({ status: "completed" });
     await expect(runtime.run({
       agentType: "test-agent",
       prompt: "second task",
       parentThreadId: "thread-1",
       budget,
+      grantedToolIds: [],
     })).resolves.toMatchObject({
       status: "failed",
       error: expect.stringContaining("Model turn budget exceeded"),
@@ -245,8 +257,13 @@ describe("AgentRuntime behavior", () => {
         name: "Read Only Agent",
         description: "Uses only read tools.",
         systemPrompt: "Read only.",
-        tools: ["read_file"],
-        maxTurns: 3,
+        capabilities: ["workspace.read"],
+        allowedToolIds: ["read_file"],
+        allowedEffects: [],
+        acceptedContexts: ["global"],
+        executionModes: ["planned"],
+        outputKinds: ["text"],
+        limits: { maxTurns: 3 },
       },
     ]);
     const model: AgentModelRunner = {
@@ -268,6 +285,7 @@ describe("AgentRuntime behavior", () => {
       agentType: "read-only-agent",
       prompt: "read something",
       parentThreadId: "thread-1",
+      grantedToolIds: ["read_file"],
     })).resolves.toMatchObject({ status: "completed" });
     expect(model.invokeText).toHaveBeenCalledOnce();
   });

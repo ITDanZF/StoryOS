@@ -9,6 +9,7 @@ import type { MessageRole, ThreadSkillState } from "../../src/main/agent/applica
 import DesktopController from "../../src/main/agent/electron/DesktopController.ts";
 import type { DesktopControllerDependencies } from "../../src/main/agent/electron/DesktopController.ts";
 import { parseTiptapDocument, serializeTiptapDocument } from "../../src/shared/book/richText.ts";
+import type { AgentRunRequest } from "../../src/main/agent/application/contracts.ts";
 
 type StoredMessage = { readonly role: MessageRole; readonly content: string; readonly threadId: string };
 type TestMessage = StoredMessage & { readonly id: string; readonly createdAt: string };
@@ -47,7 +48,7 @@ function createHarness() {
     systemWorkspace,
   });
   const agent = {
-    startRun: vi.fn((request: { readonly threadId: string; readonly input: string }) => {
+    startRun: vi.fn((request: AgentRunRequest) => {
       void request;
       return "run-1";
     }),
@@ -259,11 +260,18 @@ describe("DesktopController", () => {
     });
     expect(harness.agent.startRun).toHaveBeenCalledWith({
       threadId: "thread-1",
-      input: expect.stringContaining("<chapter_text>\n雨落在旧城。\n</chapter_text>"),
+      message: {
+        messageId: "message-1",
+        content: "分析当前段落",
+      },
+      context: expect.objectContaining({
+        kind: "book_editor",
+        chapter: expect.objectContaining({
+          documentText: "雨落在旧城。",
+          selection: expect.objectContaining({ text: "雨落在旧城" }),
+        }),
+      }),
     });
-    expect(harness.agent.startRun.mock.calls[0][0].input).toContain(
-      "<selection>\n雨落在旧城\n</selection>",
-    );
   });
 
   it("returns explicit uninitialized book state without using project name", async () => {

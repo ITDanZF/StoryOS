@@ -4,6 +4,13 @@ import type { RunSnapshot } from "../../src/main/agent/application/contracts.ts"
 import type { AgentRunner } from "../../src/main/agent/application/ports.ts";
 import type { ApplicationEventRecorder } from "../../src/main/agent/application/runPorts.ts";
 
+function runRequest(threadId: string, content: string) {
+  return {
+    threadId,
+    message: { messageId: `message-${threadId}`, content },
+  };
+}
+
 function completedHistory(index: number): RunSnapshot {
   return {
     runId: `history-${index}`,
@@ -16,7 +23,7 @@ function completedHistory(index: number): RunSnapshot {
 }
 
 describe("AgentApplication lifecycle behavior", () => {
-  it("restores history and retains only the newest configured runs", () => {
+  it("restores history and retains only the newest configured runs", async () => {
     const runner: AgentRunner = {
       run: async () => "unused",
       cancelRun: () => false,
@@ -34,7 +41,7 @@ describe("AgentApplication lifecycle behavior", () => {
       "history-3",
       "history-2",
     ]);
-    expect(application.waitForRun("history-3")).resolves.toBe("");
+    await expect(application.waitForRun("history-3")).resolves.toBe("");
     expect(application.getRun("history-1")).toBeNull();
   });
 
@@ -44,18 +51,16 @@ describe("AgentApplication lifecycle behavior", () => {
       finishActive = resolve;
     });
     const runner: AgentRunner = {
-      run: (input) => input === "active" ? activePromise : Promise.resolve(input),
+      run: (input) => input.message.content === "active"
+        ? activePromise
+        : Promise.resolve(input.message.content),
       cancelRun: () => false,
     };
     const application = new AgentApplication(runner, { maxRetainedRuns: 1 });
-    const activeRunId = application.startRun({
-      threadId: "active-thread",
-      input: "active",
-    });
-    const completedRunId = application.startRun({
-      threadId: "completed-thread",
-      input: "completed",
-    });
+    const activeRunId = application.startRun(runRequest("active-thread", "active"));
+    const completedRunId = application.startRun(
+      runRequest("completed-thread", "completed"),
+    );
     await application.waitForRun(completedRunId);
 
     expect(application.getRun(activeRunId)?.status).toBe("running");
@@ -85,7 +90,7 @@ describe("AgentApplication lifecycle behavior", () => {
     const application = new AgentApplication(runner, {
       eventRecorder: recorder,
     });
-    application.startRun({ threadId: "thread-active", input: "work" });
+    application.startRun(runRequest("thread-active", "work"));
 
     await application.shutdown();
 
@@ -95,7 +100,7 @@ describe("AgentApplication lifecycle behavior", () => {
     expect(application.hasActiveRuns()).toBe(false);
     expect(application.listRuns()).toEqual([]);
     expect(() =>
-      application.startRun({ threadId: "thread-new", input: "new work" }),
+      application.startRun(runRequest("thread-new", "new work")),
     ).toThrow("shutting down");
     await application.shutdown();
     expect(recorder.close).toHaveBeenCalledOnce();

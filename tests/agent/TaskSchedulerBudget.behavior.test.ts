@@ -22,20 +22,34 @@ const limits: RunLimits = {
 };
 
 const plan: PlannedExecutionPlan = {
-  version: 1,
+  version: 2,
   planId: "budget-plan",
   mode: "planned",
   goal: "complete one task",
+  requirements: {
+    capabilities: ["text.inspect"],
+    effects: [],
+    contextKinds: ["global"],
+    outputKind: "text",
+    decomposition: "optional",
+  },
   tasks: [{
     id: "task-1",
     title: "Task",
     objective: "Complete the task",
-    agentType: "text-analyzer",
+    assignedAgentId: "text-analyzer",
+    grantedToolIds: [],
     dependsOn: [],
     required: true,
     expectedOutput: "Result",
     acceptanceCriteria: ["complete"],
-    sideEffect: "none",
+    requirements: {
+      capabilities: ["text.inspect"],
+      effects: [],
+      contextKinds: ["global"],
+      outputKind: "text",
+      decomposition: "optional",
+    },
     timeoutMs: 1_000,
     maxAttempts: 1,
   }],
@@ -47,6 +61,9 @@ function createRequest(events: OrchestrationEvent[]) {
     runId: "run-budget",
     threadId: "thread-budget",
     goal: plan.goal,
+    input: {
+      message: { messageId: "message-budget", content: plan.goal },
+    },
     plan,
     budget: new RunBudget(limits),
     approval: async () => "deny" as const,
@@ -96,7 +113,7 @@ describe("TaskScheduler budget propagation", () => {
         return {
           status: "completed" as const,
           runId: "agent-task-1",
-          agentType: request.task.agentType,
+          agentType: request.task.assignedAgentId,
           threadId: "internal-task-1",
           content: "task result",
         };
