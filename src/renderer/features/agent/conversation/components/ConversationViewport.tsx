@@ -84,14 +84,14 @@ export default function ConversationViewport({
 
   return (
     <div
-      className="relative min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(124,58,237,0.045),transparent_30rem)] [scrollbar-gutter:stable]"
+      className="relative min-h-0 flex-1 overflow-y-auto bg-[#fbfbfa] [scrollbar-gutter:stable]"
       ref={viewportRef}
       onScroll={updateScrollState}
     >
       <div
         className={cn(
           "mx-auto min-h-full w-full",
-          compact ? "max-w-none px-4 pt-5" : "max-w-3xl px-4 pt-9 sm:px-7 sm:pt-12",
+          compact ? "max-w-none px-4 pt-4" : "max-w-3xl px-4 pt-9 sm:px-7 sm:pt-12",
           bottomPaddingClassName ?? (compact ? "pb-5" : "pb-40"),
         )}
         ref={contentRef}
@@ -99,13 +99,17 @@ export default function ConversationViewport({
         <ConversationFlow store={store} />
       </div>
       {!stuckToBottom && (
-        <button
-          className="sticky bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-neutral-200 bg-white/95 px-3 py-2 text-[11px] font-medium text-neutral-600 shadow-lg backdrop-blur hover:bg-neutral-50"
-          type="button"
-          onClick={jumpToBottom}
-        >
-          <ArrowDown size={13} />回到底部
-        </button>
+        <div className="pointer-events-none sticky bottom-3 z-10 flex h-0 justify-end px-3">
+          <button
+            className="pointer-events-auto grid size-[34px] -translate-y-full place-items-center rounded-full border border-neutral-200 bg-white/95 text-neutral-600 shadow-[0_5px_16px_rgba(30,28,20,0.13)] backdrop-blur hover:bg-neutral-50 hover:text-neutral-900"
+            type="button"
+            aria-label="回到底部"
+            title="回到底部"
+            onClick={jumpToBottom}
+          >
+            <ArrowDown size={15} />
+          </button>
+        </div>
       )}
     </div>
   );

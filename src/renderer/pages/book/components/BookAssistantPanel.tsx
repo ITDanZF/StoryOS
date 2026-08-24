@@ -5,7 +5,6 @@ import {
   Layers3,
   Plus,
   Send,
-  Sparkles,
   Square,
   X,
 } from "lucide-react";
@@ -105,11 +104,8 @@ export default function BookAssistantPanel({
         : { width: `min(${width}px, 94vw)` } as CSSProperties}
       aria-label="AI 对话"
     >
-      <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-neutral-200 px-4">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-br from-neutral-900 to-violet-700 text-white shadow-md">
-            <Sparkles size={17} />
-          </span>
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-neutral-200 px-4">
+        <div className="flex min-w-0 items-center">
           <ProjectConversationSwitcher
             snapshot={conversationSnapshot}
             connected={connected}
@@ -129,27 +125,27 @@ export default function BookAssistantPanel({
         </div>
       </header>
 
-      <div className="flex min-h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-neutral-100 px-4 py-2">
-        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 text-[10px] font-medium text-neutral-500">
+      <div className="flex h-10 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-neutral-100 px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-neutral-100 px-2 text-[10px] font-medium text-neutral-500">
           <Layers3 size={12} />上下文
         </span>
-        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 text-[10px] text-neutral-500" title={`当前项目：${projectName}`}>
+        <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2 text-[10px] text-neutral-500" title={`当前项目：${projectName}`}>
           <Folder size={12} />
           <span className="max-w-28 truncate">{projectName}</span>
         </span>
-        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 text-[10px] text-neutral-500" title={bookTitle ? `当前书籍：${bookTitle}` : "当前书籍待命名"}>
+        <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2 text-[10px] text-neutral-500" title={bookTitle ? `当前书籍：${bookTitle}` : "当前书籍待命名"}>
           <BookOpen size={12} />
           <span className="max-w-28 truncate">{bookTitle ?? "待命名书籍"}</span>
         </span>
         {contextEnabled && chapterNumber !== null && chapterTitle && (
-          <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 px-2.5 text-[10px] text-violet-700" type="button" title="移除章节上下文" onClick={() => onContextEnabledChange(false)}>
+          <button className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 px-2 text-[10px] text-violet-700" type="button" title="移除章节上下文" onClick={() => onContextEnabledChange(false)}>
             <BookOpen size={12} />
             <span>第{chapterNumber}章 · {chapterTitle}</span>
             <X size={10} />
           </button>
         )}
         {!contextEnabled && chapterNumber !== null && (
-          <button className="grid size-6 shrink-0 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-400 hover:text-neutral-800" type="button" aria-label="添加章节上下文" onClick={() => onContextEnabledChange(true)}>
+          <button className="grid size-6 shrink-0 place-items-center rounded-full border border-neutral-200 bg-white text-neutral-400 hover:bg-neutral-50 hover:text-neutral-800" type="button" aria-label="添加章节上下文" onClick={() => onContextEnabledChange(true)}>
             <Plus size={11} />
           </button>
         )}
@@ -177,26 +173,12 @@ export default function BookAssistantPanel({
       )}
 
       <form className={cn(
-        "mx-3 mb-3 shrink-0 rounded-[18px] border border-neutral-200 bg-white/95 p-3 shadow-[0_14px_34px_rgba(30,28,20,0.09)] backdrop-blur-xl transition focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100",
+        "group/composer mx-3 mb-3 shrink-0 rounded-[18px] border border-neutral-200 bg-white p-3 shadow-[0_8px_24px_rgba(30,28,20,0.07)] transition focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100/70",
         pendingApproval && "hidden",
       )} onSubmit={(event) => void submit(event)}>
-        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[9px] text-neutral-400">
-          <span className="flex min-w-0 items-center gap-1"><Folder className="shrink-0" size={11} />项目 / <b className="truncate">{projectName}</b></span>
-          <span>·</span>
-          <span className="flex min-w-0 items-center gap-1">
-            <BookOpen className="shrink-0" size={11} />
-                  {bookTitle ? <>书籍 / <b>{bookTitle}</b></> : "书籍 / 待命名"}
-          </span>
-          <span>·</span>
-          <strong>
-            {bookTitle
-              ? chapterNumber === null ? "整本书" : `第${chapterNumber}章`
-              : "项目对话"}
-          </strong>
-        </div>
         <textarea
           ref={textareaRef}
-          className="mt-2 block max-h-[156px] min-h-[64px] w-full resize-none overflow-y-auto border-0 bg-transparent text-xs leading-5 text-neutral-800 outline-none placeholder:text-neutral-400"
+          className="block max-h-[156px] min-h-12 w-full resize-none overflow-y-auto border-0 bg-transparent text-[13px] leading-[22px] text-neutral-800 outline-none placeholder:text-neutral-400"
           rows={2}
           value={draft}
           placeholder={chapterNumber === null
@@ -212,9 +194,13 @@ export default function BookAssistantPanel({
           }}
         />
         <footer className="flex items-center justify-between">
-          <span className="text-[9px] text-neutral-400">Enter 发送 · Shift + Enter 换行</span>
+          <span className="flex min-w-0 items-center gap-1.5 truncate text-[10px] text-neutral-400">
+            {contextEnabled && chapterNumber !== null
+              ? <><BookOpen size={11} />已引用第{chapterNumber}章</>
+              : "Enter 发送 · Shift + Enter 换行"}
+          </span>
           <button
-            className="grid size-[30px] place-items-center rounded-full border-0 bg-neutral-900 text-white transition hover:bg-violet-700 disabled:bg-neutral-100 disabled:text-neutral-300"
+            className="grid size-[30px] place-items-center rounded-full border-0 bg-[#5b3fd6] text-white transition hover:bg-[#4d32c4] disabled:bg-neutral-100 disabled:text-neutral-300"
             type={running ? "button" : "submit"}
             disabled={!connected || (!running && !draft.trim())}
             aria-label={running ? "停止生成" : "发送"}

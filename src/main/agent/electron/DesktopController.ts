@@ -63,7 +63,11 @@ export default class DesktopController {
       throw new Error("Conversation context does not match its project scope.");
     }
     const runtime = await this.dependencies.runtime.resolve(request.scope);
-    return this.sendMessageWithRuntime(runtime, request);
+    const result = this.sendMessageWithRuntime(runtime, request);
+    return Object.freeze({
+      ...result,
+      threads: runtime.threads.getSnapshot(),
+    });
   }
 
   private sendMessageWithRuntime(

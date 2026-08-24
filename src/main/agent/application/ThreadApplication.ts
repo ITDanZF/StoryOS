@@ -1,5 +1,9 @@
 import type { AppendMessageRequest, CreateThreadRequest, MessageDto, ThreadDto, ThreadSnapshot } from "./threadContracts.ts";
 import type { MessageRecord, ThreadPersistence, ThreadRecord, ThreadSkillState } from "./threadPorts.ts";
+import {
+  deriveThreadTitle,
+  isUntitledThreadTitle,
+} from "../../../shared/agent/threadTitle.ts";
 
 function normalizeSkillIds(skillIds: readonly string[] | undefined): readonly string[] {
   return Object.freeze([...new Set((skillIds ?? []).map((skillId) => skillId.trim()).filter(Boolean))].sort());
@@ -89,8 +93,19 @@ export default class ThreadApplication {
     const threadId = request.threadId === undefined
       ? this.requireActiveThreadId()
       : request.threadId.trim();
-    this.requireThread(threadId);
-    return toMessageDto(this.store.appendMessage({ threadId, role: request.role, content: request.content }));
+    const thread = this.requireThread(threadId);
+    const shouldGenerateTitle = request.role === "user"
+      && isUntitledThreadTitle(thread.title)
+      && !this.store.listMessages(threadId).some((message) => message.role === "user");
+    const message = this.store.appendMessage({
+      threadId,
+      role: request.role,
+      content: request.content,
+    });
+    if (shouldGenerateTitle) {
+      this.store.updateThreadTitle(threadId, deriveThreadTitle(request.content));
+    }
+    return toMessageDto(message);
   }
 
   listMessages(threadId?: string): readonly MessageDto[] {

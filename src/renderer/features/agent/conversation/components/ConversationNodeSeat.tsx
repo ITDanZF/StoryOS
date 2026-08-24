@@ -13,11 +13,13 @@ import {
 type ConversationNodeSeatProps = {
   readonly nodeKey: string;
   readonly store?: ConversationStore;
+  readonly finalAnswer?: boolean;
 };
 
 export default function ConversationNodeSeat({
   nodeKey,
   store = conversationStore,
+  finalAnswer = false,
 }: ConversationNodeSeatProps) {
   const node = useConversationNode(nodeKey, store);
   if (!node) return null;
@@ -26,7 +28,7 @@ export default function ConversationNodeSeat({
     case "user-message":
       return <UserMessageNodeView node={node} />;
     case "assistant-text":
-      return <AssistantTextNodeView node={node} />;
+      return <AssistantTextNodeView final={finalAnswer} node={node} />;
     case "reasoning":
       return <ReasoningNodeView node={node} />;
     case "tool-call":

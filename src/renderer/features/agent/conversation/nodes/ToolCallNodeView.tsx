@@ -16,9 +16,7 @@ export default function ToolCallNodeView({ node }: { readonly node: ToolCallNode
   const running = node.status === "running";
   const failed = node.status === "failed" || node.status === "rejected";
   const hasDetails = Boolean(node.inputPreview || node.outputPreview || node.error);
-  const summary = node.status === "awaiting_approval"
-    ? `${presentation.summary} · 等待确认`
-    : presentation.summary;
+  const summary = presentation.summary;
 
   return (
     <DisclosureRow

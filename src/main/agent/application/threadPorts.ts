@@ -33,6 +33,7 @@ export interface ThreadStore {
   getThread(threadId: string): ThreadRecord | null;
   listThreads(): ThreadRecord[];
   touchThread(threadId: string): void;
+  updateThreadTitle(threadId: string, title: string): ThreadRecord;
   updateThreadMetadata(threadId: string, metadata: ThreadMetadata): ThreadRecord;
   deleteThread(threadId: string): void;
 }

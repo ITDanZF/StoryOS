@@ -122,6 +122,38 @@ describe("SQLite storage", () => {
     reopened.close();
   });
 
+  it("derives and persists a title from the first user prompt", () => {
+    const root = createRoot();
+    const databasePath = path.join(root, ".storyos", "storyos.sqlite");
+    const database = new ProjectDatabase(databasePath);
+    const threads = new ThreadApplication(new SqliteThreadStore(database.handle));
+    const created = threads.createThread({ title: "新对话" });
+
+    threads.appendMessage({
+      threadId: created.id,
+      role: "user",
+      content: "请帮我检查第五章的节奏，并给出三条建议。",
+    });
+    expect(threads.getSnapshot().activeThread?.title)
+      .toBe("检查第五章的节奏，并给出三条建议");
+
+    threads.appendMessage({
+      threadId: created.id,
+      role: "user",
+      content: "这个标题不应该再次变化",
+    });
+    expect(threads.getSnapshot().activeThread?.title)
+      .toBe("检查第五章的节奏，并给出三条建议");
+    database.close();
+
+    const reopened = new ProjectDatabase(databasePath);
+    expect(new ThreadApplication(
+      new SqliteThreadStore(reopened.handle),
+    ).getSnapshot().activeThread?.title)
+      .toBe("检查第五章的节奏，并给出三条建议");
+    reopened.close();
+  });
+
   it("restores run summaries and aborts interrupted runs", async () => {
     const root = createRoot();
     const database = new ProjectDatabase(

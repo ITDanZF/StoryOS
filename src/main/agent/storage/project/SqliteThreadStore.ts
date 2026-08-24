@@ -65,6 +65,16 @@ export default class SqliteThreadStore implements ThreadPersistence {
     if (result.changes === 0) throw new Error(`Thread not found: ${threadId}`);
   }
 
+  updateThreadTitle(threadId: string, title: string): ThreadRecord {
+    const normalized = title.trim();
+    if (!normalized) throw new Error("Thread title is required.");
+    const result = this.database.prepare(
+      "UPDATE threads SET title = ?, updated_at = ? WHERE id = ?",
+    ).run(normalized, Date.now(), threadId);
+    if (result.changes === 0) throw new Error(`Thread not found: ${threadId}`);
+    return this.requireThread(threadId);
+  }
+
   updateThreadMetadata(
     threadId: string,
     metadata: ThreadMetadata,

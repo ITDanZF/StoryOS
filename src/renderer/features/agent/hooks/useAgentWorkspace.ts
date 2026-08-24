@@ -539,13 +539,21 @@ export function useAgentWorkspace() {
     if (!threadId || !normalized) return;
     setError(null);
     try {
-      const { runId } = await window.storyOSAgent.sendConversationMessage({
-        scope: activeScopeRef.current,
+      const scope = activeScopeRef.current;
+      const { runId, threads: updatedThreads } = await window.storyOSAgent.sendConversationMessage({
+        scope,
         threadId,
         content: normalized,
         ...(context ? { context } : {}),
       });
       runThreadIdsRef.current.set(runId, threadId);
+      if (
+        sameScope(scope, activeScopeRef.current)
+        && activeThreadIdRef.current === threadId
+      ) {
+        setThreads(updatedThreads);
+        cacheConversationSnapshot(scope, updatedThreads);
+      }
     } catch (cause) {
       setError(getErrorMessage(cause));
       throw cause;
@@ -554,7 +562,7 @@ export function useAgentWorkspace() {
 
   const cancelRun = useCallback(async (runId: string) => {
     await window.storyOSAgent.cancelConversationRun(activeScopeRef.current, runId);
-  }, []);
+  }, [cacheConversationSnapshot]);
 
   const resolveApproval = useCallback(async (
     approvalId: string,

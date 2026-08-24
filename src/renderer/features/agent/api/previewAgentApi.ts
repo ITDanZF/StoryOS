@@ -14,6 +14,10 @@ import type {
   ThreadSnapshot,
 } from "../../../../shared/agent/contracts.ts";
 import {
+  deriveThreadTitle,
+  isUntitledThreadTitle,
+} from "../../../../shared/agent/threadTitle.ts";
+import {
   countTiptapCharacters,
   parseTiptapDocument,
 } from "../../../../shared/book/richText.ts";
@@ -104,9 +108,23 @@ if (previewEnabled && !window.storyOSAgent) {
     scope: ConversationScope,
   ) => {
     const { threadId, content } = request;
+    const key = keyForScope(scope);
+    const previousMessages = messages.get(threadId) ?? [];
+    const currentThreads = threadsByScope.get(key) ?? [];
+    const currentThread = currentThreads.find((thread) => thread.id === threadId);
+    if (
+      currentThread
+      && isUntitledThreadTitle(currentThread.title)
+      && !previousMessages.some((message) => message.role === "user")
+    ) {
+      const updatedAt = new Date().toISOString();
+      threadsByScope.set(key, currentThreads.map((thread) => thread.id === threadId
+        ? { ...thread, title: deriveThreadTitle(content), updatedAt }
+        : thread));
+    }
     const runId = `preview-${crypto.randomUUID()}`;
     const messageId = crypto.randomUUID();
-    messages.set(threadId, [...(messages.get(threadId) ?? []), { id: messageId, threadId, role: "user", content, createdAt: new Date().toISOString() }]);
+    messages.set(threadId, [...previousMessages, { id: messageId, threadId, role: "user", content, createdAt: new Date().toISOString() }]);
     let sequence = 0;
     const publish = (event: PreviewConversationEventInput) => {
       const structured = {
@@ -137,7 +155,7 @@ if (previewEnabled && !window.storyOSAgent) {
       publish({ type: "turn.completed", payload: { content: "这是一个基础的流式回复预览。", durationMs: 650 } });
       emit({ type: "run_completed", runId, content: "这是一个基础的流式回复预览。", durationMs: 650, timestamp: new Date().toISOString() }, scope);
     }, 650);
-    return { runId };
+    return { runId, threads: threadSnapshotFor(scope) };
   };
 
   const api: AgentDesktopApi = {

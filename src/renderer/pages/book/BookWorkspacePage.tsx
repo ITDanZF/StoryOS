@@ -51,11 +51,15 @@ import useChapterGenerationPreview from "./ai/useChapterGenerationPreview.ts";
 
 const MIN_ASSISTANT_WIDTH = 300;
 const MAX_ASSISTANT_WIDTH = 560;
+const DEFAULT_ASSISTANT_VIEWPORT_RATIO = 0.29;
 function getDefaultAssistantWidth(): number {
-  if (typeof window === "undefined") return 320;
+  if (typeof window === "undefined") return 440;
   return Math.min(
-    350,
-    Math.max(MIN_ASSISTANT_WIDTH, Math.round(window.innerWidth * 0.17)),
+    MAX_ASSISTANT_WIDTH,
+    Math.max(
+      MIN_ASSISTANT_WIDTH,
+      Math.round(window.innerWidth * DEFAULT_ASSISTANT_VIEWPORT_RATIO),
+    ),
   );
 }
 

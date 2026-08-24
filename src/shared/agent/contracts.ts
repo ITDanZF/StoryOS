@@ -106,7 +106,10 @@ export type AgentDesktopApi = {
     getStatus(): Promise<AgentServiceStatus>;
     configure(request: AgentConfigurationRequest): Promise<AgentServiceStatus>;
     sendMessage(request: { threadId: string; content: string }): Promise<{ runId: string }>;
-    sendConversationMessage(request: SendConversationMessageRequest): Promise<{ runId: string }>;
+    sendConversationMessage(request: SendConversationMessageRequest): Promise<{
+        runId: string;
+        threads: ThreadSnapshot;
+    }>;
     cancelRun(runId: string): Promise<boolean>;
     cancelConversationRun(scope: ConversationScope, runId: string): Promise<boolean>;
     listRuns(): Promise<readonly RunSnapshot[]>;
