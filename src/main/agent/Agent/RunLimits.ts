@@ -9,7 +9,7 @@ export type RunLimits = {
 function readTimeoutMsFromEnv(): number {
   const rawValue = process.env.MINI_AGENT_TIMEOUT_MS?.trim();
   if (!rawValue) {
-    return 0;
+    return 900_000;
   }
 
   const timeoutMs = Number(rawValue);

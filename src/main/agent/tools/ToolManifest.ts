@@ -137,7 +137,7 @@ export function describeToolSecurity(
       provides: ["book.write"],
       effects: ["book.write"],
       requiredContexts: ["book-editor"],
-      approval: "ask",
+      approval: id.startsWith("delete_") ? "ask" : "allow",
       risk: id.startsWith("delete_") ? "high" : "medium",
     };
   }
@@ -147,7 +147,7 @@ export function describeToolSecurity(
       provides: ["editor.write"],
       effects: ["editor.write"],
       requiredContexts: ["book-editor"],
-      approval: navigationOnly ? "allow" : "ask",
+      approval: "allow",
       risk: navigationOnly ? "low" : "medium",
     };
   }

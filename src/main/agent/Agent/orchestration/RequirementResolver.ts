@@ -2,7 +2,7 @@ import type { AgentTurnInput } from "../../application/contracts.ts";
 import type { CapabilityId, EffectId } from "../capabilities.ts";
 import type { ExecutionRequirements } from "./contracts.ts";
 
-const WRITE_PATTERN = /(?:完成|创作|续写|生成|创建|修改|更新|删除|重写|改写|填充|补全|写入|write|create|update|delete|rewrite|generate|complete)/i;
+const WRITE_PATTERN = /(?:完成|创作|续写|继续|接着写|继续写|往下写|重新继续|生成|创建|修改|更新|删除|重写|改写|填充|补全|写入|write|continue|create|update|delete|rewrite|generate|complete)/i;
 const EDITOR_PATTERN = /(?:格式|排版|样式|选区|加粗|斜体|format|style|selection)/i;
 const FILE_PATTERN = /(?:文件|目录|路径|file|folder|path)/i;
 const SKILL_PATTERN = /(?:技能|skill)/i;
