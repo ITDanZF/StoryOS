@@ -43,7 +43,7 @@ export default class NovelApplication {
   getProjectBook(): NovelDto | null {
     const books = this.persistence.listNovels();
     if (books.length > 1) {
-      throw new Error("Project storage contains more than one book.");
+      throw new Error("Book storage contains more than one novel record.");
     }
     return books[0] ? this.toNovelDto(books[0]) : null;
   }
@@ -54,7 +54,7 @@ export default class NovelApplication {
     readonly status?: NovelStatus;
   }): NovelDto {
     if (this.persistence.listNovels().length > 0) {
-      throw new Error("Each project can contain only one book.");
+      throw new Error("Each book database can contain only one novel record.");
     }
     const created = this.toNovelDto(this.persistence.createNovel({
       id: `novel_${crypto.randomUUID()}`,

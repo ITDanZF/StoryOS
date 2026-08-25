@@ -1,6 +1,7 @@
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { getCustomizeWorkSpace, getDefaultWorkSpace } from "./path.ts";
+import { resetLegacyProjectStorage } from "../storage/LegacyStorageReset.ts";
 
 export const STORYOS_DIRECTORY = ".storyos";
 export const SYSTEM_WORKSPACE_DIRECTORY = ".storyos-default";
@@ -22,7 +23,7 @@ export type WorkspaceLayout = {
   readonly rootPath: string;
   readonly filesRoot: string;
   readonly stateRoot: string;
-  readonly databasePath: string;
+  readonly projectDatabasePath: string;
   readonly checkpointPath: string;
   readonly skillsRoot: string;
   readonly temporaryRoot: string;
@@ -44,7 +45,7 @@ export function getWorkspaceLayout(rootPath: string, systemDefault = false): Wor
     rootPath: resolvedRoot,
     filesRoot: systemDefault ? path.join(resolvedRoot, "files") : resolvedRoot,
     stateRoot,
-    databasePath: path.join(stateRoot, "storyos.sqlite"),
+    projectDatabasePath: path.join(stateRoot, "project.sqlite"),
     checkpointPath: path.join(stateRoot, "checkpoints", "memory.sqlite"),
     skillsRoot: path.join(stateRoot, "skills"),
     temporaryRoot: path.join(stateRoot, "tmp"),
@@ -79,6 +80,7 @@ export function ensureWorkspaceLayout(input: {
   readonly locationType: ProjectLocationType | "system-default";
 }): { readonly layout: WorkspaceLayout; readonly metadata: ProjectMetadata } {
   const layout = getWorkspaceLayout(input.rootPath, input.locationType === "system-default");
+  resetLegacyProjectStorage(layout.rootPath);
   mkdirSync(layout.rootPath, { recursive: true });
   mkdirSync(layout.filesRoot, { recursive: true });
   mkdirSync(path.dirname(layout.checkpointPath), { recursive: true });

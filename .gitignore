@@ -104,10 +104,16 @@ test-results/
 blob-report/
 .tmp-visual-check/
 
+# Test source files (kept locally, never committed)
+/tests/
+/test/
+**/__tests__/
+*.test.*
+*.spec.*
+
 # Windows and temporary files
 Thumbs.db
 Desktop.ini
 *.dmp
 *.tmp
 *.bak
-/tests

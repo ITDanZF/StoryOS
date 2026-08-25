@@ -36,15 +36,14 @@ import {
 export type DesktopControllerDependencies = {
   readonly projects: ProjectApplication;
   readonly runtime: WorkspaceRuntimeManager;
-  readonly projectNavigation?: Pick<ProjectNavigationReader, "read">;
+  readonly projectNavigation: Pick<ProjectNavigationReader, "read">;
 };
 
 export default class DesktopController {
   private readonly projectNavigation: Pick<ProjectNavigationReader, "read">;
 
   constructor(private readonly dependencies: DesktopControllerDependencies) {
-    this.projectNavigation = dependencies.projectNavigation
-      ?? new ProjectNavigationReader(dependencies.projects);
+    this.projectNavigation = dependencies.projectNavigation;
   }
 
   subscribe(handler: ConversationApplicationEventHandler): () => void {

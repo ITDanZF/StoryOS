@@ -1,4 +1,4 @@
-import { ChevronDown, Folder, FolderOpen, FolderPlus, Plus, X } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen, FolderPlus, LibraryBig, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type {
   ConversationScope,
@@ -18,12 +18,14 @@ import SettingsLauncher, { type SettingsPage } from "./SettingsLauncher.tsx";
 
 type WorkspaceSidebarProps = {
   readonly open: boolean;
+  readonly bookshelfActive: boolean;
   readonly projects: ProjectSnapshot | null;
   readonly activeBookProjectId: string | null;
   readonly conversationScope: ConversationScope;
   readonly globalThreads: ThreadSnapshot | null;
   readonly projectNavigations: Readonly<Record<string, ProjectNavigationSnapshot>>;
   readonly onClose: () => void;
+  readonly onOpenBookshelf: () => void;
   readonly onCreateProject: (request: CreateProjectRequest) => Promise<void>;
   readonly onOpenProject: (projectPath: string) => Promise<void>;
   readonly onOpenProjectDirectory: (projectPath: string) => Promise<void>;
@@ -45,12 +47,14 @@ type WorkspaceSidebarProps = {
 
 export default function WorkspaceSidebar({
   open,
+  bookshelfActive,
   projects,
   activeBookProjectId,
   conversationScope,
   globalThreads,
   projectNavigations,
   onClose,
+  onOpenBookshelf,
   onCreateProject,
   onOpenProject,
   onOpenProjectDirectory,
@@ -112,6 +116,28 @@ export default function WorkspaceSidebar({
 
         <button className="my-3 flex h-9 shrink-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void onCreateConversation({ kind: "global" })}>
           <Plus size={17} /><span className="flex-1">新建对话</span><kbd className="rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-[10px] font-normal text-neutral-400">Ctrl K</kbd>
+        </button>
+
+        <button
+          className={cn(
+            "mb-2 flex h-10 shrink-0 items-center gap-2.5 rounded-xl border-0 px-2.5 text-left text-[13px] font-medium transition",
+            bookshelfActive
+              ? "bg-white text-neutral-950 shadow-sm"
+              : "bg-transparent text-neutral-700 hover:bg-neutral-200/70",
+          )}
+          type="button"
+          aria-current={bookshelfActive ? "page" : undefined}
+          onClick={onOpenBookshelf}
+        >
+          <span className={cn(
+            "grid size-7 place-items-center rounded-lg border bg-white shadow-sm",
+            bookshelfActive
+              ? "border-neutral-300 text-neutral-900"
+              : "border-neutral-200 text-neutral-600",
+          )}>
+            <LibraryBig size={15} />
+          </span>
+          <span className="flex-1">我的书架</span>
         </button>
 
         <div className="relative shrink-0" ref={projectMenuRef}>

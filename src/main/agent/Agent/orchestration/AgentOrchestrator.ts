@@ -11,6 +11,7 @@ import type { OrchestrationEventHandler } from "./contracts.ts";
 import type { PlanProvider } from "./ports.ts";
 import TaskScheduler from "./TaskScheduler.ts";
 import type { AgentTurnInput } from "../../application/contracts.ts";
+import type { EffectId } from "../capabilities.ts";
 import RequirementResolver from "./RequirementResolver.ts";
 import ExecutionRouter from "./ExecutionRouter.ts";
 
@@ -19,6 +20,7 @@ export interface DirectAgentRunner {
     input: AgentTurnInput,
     options: Omit<AgentOrchestratorRunOptions, "onOrchestrationEvent"> & {
       readonly grantedToolIds: readonly string[];
+      readonly requiredEffects?: readonly EffectId[];
     },
   ): Promise<string>;
   cancelRun(runId: string, reason?: unknown): boolean;
@@ -93,6 +95,7 @@ export default class AgentOrchestrator {
           onChunk: options.onChunk,
           onAgentEvent: options.onAgentEvent,
           grantedToolIds: plan.grantedToolIds,
+          requiredEffects: plan.requirements.effects,
         });
       }
 

@@ -6,6 +6,9 @@ import Configuration from "./config/index.ts";
 import DesktopController from "./electron/DesktopController.ts";
 import ApplicationDatabase from "./storage/global/ApplicationDatabase.ts";
 import SqliteProjectStore from "./storage/global/SqliteProjectStore.ts";
+import SqliteBookStore from "./storage/global/SqliteBookStore.ts";
+import ProjectNavigationReader from "./application/ProjectNavigationReader.ts";
+import { prepareLegacyGlobalStorageReset } from "./storage/LegacyStorageReset.ts";
 import {
   createModelConnectionConfiguration,
   type ModelConnectionConfiguration,
@@ -185,17 +188,32 @@ export default class StoryAgentService {
         modelConfiguration: ModelConnectionConfiguration,
     ): Promise<void> {
         await this.workspace.createAgentWorkSpace();
+        const legacyReset = prepareLegacyGlobalStorageReset(
+            this.options.agentHome,
+        );
         const applicationDatabase = new ApplicationDatabase(this.options.agentHome);
         try {
+            legacyReset.complete();
             const projects = new ProjectApplication(
                 new SqliteProjectStore(applicationDatabase.handle),
             );
+            const books = new SqliteBookStore(applicationDatabase.handle);
             const runtime = await WorkspaceRuntimeManager.create(
                 projects,
+                books,
+                this.options.agentHome,
                 modelConfiguration,
                 this.options.rendererEditorTools,
             );
-            const controller = new DesktopController({ projects, runtime });
+            const controller = new DesktopController({
+                projects,
+                runtime,
+                projectNavigation: new ProjectNavigationReader(
+                    projects,
+                    books,
+                    this.options.agentHome,
+                ),
+            });
             for (const subscriber of this.subscribers) {
                 this.controllerUnsubscribers.set(
                     subscriber,

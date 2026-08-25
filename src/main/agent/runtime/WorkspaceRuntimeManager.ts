@@ -9,6 +9,7 @@ import type {
 } from "../application/conversationContracts.ts";
 import NovelApplication from "../application/NovelApplication.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
+import type { BookRegistry } from "../application/bookRegistryPorts.ts";
 import ThreadApplication from "../application/ThreadApplication.ts";
 import Memory from "../Memory/index.ts";
 import type { ModelConnectionConfiguration } from "../model/ModelConfiguration.ts";
@@ -24,7 +25,7 @@ import BookToolContext from "../tools/book/BookToolContext.ts";
 import ChapterGenerationService from "../book-generation/ChapterGenerationService.ts";
 import type { RendererEditorToolClient } from "../tools/editor/contracts.ts";
 import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
-import SqliteNovelStore from "../storage/project/SqliteNovelStore.ts";
+import ProjectBookNovelStore from "../storage/book/ProjectBookNovelStore.ts";
 import SqliteRunStore from "../storage/project/SqliteRunStore.ts";
 import SqliteConversationEventStore from "../storage/project/SqliteConversationEventStore.ts";
 import SqliteThreadStore from "../storage/project/SqliteThreadStore.ts";
@@ -51,6 +52,7 @@ export type ActiveWorkspaceRuntime = {
 
 type RuntimeResourceScope = {
   projectDatabase: ProjectDatabase | null;
+  bookStore: ProjectBookNovelStore | null;
   modelSessions: Memory | null;
   agent: AgentApplication | null;
   unsubscribe: (() => void) | null;
@@ -73,17 +75,23 @@ export default class WorkspaceRuntimeManager {
 
   private constructor(
     private readonly projects: ProjectApplication,
+    private readonly books: BookRegistry,
+    private readonly agentHome: string,
     private readonly modelConfiguration: ModelConnectionConfiguration,
     private readonly rendererEditorTools?: RendererEditorToolClient,
   ) {}
 
   static async create(
     projects: ProjectApplication,
+    books: BookRegistry,
+    agentHome: string,
     modelConfiguration: ModelConnectionConfiguration,
     rendererEditorTools?: RendererEditorToolClient,
   ): Promise<WorkspaceRuntimeManager> {
     const manager = new WorkspaceRuntimeManager(
       projects,
+      books,
+      agentHome,
       modelConfiguration,
       rendererEditorTools,
     );
@@ -167,6 +175,7 @@ export default class WorkspaceRuntimeManager {
   ): Promise<ActiveWorkspaceRuntime> {
     const resources: RuntimeResourceScope = {
       projectDatabase: null,
+      bookStore: null,
       modelSessions: null,
       agent: null,
       unsubscribe: null,
@@ -199,7 +208,7 @@ export default class WorkspaceRuntimeManager {
         });
       };
 
-      const projectDatabase = new ProjectDatabase(layout.databasePath);
+      const projectDatabase = new ProjectDatabase(layout.projectDatabasePath);
       resources.projectDatabase = projectDatabase;
       const threads = new ThreadApplication(
         new SqliteThreadStore(projectDatabase.handle),
@@ -207,8 +216,14 @@ export default class WorkspaceRuntimeManager {
       if (project && !threads.getActiveThreadId()) {
         threads.createThread({ title: "新对话" });
       }
+      const bookStore = new ProjectBookNovelStore(
+        project?.id ?? null,
+        this.agentHome,
+        this.books,
+      );
+      resources.bookStore = bookStore;
       const novels = new NovelApplication(
-        new SqliteNovelStore(projectDatabase.handle),
+        bookStore,
         project
           ? (mutation) => {
               void publishScopedEvent({
@@ -414,7 +429,11 @@ export default class WorkspaceRuntimeManager {
           try {
             resources.modelSessions?.close();
           } finally {
-            resources.projectDatabase?.close();
+            try {
+              resources.bookStore?.close();
+            } finally {
+              resources.projectDatabase?.close();
+            }
           }
         }
       }

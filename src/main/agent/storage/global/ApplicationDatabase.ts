@@ -26,6 +26,31 @@ const migrations: readonly SqliteMigration[] = [
         CREATE INDEX idx_projects_last_opened_at
           ON projects(last_opened_at DESC);
 
+        CREATE TABLE books (
+          id TEXT PRIMARY KEY,
+          storage_path TEXT NOT NULL,
+          path_key TEXT NOT NULL UNIQUE,
+          state TEXT NOT NULL DEFAULT 'available'
+            CHECK (state IN ('available', 'missing')),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          last_opened_at INTEGER
+        );
+
+        CREATE INDEX idx_books_last_opened_at
+          ON books(last_opened_at DESC);
+
+        CREATE TABLE project_books (
+          project_id TEXT PRIMARY KEY
+            REFERENCES projects(id) ON DELETE CASCADE,
+          book_id TEXT NOT NULL
+            REFERENCES books(id) ON DELETE RESTRICT,
+          attached_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX idx_project_books_book_id
+          ON project_books(book_id);
+
         CREATE TABLE app_state (
           singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
           active_project_id TEXT
