@@ -1,87 +1,9 @@
-const chapters = {
-  "chapter-1": {
-    volume: "第一卷",
-    number: 1,
-    title: "雨夜",
-    words: 1248,
-    content: [
-      "雨从傍晚开始下，到午夜还没有停。",
-      "林默撑着一把黑伞，沿着旧城区狭窄的街道往前走。路灯在雨幕里晕开一圈昏黄的光，积水倒映着两侧紧闭的店门。这里比他记忆中更安静，连远处高架桥上的车声都像隔着一层厚重的玻璃。",
-      "巷口那家钟表店已经关了。褪色的招牌被风吹得轻轻摇晃，每一下都发出短促的吱呀声。林默抬头看了一眼时间，十一点四十七分，比约定的时间早了十三分钟。",
-      "他没有立刻进去。",
-      "雨水顺着伞骨滑落，在脚边汇成细小的水流。就在他准备点开手机时，巷子深处传来了一声脚步。很轻，像有人踩碎了一片被雨泡软的落叶。",
-      "林默抬起头。巷子里空无一人。",
-      "他慢慢地向巷子深处走去，雨水落在肩上。第二声脚步紧跟着响起，这一次，比刚才近了许多。"
-    ]
-  },
-  "chapter-2": {
-    volume: "第一卷",
-    number: 2,
-    title: "来客",
-    words: 2016,
-    content: [
-      "清晨六点，门铃响了三次。",
-      "林默没有睡。他坐在客厅的旧沙发上，看着窗外逐渐褪色的夜空。桌上的信封仍然没有拆开，边缘已经被潮湿的手指压出一道浅浅的折痕。",
-      "第四次门铃响起时，他终于站了起来。门外的人没有出声，只在猫眼之外留下一道模糊的影子。",
-      "“谁？”林默问。",
-      "门外沉默了几秒。一个女人的声音隔着门板传来：“昨晚在巷子里，你看见他了，对吗？”"
-    ]
-  },
-  "chapter-3": {
-    volume: "第一卷",
-    number: 3,
-    title: "旧照片",
-    words: 386,
-    content: [
-      "本章大纲：林默从信封中发现一张拍摄于二十年前的合影。照片里除了父亲，还有一个与昨夜巷中身影极其相似的人。",
-      "关键转折：照片背后写着一个已经废弃的车站地址，以及一句“不要相信准时出现的人”。"
-    ]
-  },
-  "chapter-4": {
-    volume: "第二卷",
-    number: 4,
-    title: "回声",
-    words: 524,
-    content: [
-      "本章大纲：旧车站里的广播每隔十分钟重复一段不存在于任何记录中的失踪通告。",
-      "林默在通告里听见了自己的名字，而播报日期是三天以后。"
-    ]
-  },
-  "chapter-5": {
-    volume: "第二卷",
-    number: 5,
-    title: "破晓",
-    words: 0,
-    content: ["在这里开始书写新的章节……"]
-  }
-};
-
-const projects = {
-  myStory: { name: "myStory", bookTitle: "长夜" },
-  starSea: { name: "星海纪元", bookTitle: "星海无声" },
-  mistHarbor: { name: "雾港来信", bookTitle: "潮痕" }
-};
-
-const projectConversations = {
-  myStory: [
-    { id: "chapter", title: "第一章创作助手", updatedAt: "刚刚" },
-    { id: "world", title: "世界观讨论", updatedAt: "昨天" },
-    { id: "outline", title: "情节大纲推演", updatedAt: "周一" }
-  ],
-  starSea: [
-    { id: "character", title: "主角设定讨论", updatedAt: "2 小时前" },
-    { id: "volume", title: "第一卷结构梳理", updatedAt: "周二" }
-  ],
-  mistHarbor: [
-    { id: "clue", title: "线索一致性检查", updatedAt: "周三" }
-  ]
-};
-
-const activeConversationByProject = {
-  myStory: "chapter",
-  starSea: "character",
-  mistHarbor: "clue"
-};
+import { chapters, projects, projectConversations, activeConversationByProject, globalConversations } from "./modules/data.js?v=2";
+import { state, countCharacters, readDraft, writeDraft } from "./modules/store.js";
+import { openDialog, closeDialog } from "./modules/dialogs.js";
+import { renderGlobalConversation, renderSettings, renderAbout } from "./modules/workspace.js?v=2";
+import { renderBookOverview, renderPageOverview } from "./modules/book.js";
+import { agentProcessMarkup, assistantReply } from "./modules/assistant.js";
 
 const app = document.querySelector("#app");
 const editor = document.querySelector("#chapter-editor");
@@ -99,18 +21,14 @@ let activeProjectId = "myStory";
 let activeConversationScope = "project";
 let saveTimer = null;
 let toastTimer = null;
+let previousScreen = "book";
 
 function icon(id) {
   return `<svg aria-hidden="true"><use href="#${id}"/></svg>`;
 }
 
 function storedChapter(id) {
-  try {
-    const draft = localStorage.getItem(`storyos-prototype:${id}`);
-    return draft ? { ...chapters[id], ...JSON.parse(draft) } : chapters[id];
-  } catch {
-    return chapters[id];
-  }
+  return readDraft(chapters, id);
 }
 
 function saveCurrentChapter() {
@@ -119,7 +37,7 @@ function saveCurrentChapter() {
   chapter.title = titleInput.value.trim() || "未命名章节";
   chapter.content = [...editor.querySelectorAll("p")].map((paragraph) => paragraph.textContent || "");
   chapter.words = countCharacters(editor.innerText);
-  localStorage.setItem(`storyos-prototype:${activeChapterId}`, JSON.stringify(chapter));
+  writeDraft(activeChapterId, chapter);
   saveStatus.classList.remove("saving");
   saveStatus.classList.add("saved");
   saveStatus.innerHTML = `${icon("i-check")}已保存`;
@@ -131,10 +49,6 @@ function queueSave() {
   saveStatus.classList.add("saving");
   saveStatus.textContent = "保存中…";
   saveTimer = setTimeout(saveCurrentChapter, 650);
-}
-
-function countCharacters(value) {
-  return Array.from(value.replace(/\s/g, "")).length;
 }
 
 function updateCount() {
@@ -172,6 +86,160 @@ function showToast(text) {
   toast.textContent = text;
   toast.classList.add("visible");
   toastTimer = setTimeout(() => toast.classList.remove("visible"), 2200);
+}
+
+function setHeaderVisible(visible) {
+  document.querySelector(".workspace-header").hidden = !visible;
+}
+
+function removeStandalonePage() {
+  document.querySelector(".workspace > .standalone-page")?.remove();
+}
+
+function showStandalonePage(screen, markup) {
+  previousScreen = state.screen;
+  state.screen = screen;
+  document.querySelector(".creation-workspace").hidden = true;
+  setHeaderVisible(false);
+  removeStandalonePage();
+  document.querySelector(".workspace").insertAdjacentHTML("beforeend", markup);
+  bindStandalonePage();
+}
+
+function showBookWorkspace() {
+  state.screen = "book";
+  removeStandalonePage();
+  setHeaderVisible(true);
+  document.querySelector(".creation-workspace").hidden = false;
+}
+
+function showBookMainView(kind = "profile") {
+  showBookWorkspace();
+  state.bookView = kind === "editor" ? "editor" : "overview";
+  const editorPanel = document.querySelector(".editor-panel");
+  let view = document.querySelector(".book-main-view");
+  if (kind === "editor") {
+    editorPanel.hidden = false;
+    view?.remove();
+    document.querySelector(".overview-row").classList.remove("active");
+    return;
+  }
+  editorPanel.hidden = true;
+  if (!view) {
+    view = document.createElement("main");
+    view.className = "book-main-view";
+    editorPanel.after(view);
+  }
+  view.innerHTML = kind === "pages"
+    ? renderPageOverview(chapters)
+    : renderBookOverview(projects[activeProjectId], chapters);
+  document.querySelector(".overview-row").classList.toggle("active", kind === "profile");
+}
+
+function bindStandalonePage() {
+  const page = document.querySelector(".workspace > .standalone-page");
+  if (!page) return;
+  page.querySelectorAll("[data-fill-prompt]").forEach((button) => button.addEventListener("click", () => {
+    const input = page.querySelector("textarea");
+    input.value = button.dataset.fillPrompt;
+    input.focus();
+  }));
+  page.querySelector(".standalone-composer")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = event.currentTarget.querySelector("textarea");
+    const text = input.value.trim();
+    if (!text) return;
+    const stream = page.querySelector(".standalone-messages");
+    stream.querySelector(".empty-hero")?.remove();
+    stream.insertAdjacentHTML("beforeend", `<article class="standalone-user">${escapeHtml(text)}</article><article class="standalone-assistant"><b>✦ StoryOS</b><p>我会把这个问题拆成目标、约束和下一步行动。作为全局对话，这里不会自动读取任何项目文件。</p>${agentProcessMarkup()}</article>`);
+    input.value = "";
+    stream.scrollTop = stream.scrollHeight;
+  });
+  page.querySelector("#model-settings")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.configured = true;
+    showToast("模型配置已保存，连接测试成功");
+  });
+}
+
+function initializeGlobalConversations() {
+  const list = document.querySelector("#global-conversation-list");
+  list.querySelector("#empty-global-conversations")?.remove();
+  globalConversations.forEach((conversation) => {
+    const row = document.createElement("button");
+    row.className = "global-conversation-row";
+    row.type = "button";
+    row.dataset.conversation = conversation.id;
+    row.innerHTML = `<span>${escapeHtml(conversation.title)}</span><small>${conversation.updatedAt}</small>`;
+    list.append(row);
+  });
+}
+
+function decorateProjectRows() {
+  document.querySelectorAll(".project-node").forEach((node) => {
+    if (node.querySelector(":scope > .project-more")) return;
+    const more = document.createElement("button");
+    more.className = "project-more";
+    more.type = "button";
+    more.dataset.action = "project-menu";
+    more.setAttribute("aria-label", "项目操作");
+    more.textContent = "···";
+    node.querySelector(".project-row").after(more);
+  });
+}
+
+function openProjectActions(node) {
+  const id = node.dataset.project;
+  const project = projects[id];
+  openDialog({
+    title: `管理项目“${project.name}”`,
+    description: "可以重命名项目，或从原型工作区中移除它。",
+    fields: [{ name: "name", label: "项目名称", value: project.name }],
+    confirmLabel: "保存名称",
+    onConfirm: ({ name }) => {
+      project.name = name.trim();
+      node.querySelector(".project-row strong").textContent = project.name;
+      if (id === activeProjectId) activateProject(id);
+      showToast("项目名称已更新");
+    }
+  });
+  const footer = document.querySelector(".prototype-dialog footer");
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "dialog-delete-link";
+  remove.textContent = "删除项目";
+  remove.addEventListener("click", () => {
+    closeDialog();
+    openDialog({ title: `删除项目“${project.name}”？`, description: "原型只会移除演示数据；正式应用会将项目移动到系统回收站。", confirmLabel: "确认删除", danger: true, onConfirm: () => {
+      node.remove();
+      delete projects[id];
+      updateSidebarEmptyStates();
+      if (id === activeProjectId) showStandalonePage("global", renderGlobalConversation());
+      showToast("项目已从原型中移除");
+    }});
+  });
+  footer.prepend(remove);
+}
+
+function createProject() {
+  openDialog({
+    title: "新建空白项目",
+    description: "创建新的本地创作空间，并自动准备一本待命名书籍。",
+    fields: [{ name: "name", label: "项目名称", placeholder: "例如：新故事" }, { name: "path", label: "项目资源目录", value: "E:\\workspace" }],
+    confirmLabel: "创建项目",
+    onConfirm: ({ name }) => {
+      const id = `project-${Date.now()}`;
+      projects[id] = { name, bookTitle: "未命名书籍", description: "在这里填写新书简介。", chapters: 0, chapterIds: [], volumes: {} };
+      projectConversations[id] = [];
+      activeConversationByProject[id] = null;
+      document.querySelector("#project-tree").insertAdjacentHTML("beforeend", `<section class="project-node" data-project="${id}"><button class="project-row" type="button" data-action="toggle-project" aria-expanded="false"><svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>${escapeHtml(name)}</strong></button><div class="project-children"><button class="project-book" type="button" data-project="${id}"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>0章</small></button></div></section>`);
+      decorateProjectRows();
+      updateSidebarEmptyStates();
+      activateProject(id);
+      showBookMainView("profile");
+      showToast(`项目“${name}”已创建`);
+    }
+  });
 }
 
 function closeConversationPopover() {
@@ -225,6 +293,24 @@ function openProjectNode(projectId) {
   });
 }
 
+function renderCatalogForProject(projectId) {
+  const project = projects[projectId];
+  const tree = document.querySelector("#chapter-tree");
+  const ids = project.chapterIds || [];
+  const volumeNames = Object.keys(project.volumes || {});
+  if (volumeNames.length === 0) {
+    tree.innerHTML = '<p class="catalog-empty">暂无分卷，先新建一个分卷开始写作。</p>';
+    return;
+  }
+  tree.innerHTML = volumeNames.map((volumeName) => {
+    const volumeChapters = ids.map((id) => [id, chapters[id]]).filter(([, chapter]) => chapter?.volume === volumeName);
+    const chapterRows = volumeChapters.length
+      ? volumeChapters.map(([id, chapter]) => `<button class="chapter-row ${id === activeChapterId ? "active" : ""}" type="button" data-chapter="${id}"><span class="chapter-index">${String(chapter.number).padStart(2, "0")}</span><span><strong>${escapeHtml(chapter.title)}</strong><small>${chapter.status} · ${chapter.words.toLocaleString("zh-CN")} 字</small></span><i></i></button>`).join("")
+      : '<p class="volume-empty">暂无章节</p>';
+    return `<section class="volume open" data-volume="${escapeHtml(volumeName)}"><header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>${escapeHtml(volumeName)}</strong><small>${escapeHtml(project.volumes[volumeName] || "未命名分卷")}</small></span></button><span class="volume-actions"><button class="volume-delete" type="button" data-action="delete-volume" aria-label="删除分卷${escapeHtml(volumeName)}">×</button><button class="chapter-add" type="button" data-action="add-chapter" aria-label="在${escapeHtml(volumeName)}新建章节"><svg><use href="#i-plus"/></svg></button></span></header><div class="volume-chapters">${chapterRows}</div></section>`;
+  }).join("");
+}
+
 function activateProject(projectId) {
   const project = projects[projectId];
   if (!project) return;
@@ -236,6 +322,7 @@ function activateProject(projectId) {
   document.querySelector("#current-book-title").textContent = project.bookTitle;
   document.querySelector("#current-book-title-crumb").textContent = `《${project.bookTitle}》`;
   document.querySelector("#composer-project").textContent = project.name;
+  renderCatalogForProject(projectId);
   const activeConversation = projectConversations[projectId]?.find(
     (item) => item.id === activeConversationByProject[projectId]
   );
@@ -244,9 +331,10 @@ function activateProject(projectId) {
 }
 
 function updateSidebarEmptyStates() {
-  document.querySelector("#empty-projects").hidden = document.querySelectorAll(".project-node").length > 0;
-  document.querySelector("#empty-global-conversations").hidden =
-    document.querySelectorAll(".global-conversation-row").length > 0;
+  const emptyProjects = document.querySelector("#empty-projects");
+  const emptyConversations = document.querySelector("#empty-global-conversations");
+  if (emptyProjects) emptyProjects.hidden = document.querySelectorAll(".project-node").length > 0;
+  if (emptyConversations) emptyConversations.hidden = document.querySelectorAll(".global-conversation-row").length > 0;
 }
 
 function selectGlobalConversation(row) {
@@ -258,6 +346,7 @@ function selectGlobalConversation(row) {
   document.querySelector("#context-chip").hidden = true;
   closeConversationPopover();
   app.classList.remove("ai-collapsed");
+  showStandalonePage("global", renderGlobalConversation(row.querySelector("span").textContent));
 }
 
 function createGlobalConversation() {
@@ -268,7 +357,6 @@ function createGlobalConversation() {
   row.dataset.conversation = `global-${Date.now()}`;
   row.innerHTML = "<span>新对话</span><small>刚刚</small>";
   list.prepend(row);
-  row.addEventListener("click", () => selectGlobalConversation(row));
   updateSidebarEmptyStates();
   selectGlobalConversation(row);
   showToast("已创建全局对话，不携带任何项目或书籍上下文");
@@ -329,11 +417,10 @@ function simulateAssistantReply() {
   messages.scrollTop = messages.scrollHeight;
   setTimeout(() => {
     typing.remove();
-    if (activeConversationScope === "global") {
-      appendMessage("assistant", "这是一个全局对话，我不会自动读取任何项目或书籍内容。你可以在这里讨论通用写作方法、灵感或其他不属于具体项目的话题。");
-    } else {
-      const chapter = chapters[activeChapterId];
-      appendMessage("assistant", `我正在结合《${chapter.title}》当前修订进行分析。这个段落的感官信息很清楚，可以再强化人物此刻的具体目标，让紧张感不仅来自环境，也来自他害怕失去什么。`);
+    const chapter = chapters[activeChapterId];
+    appendMessage("assistant", assistantReply(activeConversationScope, chapter?.title || "当前章节"));
+    if (activeConversationScope !== "global") {
+      messages.lastElementChild.insertAdjacentHTML("beforeend", agentProcessMarkup());
     }
   }, 900);
 }
@@ -363,6 +450,73 @@ function bindResizer(selector, variable, min, max, reverse = false) {
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", stop);
   });
+}
+
+function createVolume() {
+  const number = Object.keys(projects[activeProjectId].volumes || {}).length + 1;
+  openDialog({ title: "新建分卷", fields: [{ name: "title", label: "分卷名称", value: `第${number}卷` }, { name: "subtitle", label: "分卷副标题", placeholder: "例如：新的旅程", required: false }], confirmLabel: "创建分卷", onConfirm: ({ title, subtitle }) => {
+    projects[activeProjectId].volumes[title] = subtitle || "未命名分卷";
+    renderCatalogForProject(activeProjectId);
+    showToast(`已创建${title}`);
+  }});
+}
+
+function createChapter(targetVolume) {
+  const volume = targetVolume || document.querySelector(".volume:last-of-type") || document.querySelector(".volume");
+  if (!volume) return createVolume();
+  const nextNumber = Object.keys(chapters).length + 1;
+  openDialog({ title: "新建章节", fields: [{ name: "title", label: "章节标题", value: `第 ${nextNumber} 章` }], confirmLabel: "创建并打开", onConfirm: ({ title }) => {
+    const id = `chapter-${Date.now()}`;
+    const volumeTitle = volume.dataset.volume;
+    chapters[id] = { volume: volumeTitle, number: nextNumber, title, words: 0, status: "未开始", content: ["在这里开始书写新的章节……"] };
+    projects[activeProjectId].chapterIds.push(id);
+    projects[activeProjectId].chapters = projects[activeProjectId].chapterIds.length;
+    document.querySelector(`.project-book[data-project="${activeProjectId}"] small`).textContent = `${projects[activeProjectId].chapters}章`;
+    volume.querySelector(".volume-empty")?.remove();
+    volume.querySelector(".volume-chapters").insertAdjacentHTML("beforeend", `<button class="chapter-row" type="button" data-chapter="${id}"><span class="chapter-index">${String(nextNumber).padStart(2, "0")}</span><span><strong>${escapeHtml(title)}</strong><small>未开始</small></span><i></i></button>`);
+    renderChapter(id);
+    showBookMainView("editor");
+    showToast(`已创建章节“${title}”`);
+  }});
+}
+
+function openHistory() {
+  openDialog({ title: `“${chapters[activeChapterId].title}”的历史版本`, description: "自动保存会在关键编辑后生成版本。选择恢复不会影响原型之外的数据。", confirmLabel: "关闭", onConfirm: () => true });
+  document.querySelector(".dialog-fields").innerHTML = `<div class="history-list"><button type="button"><span><b>当前版本</b><small>刚刚 · ${chapters[activeChapterId].words.toLocaleString("zh-CN")} 字</small></span><i>当前</i></button><button type="button"><span><b>自动保存</b><small>今天 10:24 · 1,196 字</small></span><i>预览</i></button><button type="button"><span><b>AI 修改前</b><small>昨天 22:08 · 1,121 字</small></span><i>预览</i></button></div>`;
+}
+
+function openChapterMenu() {
+  openDialog({ title: `管理章节“${chapters[activeChapterId].title}”`, fields: [{ name: "title", label: "章节标题", value: chapters[activeChapterId].title }, { name: "status", label: "写作状态", type: "select", options: ["草稿", "大纲", "已完成", "未开始"] }], confirmLabel: "保存", onConfirm: ({ title, status }) => {
+    chapters[activeChapterId].title = title;
+    chapters[activeChapterId].status = status;
+    titleInput.value = title;
+    const row = document.querySelector(`[data-chapter="${activeChapterId}"]`);
+    row.querySelector("strong").textContent = title;
+    row.querySelector("small").textContent = `${status} · ${chapters[activeChapterId].words.toLocaleString("zh-CN")} 字`;
+    showToast("章节信息已更新");
+  }});
+  const footer = document.querySelector(".prototype-dialog footer");
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "dialog-delete-link";
+  remove.textContent = "删除章节";
+  remove.addEventListener("click", () => {
+    const deletingId = activeChapterId;
+    const deletingTitle = chapters[deletingId].title;
+    closeDialog();
+    openDialog({ title: `删除章节“${deletingTitle}”？`, description: "章节正文和历史版本将从当前项目中移除，此操作无法撤销。", confirmLabel: "确认删除", danger: true, onConfirm: () => {
+      const project = projects[activeProjectId];
+      project.chapterIds = project.chapterIds.filter((id) => id !== deletingId);
+      project.chapters = project.chapterIds.length;
+      document.querySelector(`.project-book[data-project="${activeProjectId}"] small`).textContent = `${project.chapters}章`;
+      renderCatalogForProject(activeProjectId);
+      const nextId = project.chapterIds[0];
+      if (nextId) { renderChapter(nextId); showBookMainView("editor"); }
+      else showBookMainView("profile");
+      showToast(`章节“${deletingTitle}”已删除`);
+    }});
+  });
+  footer.prepend(remove);
 }
 
 document.querySelector("#chapter-tree").addEventListener("click", (event) => {
@@ -421,6 +575,26 @@ conversationSwitcher.addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  const projectBook = event.target.closest(".project-book");
+  if (projectBook) {
+    activateProject(projectBook.dataset.project);
+    const activeId = activeConversationByProject[projectBook.dataset.project];
+    if (activeId) selectProjectConversation(projectBook.dataset.project, activeId, false);
+    showBookMainView("profile");
+    showToast(`已切换到「${projects[projectBook.dataset.project].name}」书籍工作区`);
+    return;
+  }
+  const globalRow = event.target.closest(".global-conversation-row");
+  if (globalRow) {
+    selectGlobalConversation(globalRow);
+    return;
+  }
+  const anyChapter = event.target.closest("[data-chapter]");
+  if (anyChapter && !anyChapter.closest("#chapter-tree")) {
+    renderChapter(anyChapter.dataset.chapter);
+    showBookMainView("editor");
+    return;
+  }
   const actionTarget = event.target.closest("[data-action]");
   const action = actionTarget?.dataset.action;
   if (action === "toggle-toc") togglePanel("toc");
@@ -461,18 +635,61 @@ document.addEventListener("click", (event) => {
     createProjectConversation(activeProjectId);
   }
   if (action === "new-global-chat") createGlobalConversation();
-  if (action === "new-project") showToast("原型演示：创建项目后，将自动生成一本书和独立的项目对话区");
-  if (action === "add-chapter") showToast("原型演示：这里将创建新章节并自动打开");
+  if (action === "new-project") createProject();
+  if (action === "add-volume") createVolume();
+  if (action === "delete-volume") {
+    const volumeName = actionTarget.closest(".volume").dataset.volume;
+    openDialog({ title: `删除分卷“${volumeName}”？`, description: "分卷结构会被删除，其中的章节将保留并移动到“未分卷”。", confirmLabel: "删除分卷", danger: true, onConfirm: () => {
+      const project = projects[activeProjectId];
+      const affected = project.chapterIds.filter((id) => chapters[id]?.volume === volumeName);
+      delete project.volumes[volumeName];
+      if (affected.length) {
+        project.volumes["未分卷"] = "保留的章节";
+        affected.forEach((id) => { chapters[id].volume = "未分卷"; });
+      }
+      renderCatalogForProject(activeProjectId);
+      showToast(`分卷“${volumeName}”已删除，章节已保留`);
+    }});
+  }
+  if (action === "add-chapter") createChapter(actionTarget.closest(".volume"));
+  if (action === "book-overview" || action === "overview-profile") showBookMainView("profile");
+  if (action === "overview-pages") showBookMainView("pages");
+  if (action === "chapter-history") openHistory();
+  if (action === "chapter-menu") openChapterMenu();
+  if (action === "toggle-settings") {
+    const menu = document.querySelector("#settings-menu");
+    menu.hidden = !menu.hidden;
+    actionTarget.setAttribute("aria-expanded", String(!menu.hidden));
+  }
+  if (action === "open-settings") { document.querySelector("#settings-menu").hidden = true; showStandalonePage("settings", renderSettings(state.configured)); }
+  if (action === "open-about") { document.querySelector("#settings-menu").hidden = true; showStandalonePage("about", renderAbout()); }
+  if (action === "back-workspace") {
+    if (previousScreen === "global") showStandalonePage("global", renderGlobalConversation("悬疑开场写作方法"));
+    else showBookWorkspace();
+  }
+  if (action === "project-menu") { event.preventDefault(); event.stopPropagation(); openProjectActions(actionTarget.closest(".project-node")); }
+  if (action === "add-context") {
+    const chip = document.querySelector("#context-chip");
+    chip.hidden = false;
+    chip.querySelector("span").textContent = `第${chapters[activeChapterId].number}章 · ${chapters[activeChapterId].title}`;
+    showToast("已添加当前章节作为上下文");
+  }
+  if (action === "view-diff") openDialog({ title: "修改差异", description: "红色为原文，绿色为建议内容。", confirmLabel: "关闭", onConfirm: () => true });
+  if (action === "approve-agent-change") { actionTarget.closest(".agent-process").classList.add("approved"); actionTarget.closest("footer").innerHTML = "<span>✓ 修改已批准并加入正文</span>"; showToast("Agent 修改已批准"); }
+  if (action === "reject-agent-change") { actionTarget.closest(".agent-process").remove(); showToast("已保留原文"); }
+  if (action === "edit-book-profile") openDialog({ title: "编辑书籍资料", fields: [{ name: "title", label: "书籍名称", value: projects[activeProjectId].bookTitle }, { name: "description", label: "书籍简介", value: projects[activeProjectId].description }], confirmLabel: "保存资料", onConfirm: ({ title, description }) => { projects[activeProjectId].bookTitle = title; projects[activeProjectId].description = description; activateProject(activeProjectId); showBookMainView("profile"); showToast("书籍资料已保存"); } });
+  if (action === "conversation-menu") openDialog({ title: "对话设置", description: "项目对话会自动携带当前书籍上下文。", fields: [{ name: "title", label: "对话标题", value: document.querySelector("#conversation-title").textContent }], confirmLabel: "保存", onConfirm: ({ title }) => { document.querySelector("#conversation-title").textContent = title; showToast("对话标题已更新"); } });
+  if (action === "font-menu") showToast("字体：默认宋体（原型保留项目排版设置）");
+  if (action === "size-menu") showToast("字号：15 px · 行高 2.05");
 });
 
-document.querySelectorAll(".project-book").forEach((button) => {
-  button.addEventListener("click", () => {
-    activateProject(button.dataset.project);
-    const activeId = activeConversationByProject[button.dataset.project];
-    if (activeId) selectProjectConversation(button.dataset.project, activeId, false);
-    else createProjectConversation(button.dataset.project);
-    showToast(`已切换到「${projects[button.dataset.project].name}」书籍工作区`);
-  });
+document.querySelector(".editor-toolbar").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-command]");
+  if (!button) return;
+  editor.focus();
+  document.execCommand(button.dataset.command, false, button.dataset.value || null);
+  button.classList.toggle("active", ["bold", "italic", "underline", "strikeThrough"].includes(button.dataset.command));
+  queueSave();
 });
 
 document.querySelector("#context-chip").addEventListener("click", () => {
@@ -509,6 +726,9 @@ document.addEventListener("pointerdown", (event) => {
 
 bindResizer(".toc-resizer", "--toc-width", 190, 330);
 bindResizer(".ai-resizer", "--assistant-width", 310, 520, true);
+initializeGlobalConversations();
+decorateProjectRows();
 updateSidebarEmptyStates();
+renderCatalogForProject(activeProjectId);
 renderChapter("chapter-1");
 renderProjectConversationList();

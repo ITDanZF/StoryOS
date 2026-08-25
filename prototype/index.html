@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StoryOS · 书籍创作工作区原型</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=4">
 </head>
 <body>
   <svg class="icon-sprite" aria-hidden="true">
@@ -83,7 +83,13 @@
         </nav>
       </section>
 
-      <button class="settings-row" type="button"><span><svg><use href="#i-settings"/></svg>设置</span><svg><use href="#i-chevron"/></svg></button>
+      <div class="settings-launcher">
+        <div class="settings-menu" id="settings-menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-action="open-settings">设置面板 <svg><use href="#i-chevron"/></svg></button>
+          <button type="button" role="menuitem" data-action="open-about">关于我们 <svg><use href="#i-chevron"/></svg></button>
+        </div>
+        <button class="settings-row" type="button" data-action="toggle-settings" aria-expanded="false"><span><svg><use href="#i-settings"/></svg>设置</span><svg><use href="#i-chevron"/></svg></button>
+      </div>
     </aside>
 
     <section class="workspace">
@@ -105,12 +111,12 @@
           <div class="book-panel-header">
             <div><h1 id="current-book-title">长夜</h1></div>
           </div>
-          <button class="overview-row active" type="button"><svg><use href="#i-book"/></svg><span>书籍概览</span></button>
-          <div class="catalog-section-header"><span><svg><use href="#i-history"/></svg>目录</span><button type="button" aria-label="新建分卷" title="新建分卷"><svg><use href="#i-plus"/></svg></button></div>
+          <button class="overview-row" type="button" data-action="book-overview"><svg><use href="#i-book"/></svg><span>书籍概览</span></button>
+          <div class="catalog-section-header"><span><svg><use href="#i-history"/></svg>目录</span><button type="button" data-action="add-volume" aria-label="新建分卷" title="新建分卷"><svg><use href="#i-plus"/></svg></button></div>
           <label class="catalog-search"><svg><use href="#i-search"/></svg><input type="search" placeholder="搜索章节标题" aria-label="搜索章节标题"></label>
           <nav class="chapter-tree" id="chapter-tree" aria-label="章节目录">
             <section class="volume open" data-volume="第一卷">
-              <header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>第一卷</strong><small>城市之夜</small></span></button><button class="chapter-add" type="button" aria-label="在第一卷新建章节"><svg><use href="#i-plus"/></svg></button></header>
+              <header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>第一卷</strong><small>城市之夜</small></span></button><button class="chapter-add" type="button" data-action="add-chapter" aria-label="在第一卷新建章节"><svg><use href="#i-plus"/></svg></button></header>
               <div class="volume-chapters">
                 <button class="chapter-row active" type="button" data-chapter="chapter-1"><span class="chapter-index">01</span><span><strong>雨夜</strong><small>草稿 · 1,248 字</small></span><i></i></button>
                 <button class="chapter-row" type="button" data-chapter="chapter-2"><span class="chapter-index">02</span><span><strong>来客</strong><small>草稿 · 2,016 字</small></span><i></i></button>
@@ -118,7 +124,7 @@
               </div>
             </section>
             <section class="volume open" data-volume="第二卷">
-              <header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>第二卷</strong><small>黎明之前</small></span></button><button class="chapter-add" type="button" aria-label="在第二卷新建章节"><svg><use href="#i-plus"/></svg></button></header>
+              <header><button class="volume-toggle" type="button"><svg class="disclosure open"><use href="#i-chevron"/></svg><span><strong>第二卷</strong><small>黎明之前</small></span></button><button class="chapter-add" type="button" data-action="add-chapter" aria-label="在第二卷新建章节"><svg><use href="#i-plus"/></svg></button></header>
               <div class="volume-chapters">
                 <button class="chapter-row" type="button" data-chapter="chapter-4"><span class="chapter-index">04</span><span><strong>回声</strong><small>大纲 · 524 字</small></span><i></i></button>
                 <button class="chapter-row" type="button" data-chapter="chapter-5"><span class="chapter-index">05</span><span><strong>破晓</strong><small>未开始</small></span><i></i></button>
@@ -133,10 +139,10 @@
         <article class="editor-panel">
           <header class="editor-header">
             <div class="chapter-heading"><span class="chapter-kicker" id="chapter-kicker">第一卷 · 第 1 章</span><input id="chapter-title" value="雨夜" aria-label="章节标题"></div>
-            <div class="editor-meta"><span class="save-status saved" id="save-status"><svg><use href="#i-check"/></svg>已保存</span><span id="word-count">1,248 字</span><button class="icon-button subtle" type="button" aria-label="历史版本"><svg><use href="#i-history"/></svg></button><button class="icon-button subtle" type="button" aria-label="章节菜单"><svg><use href="#i-more"/></svg></button></div>
+            <div class="editor-meta"><span class="save-status saved" id="save-status"><svg><use href="#i-check"/></svg>已保存</span><span id="word-count">1,248 字</span><button class="icon-button subtle" type="button" data-action="chapter-history" aria-label="历史版本"><svg><use href="#i-history"/></svg></button><button class="icon-button subtle" type="button" data-action="chapter-menu" aria-label="章节菜单"><svg><use href="#i-more"/></svg></button></div>
           </header>
           <div class="editor-toolbar" aria-label="编辑工具栏">
-            <button class="toolbar-select" type="button">正文⌄</button><button class="toolbar-select wide" type="button">默认宋体⌄</button><button class="toolbar-select" type="button">默认字号⌄</button><span></span><button type="button"><b>B</b></button><button type="button"><i>I</i></button><button type="button"><u>U</u></button><button type="button"><s>S</s></button><span></span><button type="button">“</button><button type="button">☷</button><button type="button">1.</button><span></span><button type="button">↶</button><button type="button">↷</button><button class="ask-ai" type="button" data-action="ask-selection"><svg><use href="#i-spark"/></svg>询问 AI</button>
+            <button class="toolbar-select" type="button" data-command="formatBlock" data-value="p">正文⌄</button><button class="toolbar-select wide" type="button" data-action="font-menu">默认宋体⌄</button><button class="toolbar-select" type="button" data-action="size-menu">默认字号⌄</button><span></span><button type="button" data-command="bold" aria-label="粗体"><b>B</b></button><button type="button" data-command="italic" aria-label="斜体"><i>I</i></button><button type="button" data-command="underline" aria-label="下划线"><u>U</u></button><button type="button" data-command="strikeThrough" aria-label="删除线"><s>S</s></button><span></span><button type="button" data-command="formatBlock" data-value="blockquote" aria-label="引用">“</button><button type="button" data-command="insertUnorderedList" aria-label="无序列表">☷</button><button type="button" data-command="insertOrderedList" aria-label="有序列表">1.</button><span></span><button type="button" data-command="undo" aria-label="撤销">↶</button><button type="button" data-command="redo" aria-label="重做">↷</button><button class="ask-ai" type="button" data-action="ask-selection"><svg><use href="#i-spark"/></svg>询问 AI</button>
           </div>
           <div class="editor-scroll">
             <div class="document-page">
@@ -151,13 +157,13 @@
         <aside class="ai-panel" aria-label="AI 对话">
           <header class="ai-header">
             <div class="ai-title"><span class="ai-avatar"><svg><use href="#i-spark"/></svg></span><button class="conversation-switcher" id="conversation-switcher" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="conversation-popover"><span><strong id="conversation-title">第一章创作助手</strong><svg class="conversation-chevron"><use href="#i-chevron"/></svg></span><small><i></i> AI 助手在线</small></button></div>
-            <div><button class="icon-button subtle" type="button" data-action="new-chat" aria-label="新建对话"><svg><use href="#i-plus"/></svg></button><button class="icon-button subtle" type="button" data-action="focus-ai" aria-label="展开对话"><svg><use href="#i-expand"/></svg></button><button class="icon-button subtle" type="button" aria-label="对话菜单"><svg><use href="#i-more"/></svg></button></div>
+            <div><button class="icon-button subtle" type="button" data-action="new-chat" aria-label="新建对话"><svg><use href="#i-plus"/></svg></button><button class="icon-button subtle" type="button" data-action="focus-ai" aria-label="展开对话"><svg><use href="#i-expand"/></svg></button><button class="icon-button subtle" type="button" data-action="conversation-menu" aria-label="对话菜单"><svg><use href="#i-more"/></svg></button></div>
             <section class="conversation-popover" id="conversation-popover" role="dialog" aria-label="切换项目对话" hidden>
               <header><span><strong>项目对话</strong><small id="conversation-count">3 个对话</small></span><button type="button" data-action="new-chat"><svg><use href="#i-plus"/></svg><span>新建</span></button></header>
               <div class="project-conversation-list" id="project-conversation-list" role="list" aria-label="项目对话列表"></div>
             </section>
           </header>
-          <div class="context-bar"><span>上下文</span><button type="button" id="context-chip"><svg><use href="#i-book"/></svg><span>第一章 · 雨夜</span><b>×</b></button><button class="context-add" type="button"><svg><use href="#i-plus"/></svg></button></div>
+          <div class="context-bar"><span>上下文</span><button type="button" id="context-chip"><svg><use href="#i-book"/></svg><span>第一章 · 雨夜</span><b>×</b></button><button class="context-add" type="button" data-action="add-context" aria-label="添加章节上下文"><svg><use href="#i-plus"/></svg></button></div>
           <div class="messages" id="messages" aria-live="polite">
             <div class="date-divider"><span>今天</span></div>
             <article class="message user-message"><p>帮我看看第一章开场的氛围是否足够紧张，尤其是林默走进巷子的这一段。</p></article>
@@ -168,7 +174,7 @@
               <section class="suggestion-card">
                 <header><span><svg><use href="#i-spark"/></svg>修改建议</span><small>替换选中段落</small></header>
                 <div><del>他慢慢地向巷子深处走去，雨水落在肩上。</del><ins>脚步声在雨里多出了一拍。林默停下，那声音也随之消失。</ins></div>
-                <footer><button type="button" class="secondary">查看差异</button><button type="button" class="primary" data-action="apply-suggestion">应用到正文</button></footer>
+                <footer><button type="button" class="secondary" data-action="view-diff">查看差异</button><button type="button" class="primary" data-action="apply-suggestion">应用到正文</button></footer>
               </section>
             </article>
           </div>
@@ -184,7 +190,8 @@
       </div>
     </section>
   </main>
+  <div class="modal-root" id="modal-root"></div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="./app.js"></script>
+  <script type="module" src="./app.js?v=7"></script>
 </body>
 </html>

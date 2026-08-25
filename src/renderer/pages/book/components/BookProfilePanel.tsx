@@ -159,13 +159,13 @@ export default function BookProfilePanel({
           className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
           aria-label="书籍基本信息"
         >
-          <label className="block px-6 py-5 sm:px-7">
-            <span className="block text-[11px] font-medium text-neutral-400">
+          <label className="block bg-[linear-gradient(145deg,#393531_0%,#4b4038_58%,#9a6640_100%)] px-6 py-6 sm:px-7 sm:py-7">
+            <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-[#d8a47b]">
               书名
             </span>
             <input
               autoFocus={!book}
-              className="mt-2 w-full border-0 bg-transparent p-0 text-[26px] font-semibold leading-9 tracking-[-0.025em] text-neutral-950 outline-none placeholder:font-normal placeholder:text-neutral-300"
+              className="mt-3 w-full border-0 bg-transparent p-0 font-serif text-[28px] font-semibold leading-10 tracking-[0.04em] text-[#fff9f2] caret-[#e4b48e] outline-none selection:bg-[#c78658]/45 placeholder:font-normal placeholder:tracking-normal placeholder:text-white/35"
               maxLength={200}
               placeholder="输入书籍名称"
               value={title}
