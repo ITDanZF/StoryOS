@@ -15,6 +15,15 @@ import {
 } from "./model/ModelConfiguration.ts";
 import WorkSpace from "./workspace/index.ts";
 import WorkspaceRuntimeManager from "./runtime/WorkspaceRuntimeManager.ts";
+import BookRuntimeManager from "./runtime/BookRuntimeManager.ts";
+import BookProvisioningService from "./application/BookProvisioningService.ts";
+import BookshelfApplication from "./application/BookshelfApplication.ts";
+import ProjectBookBindingService from "./application/ProjectBookBindingService.ts";
+import BookRegistryReconciler from "./application/BookRegistryReconciler.ts";
+import BookLifecycleService from "./application/BookLifecycleService.ts";
+import BookTransferService from "./application/BookTransferService.ts";
+import ProjectArchiveService from "./application/ProjectArchiveService.ts";
+import SqliteProjectArchiveStore from "./storage/global/SqliteProjectArchiveStore.ts";
 import type { RendererEditorToolClient } from "./tools/editor/contracts.ts";
 
 export type AgentConfigurationRequest = {
@@ -198,12 +207,60 @@ export default class StoryAgentService {
                 new SqliteProjectStore(applicationDatabase.handle),
             );
             const books = new SqliteBookStore(applicationDatabase.handle);
+            const bookRuntimes = new BookRuntimeManager(
+                this.options.agentHome,
+                books,
+            );
+            const bookProvisioning = new BookProvisioningService(
+                this.options.agentHome,
+                books,
+                bookRuntimes,
+            );
+            const bookReconciler = new BookRegistryReconciler(
+                books,
+                bookRuntimes,
+            );
+            bookReconciler.reconcile();
+            const projectArchives = new ProjectArchiveService(
+                this.options.agentHome,
+                projects,
+                books,
+                new SqliteProjectArchiveStore(applicationDatabase.handle),
+                bookRuntimes,
+            );
+            projectArchives.reconcile();
             const runtime = await WorkspaceRuntimeManager.create(
                 projects,
                 books,
-                this.options.agentHome,
+                bookRuntimes,
+                bookProvisioning,
                 modelConfiguration,
                 this.options.rendererEditorTools,
+            );
+            const bookBindings = new ProjectBookBindingService(
+                projects,
+                books,
+                bookRuntimes,
+                runtime,
+            );
+            const bookLifecycle = new BookLifecycleService(
+                this.options.agentHome,
+                books,
+                bookRuntimes,
+            );
+            const bookTransfer = new BookTransferService(
+                this.options.agentHome,
+                books,
+                bookRuntimes,
+            );
+            const bookshelf = new BookshelfApplication(
+                books,
+                bookRuntimes,
+                bookBindings,
+                bookReconciler,
+                bookLifecycle,
+                bookTransfer,
+                projectArchives,
             );
             const controller = new DesktopController({
                 projects,
@@ -211,8 +268,9 @@ export default class StoryAgentService {
                 projectNavigation: new ProjectNavigationReader(
                     projects,
                     books,
-                    this.options.agentHome,
+                    bookRuntimes,
                 ),
+                bookshelf,
             });
             for (const subscriber of this.subscribers) {
                 this.controllerUnsubscribers.set(

@@ -24,6 +24,7 @@ export interface ProjectStore {
   renameProject(projectPath: string, nextPath: string, name: string): ProjectRecord;
   listProjects(): ProjectRecord[];
   removeProject(projectPath: string): void;
+  restoreProject(input: ProjectRecord): ProjectRecord;
   getActiveProjectId(): string | null;
   setActiveProjectId(projectId: string | null): void;
 }

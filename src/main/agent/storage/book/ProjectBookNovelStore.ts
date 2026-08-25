@@ -1,5 +1,4 @@
-import path from "node:path";
-import { existsSync, rmSync } from "node:fs";
+import type BookProvisioningService from "../../application/BookProvisioningService.ts";
 import type { BookRegistry } from "../../application/bookRegistryPorts.ts";
 import type {
   ChapterRecord,
@@ -8,46 +7,31 @@ import type {
   NovelRecord,
   VolumeRecord,
 } from "../../application/novelPorts.ts";
-import BookDatabase from "./BookDatabase.ts";
-import { ensureBookLayout, getBookLayout } from "./BookLayout.ts";
-import SqliteNovelStore from "./SqliteNovelStore.ts";
-
-function samePath(first: string, second: string): boolean {
-  const left = path.resolve(first);
-  const right = path.resolve(second);
-  return process.platform === "win32"
-    ? left.toLowerCase() === right.toLowerCase()
-    : left === right;
-}
+import type BookRuntimeManager from "../../runtime/BookRuntimeManager.ts";
+import type { BookRuntimeLease } from "../../runtime/BookRuntimeManager.ts";
 
 export default class ProjectBookNovelStore implements NovelPersistence {
-  private database: BookDatabase | null = null;
-  private delegate: SqliteNovelStore | null = null;
+  private lease: BookRuntimeLease | null = null;
+  private delegate: NovelPersistence | null = null;
 
   constructor(
     private readonly projectId: string | null,
-    private readonly agentHome: string,
     private readonly registry: BookRegistry,
+    private readonly runtimes: BookRuntimeManager,
+    private readonly provisioning: BookProvisioningService,
   ) {
     const book = projectId ? registry.getBookForProject(projectId) : null;
     if (!book) return;
     if (book.state !== "available") {
       throw new Error(`Project book storage is unavailable: ${book.id}`);
     }
-    const layout = getBookLayout(agentHome, book.id);
-    if (!samePath(book.storagePath, layout.rootPath)) {
-      throw new Error(`Invalid registered book path: ${book.storagePath}`);
-    }
-    if (!existsSync(layout.databasePath)) {
-      throw new Error(`Book database does not exist: ${layout.databasePath}`);
-    }
-    this.open(layout.databasePath);
+    this.bind(runtimes.acquire(book.id));
   }
 
   close(): void {
     this.delegate = null;
-    this.database?.close();
-    this.database = null;
+    this.lease?.close();
+    this.lease = null;
   }
 
   createNovel(
@@ -58,25 +42,12 @@ export default class ProjectBookNovelStore implements NovelPersistence {
       throw new Error("A project is required to create a book.");
     }
 
-    const bookId = `book_${crypto.randomUUID()}`;
-    const layout = ensureBookLayout(this.agentHome, bookId);
-    const database = new BookDatabase(layout.databasePath);
-    const store = new SqliteNovelStore(database.handle);
-    try {
-      const novel = store.createNovel(input);
-      this.registry.registerBookForProject({
-        id: bookId,
-        projectId: this.projectId,
-        storagePath: layout.rootPath,
-      });
-      this.database = database;
-      this.delegate = store;
-      return novel;
-    } catch (error) {
-      database.close();
-      rmSync(layout.rootPath, { recursive: true, force: true });
-      throw error;
-    }
+    const provisioned = this.provisioning.createForProject(
+      this.projectId,
+      input,
+    );
+    this.bind(provisioned.lease);
+    return provisioned.novel;
   }
 
   getNovel(novelId: string): NovelRecord | null {
@@ -164,13 +135,13 @@ export default class ProjectBookNovelStore implements NovelPersistence {
     return this.requireStore().listRevisions(chapterId);
   }
 
-  private open(databasePath: string): void {
-    const database = new BookDatabase(databasePath);
-    this.database = database;
-    this.delegate = new SqliteNovelStore(database.handle);
+  private bind(lease: BookRuntimeLease): void {
+    this.lease?.close();
+    this.lease = lease;
+    this.delegate = lease.persistence;
   }
 
-  private requireStore(): SqliteNovelStore {
+  private requireStore(): NovelPersistence {
     if (!this.delegate) {
       throw new Error(`Project book not found: ${this.projectId ?? "global"}`);
     }

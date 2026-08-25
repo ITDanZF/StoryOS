@@ -17,6 +17,14 @@ export function getBookLibraryRoot(agentHome: string): string {
   return path.resolve(agentHome, "library", "books");
 }
 
+export function getBookCreationRoot(agentHome: string): string {
+  return path.resolve(agentHome, "library", ".creating");
+}
+
+export function getBookDeletionRoot(agentHome: string): string {
+  return path.resolve(agentHome, "library", ".deleting");
+}
+
 export function getBookLayout(agentHome: string, bookId: string): BookLayout {
   const libraryRoot = getBookLibraryRoot(agentHome);
   const rootPath = path.resolve(libraryRoot, requireBookId(bookId));

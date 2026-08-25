@@ -105,6 +105,23 @@ export default class ProjectApplication {
     }
   }
 
+  rollbackProjectCreation(project: ProjectDto): void {
+    const registered = this.store.getProjectById(project.id);
+    if (!registered || !pathsReferToSameLocation(registered.path, project.path)) {
+      throw new Error(`Created project is no longer registered: ${project.id}`);
+    }
+    const metadata = readProjectMetadata(project.path);
+    if (!metadata || metadata.projectId !== project.id) {
+      throw new Error(`Created project metadata does not match: ${project.path}`);
+    }
+    if (registered.locationType !== "created") {
+      throw new Error(`Linked projects cannot be rolled back: ${project.id}`);
+    }
+    this.store.removeProject(project.path);
+    if (this.activeProjectId === project.id) this.setActiveProject(null);
+    rmSync(project.path, { recursive: true, force: true });
+  }
+
   openProject(projectPath: string): ProjectDto {
     const normalizedPath = path.resolve(this.requirePath(projectPath));
     if (!existsSync(normalizedPath)) throw new Error(`Project path does not exist: ${normalizedPath}`);
@@ -211,6 +228,11 @@ export default class ProjectApplication {
     this.store.removeProject(normalizedPath);
     if (removed?.id === this.activeProjectId) this.setActiveProject(null);
     return this.getSnapshot();
+  }
+
+  restoreProject(input: ProjectRecord): ProjectDto {
+    const restored = this.store.restoreProject(input);
+    return toProjectDto(restored);
   }
 
   private getDefaultParentPath(): string {

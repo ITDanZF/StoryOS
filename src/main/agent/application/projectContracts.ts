@@ -34,6 +34,7 @@ export type CreateProjectRequest = {
   readonly name: string;
   readonly parentPath?: string;
   readonly createAgentsFile?: boolean;
+  readonly bookId?: string;
 };
 
 export type RenameProjectRequest = {

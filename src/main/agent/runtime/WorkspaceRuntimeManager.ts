@@ -8,6 +8,7 @@ import type {
   ConversationScope,
 } from "../application/conversationContracts.ts";
 import NovelApplication from "../application/NovelApplication.ts";
+import BookProvisioningService from "../application/BookProvisioningService.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import type { BookRegistry } from "../application/bookRegistryPorts.ts";
 import ThreadApplication from "../application/ThreadApplication.ts";
@@ -26,6 +27,7 @@ import ChapterGenerationService from "../book-generation/ChapterGenerationServic
 import type { RendererEditorToolClient } from "../tools/editor/contracts.ts";
 import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
 import ProjectBookNovelStore from "../storage/book/ProjectBookNovelStore.ts";
+import BookRuntimeManager from "./BookRuntimeManager.ts";
 import SqliteRunStore from "../storage/project/SqliteRunStore.ts";
 import SqliteConversationEventStore from "../storage/project/SqliteConversationEventStore.ts";
 import SqliteThreadStore from "../storage/project/SqliteThreadStore.ts";
@@ -76,24 +78,62 @@ export default class WorkspaceRuntimeManager {
   private constructor(
     private readonly projects: ProjectApplication,
     private readonly books: BookRegistry,
-    private readonly agentHome: string,
+    private readonly bookRuntimes: BookRuntimeManager,
+    private readonly bookProvisioning: BookProvisioningService,
     private readonly modelConfiguration: ModelConnectionConfiguration,
     private readonly rendererEditorTools?: RendererEditorToolClient,
   ) {}
 
-  static async create(
+  static create(
     projects: ProjectApplication,
     books: BookRegistry,
     agentHome: string,
     modelConfiguration: ModelConnectionConfiguration,
     rendererEditorTools?: RendererEditorToolClient,
+  ): Promise<WorkspaceRuntimeManager>;
+  static create(
+    projects: ProjectApplication,
+    books: BookRegistry,
+    bookRuntimes: BookRuntimeManager,
+    bookProvisioning: BookProvisioningService,
+    modelConfiguration: ModelConnectionConfiguration,
+    rendererEditorTools?: RendererEditorToolClient,
+  ): Promise<WorkspaceRuntimeManager>;
+  static async create(
+    projects: ProjectApplication,
+    books: BookRegistry,
+    bookRuntimesOrAgentHome: BookRuntimeManager | string,
+    provisioningOrConfiguration:
+      | BookProvisioningService
+      | ModelConnectionConfiguration,
+    configurationOrRenderer?:
+      | ModelConnectionConfiguration
+      | RendererEditorToolClient,
+    rendererEditorTools?: RendererEditorToolClient,
   ): Promise<WorkspaceRuntimeManager> {
+    const bookRuntimes = typeof bookRuntimesOrAgentHome === "string"
+      ? new BookRuntimeManager(bookRuntimesOrAgentHome, books)
+      : bookRuntimesOrAgentHome;
+    const bookProvisioning = typeof bookRuntimesOrAgentHome === "string"
+      ? new BookProvisioningService(
+          bookRuntimesOrAgentHome,
+          books,
+          bookRuntimes,
+        )
+      : provisioningOrConfiguration as BookProvisioningService;
+    const modelConfiguration = typeof bookRuntimesOrAgentHome === "string"
+      ? provisioningOrConfiguration as ModelConnectionConfiguration
+      : configurationOrRenderer as ModelConnectionConfiguration;
+    const editorTools = typeof bookRuntimesOrAgentHome === "string"
+      ? configurationOrRenderer as RendererEditorToolClient | undefined
+      : rendererEditorTools;
     const manager = new WorkspaceRuntimeManager(
       projects,
       books,
-      agentHome,
+      bookRuntimes,
+      bookProvisioning,
       modelConfiguration,
-      rendererEditorTools,
+      editorTools,
     );
     try {
       manager.globalRuntime = await manager.createRuntime(null);
@@ -218,8 +258,9 @@ export default class WorkspaceRuntimeManager {
       }
       const bookStore = new ProjectBookNovelStore(
         project?.id ?? null,
-        this.agentHome,
         this.books,
+        this.bookRuntimes,
+        this.bookProvisioning,
       );
       resources.bookStore = bookStore;
       const novels = new NovelApplication(
@@ -364,6 +405,7 @@ export default class WorkspaceRuntimeManager {
       this.closeRuntime(projectRuntime),
       this.closeRuntime(globalRuntime),
     ]);
+    this.bookRuntimes.closeAll();
     this.subscribers.clear();
   }
 

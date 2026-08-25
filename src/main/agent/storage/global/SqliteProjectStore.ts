@@ -130,6 +130,43 @@ export default class SqliteProjectStore implements ProjectStore {
       .run(projectPathKey(projectPath));
   }
 
+  restoreProject(input: ProjectRecord): ProjectRecord {
+    const projectPath = path.resolve(input.path);
+    const pathKey = projectPathKey(projectPath);
+    const transaction = this.database.transaction(() => {
+      const conflict = this.database.prepare(`
+        SELECT id, path_key
+        FROM projects
+        WHERE id = ? OR path_key = ?
+        LIMIT 1
+      `).get(input.id, pathKey) as {
+        readonly id: string;
+        readonly path_key: string;
+      } | undefined;
+      if (conflict) {
+        throw new Error(`Project restore conflicts with an existing project: ${input.id}`);
+      }
+      this.database.prepare(`
+        INSERT INTO projects(
+          id, path, path_key, name, location_type, trusted,
+          created_at, updated_at, last_opened_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        input.id,
+        projectPath,
+        pathKey,
+        input.name,
+        input.locationType,
+        Number(input.trusted),
+        input.createdAt.getTime(),
+        input.updatedAt.getTime(),
+        input.lastOpenedAt.getTime(),
+      );
+      return this.requireRowById(input.id);
+    });
+    return this.toRecord(transaction());
+  }
+
   getActiveProjectId(): string | null {
     const row = this.database.prepare(
       "SELECT active_project_id FROM app_state WHERE singleton = 1",

@@ -1,6 +1,7 @@
 import { shell } from "electron";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ProjectNavigationReader from "../application/ProjectNavigationReader.ts";
+import type BookshelfApplication from "../application/BookshelfApplication.ts";
 import type { CreateProjectRequest, RenameProjectRequest } from "../application/projectContracts.ts";
 import type {
   ConversationApplicationEventHandler,
@@ -37,6 +38,22 @@ export type DesktopControllerDependencies = {
   readonly projects: ProjectApplication;
   readonly runtime: WorkspaceRuntimeManager;
   readonly projectNavigation: Pick<ProjectNavigationReader, "read">;
+  readonly bookshelf: Pick<
+    BookshelfApplication,
+    | "listBooks"
+    | "listTrash"
+    | "attachBookToProject"
+    | "detachBookFromProject"
+    | "reconcileRegistry"
+    | "moveBookToTrash"
+    | "restoreBookFromTrash"
+    | "permanentlyDeleteBook"
+    | "exportBook"
+    | "importBook"
+    | "listProjectArchives"
+    | "createProjectArchive"
+    | "restoreProjectArchive"
+  >;
 };
 
 export default class DesktopController {
@@ -140,6 +157,78 @@ export default class DesktopController {
 
   async getProjectNavigation(projectId: string) {
     return this.projectNavigation.read(projectId);
+  }
+
+  getBookshelfBooks() {
+    return this.dependencies.bookshelf.listBooks();
+  }
+
+  getBookshelfTrash() {
+    return this.dependencies.bookshelf.listTrash();
+  }
+
+  async attachBookshelfBook(projectId: string, bookId: string) {
+    await this.dependencies.bookshelf.attachBookToProject(projectId, bookId);
+    return this.projectNavigation.read(projectId);
+  }
+
+  async detachProjectBook(projectId: string) {
+    await this.dependencies.bookshelf.detachBookFromProject(projectId);
+    return this.projectNavigation.read(projectId);
+  }
+
+  reconcileBookshelfRegistry() {
+    return this.dependencies.bookshelf.reconcileRegistry();
+  }
+
+  moveBookshelfBookToTrash(bookId: string) {
+    return this.dependencies.bookshelf.moveBookToTrash(bookId);
+  }
+
+  restoreBookshelfBookFromTrash(bookId: string) {
+    return this.dependencies.bookshelf.restoreBookFromTrash(bookId);
+  }
+
+  permanentlyDeleteBookshelfBook(input: {
+    readonly bookId: string;
+    readonly confirmationBookId: string;
+  }): void {
+    this.dependencies.bookshelf.permanentlyDeleteBook(input);
+  }
+
+  exportBookshelfBook(request: {
+    readonly bookId: string;
+    readonly outputPath: string;
+  }): Promise<void> {
+    return this.dependencies.bookshelf.exportBook(request);
+  }
+
+  importBookshelfBook(request: { readonly packagePath: string }) {
+    return this.dependencies.bookshelf.importBook(request);
+  }
+
+  listProjectArchives(bookId?: string) {
+    return this.dependencies.bookshelf.listProjectArchives(bookId);
+  }
+
+  async restoreProjectArchive(request: {
+    readonly archiveId: string;
+    readonly targetPath: string;
+    readonly bookStrategy: "snapshot" | "current";
+  }) {
+    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    const result = this.dependencies.bookshelf.restoreProjectArchive(request);
+    try {
+      await this.dependencies.runtime.activate(result.projectPath);
+      this.dependencies.projects.switchProject(result.projectPath);
+      return Object.freeze({
+        result,
+        workspace: this.getWorkspaceSnapshot(),
+      });
+    } catch (error) {
+      await this.dependencies.runtime.activate(previousPath);
+      throw error;
+    }
   }
 
   async getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot> {
@@ -371,10 +460,31 @@ export default class DesktopController {
   async createProject(request: CreateProjectRequest) {
     const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
     const project = this.dependencies.projects.createProject(request);
+    const bookId = request.bookId?.trim() || null;
     try {
+      if (bookId) {
+        await this.dependencies.bookshelf.attachBookToProject(
+          project.id,
+          bookId,
+        );
+      }
       await this.dependencies.runtime.activate(project.path);
       return this.getWorkspaceSnapshot();
     } catch (error) {
+      if (bookId) {
+        try {
+          await this.dependencies.bookshelf.detachBookFromProject(project.id);
+          this.dependencies.projects.switchProject(previousPath);
+          this.dependencies.projects.rollbackProjectCreation(project);
+          await this.dependencies.runtime.activate(previousPath);
+        } catch (recoveryError) {
+          throw new AggregateError(
+            [error, recoveryError],
+            `Project creation recovery failed: ${project.id}`,
+          );
+        }
+        throw error;
+      }
       this.dependencies.projects.switchProject(previousPath);
       await this.dependencies.runtime.activate(previousPath);
       throw error;
@@ -419,6 +529,7 @@ export default class DesktopController {
     const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === project.path;
     if (wasActive) await this.dependencies.runtime.closeForProjectMutation(project.path);
     try {
+      await this.dependencies.bookshelf.createProjectArchive(project.id);
       await shell.trashItem(project.path);
     } catch (error) {
       if (wasActive) await this.dependencies.runtime.activate(project.path);

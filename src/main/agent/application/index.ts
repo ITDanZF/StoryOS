@@ -1,6 +1,27 @@
 export { default as AgentApplication } from "./AgentApplication.ts";
 export { default as NovelApplication } from "./NovelApplication.ts";
+export { default as BookshelfApplication } from "./BookshelfApplication.ts";
+export { default as ProjectBookBindingService } from "./ProjectBookBindingService.ts";
+export { default as BookRegistryReconciler } from "./BookRegistryReconciler.ts";
+export { default as BookLifecycleService } from "./BookLifecycleService.ts";
+export { default as BookTransferService } from "./BookTransferService.ts";
+export { default as ProjectArchiveService } from "./ProjectArchiveService.ts";
+export type {
+  ProjectArchiveDto,
+  ProjectArchiveManifest,
+  ProjectArchiveRecord,
+  ProjectArchiveState,
+  RestoreProjectArchiveRequest,
+  RestoreProjectArchiveResult,
+} from "./projectArchiveContracts.ts";
 export { default as ThreadApplication } from "./ThreadApplication.ts";
+export type {
+  AvailableBookshelfBookCard,
+  BookshelfBookCard,
+  BookshelfStorageState,
+  BookshelfTrashEntry,
+  UnavailableBookshelfBookCard,
+} from "./bookshelfContracts.ts";
 export type {
   ApplicationEvent,
   ApplicationEventHandler,
