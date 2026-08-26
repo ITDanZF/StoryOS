@@ -4,6 +4,7 @@ import { openDialog, closeDialog } from "./modules/dialogs.js";
 import { renderGlobalConversation, renderSettings, renderAbout } from "./modules/workspace.js?v=2";
 import { renderBookOverview, renderPageOverview } from "./modules/book.js";
 import { agentProcessMarkup, assistantReply } from "./modules/assistant.js";
+import { addLibraryBook, renderBookshelf } from "./modules/bookshelf.js?v=1";
 
 const app = document.querySelector("#app");
 const editor = document.querySelector("#chapter-editor");
@@ -99,6 +100,7 @@ function removeStandalonePage() {
 function showStandalonePage(screen, markup) {
   previousScreen = state.screen;
   state.screen = screen;
+  document.querySelector(".bookshelf-launcher")?.classList.toggle("active", screen === "bookshelf");
   document.querySelector(".creation-workspace").hidden = true;
   setHeaderVisible(false);
   removeStandalonePage();
@@ -108,9 +110,14 @@ function showStandalonePage(screen, markup) {
 
 function showBookWorkspace() {
   state.screen = "book";
+  document.querySelector(".bookshelf-launcher")?.classList.remove("active");
   removeStandalonePage();
   setHeaderVisible(true);
   document.querySelector(".creation-workspace").hidden = false;
+}
+
+function showBookshelf() {
+  showStandalonePage("bookshelf", renderBookshelf());
 }
 
 function showBookMainView(kind = "profile") {
@@ -139,6 +146,31 @@ function showBookMainView(kind = "profile") {
 function bindStandalonePage() {
   const page = document.querySelector(".workspace > .standalone-page");
   if (!page) return;
+  if (page.classList.contains("bookshelf-page")) {
+    const search = page.querySelector("#library-search");
+    const updateResults = () => {
+      const query = search.value.trim().toLowerCase();
+      const filter = page.querySelector("[data-library-filter].active")?.dataset.libraryFilter || "all";
+      let visible = 0;
+      page.querySelectorAll("[data-library-book]").forEach((card) => {
+        const matchesQuery = !query || card.dataset.search.includes(query);
+        const matchesFilter = filter === "all" || card.dataset.status === filter;
+        card.hidden = !(matchesQuery && matchesFilter);
+        if (!card.hidden) visible += 1;
+      });
+      page.querySelector("#library-empty").hidden = visible !== 0;
+      page.querySelector("#library-grid").hidden = visible === 0;
+    };
+    search.addEventListener("input", updateResults);
+    page.querySelectorAll("[data-library-filter]").forEach((button) => button.addEventListener("click", () => {
+      page.querySelectorAll("[data-library-filter]").forEach((item) => item.classList.toggle("active", item === button));
+      updateResults();
+    }));
+    page.querySelectorAll("[data-library-view]").forEach((button) => button.addEventListener("click", () => {
+      page.querySelectorAll("[data-library-view]").forEach((item) => item.classList.toggle("active", item === button));
+      page.querySelector("#library-grid").classList.toggle("list-view", button.dataset.libraryView === "list");
+    }));
+  }
   page.querySelectorAll("[data-fill-prompt]").forEach((button) => button.addEventListener("click", () => {
     const input = page.querySelector("textarea");
     input.value = button.dataset.fillPrompt;
@@ -635,6 +667,48 @@ document.addEventListener("click", (event) => {
     createProjectConversation(activeProjectId);
   }
   if (action === "new-global-chat") createGlobalConversation();
+  if (action === "open-bookshelf") showBookshelf();
+  if (action === "continue-writing") {
+    activateProject(actionTarget.dataset.project);
+    renderChapter(projects[actionTarget.dataset.project].chapterIds[0]);
+    showBookMainView("editor");
+    showToast("已回到《长夜》第一章 · 雨夜");
+  }
+  if (action === "open-library-book") {
+    const projectId = actionTarget.dataset.project;
+    if (!projectId) showToast("新书尚未关联项目，先完成书籍资料设置");
+    else {
+      activateProject(projectId);
+      showBookMainView("profile");
+      showToast(`已打开《${projects[projectId].bookTitle}》`);
+    }
+  }
+  if (action === "new-book") {
+    openDialog({
+      title: "新建书籍",
+      description: "先创建独立书籍资产，之后可以把它关联到任意创作项目。",
+      fields: [
+        { name: "title", label: "书籍名称", placeholder: "例如：未寄出的冬天" },
+        { name: "genre", label: "作品类型", type: "select", options: ["长篇小说", "中篇小说", "短篇小说", "剧本"] }
+      ],
+      confirmLabel: "创建书籍",
+      onConfirm: ({ title, genre }) => {
+        addLibraryBook(title.trim(), genre);
+        const count = document.querySelector(".bookshelf-launcher small");
+        count.textContent = String(Number(count.textContent) + 1);
+        showBookshelf();
+        showToast(`《${title.trim()}》已加入书架`);
+      }
+    });
+  }
+  if (action === "import-book") showToast("请选择 .storyos-book 文件导入（原型演示）");
+  if (action === "library-book-menu") openDialog({
+    title: "管理书籍",
+    description: "书籍是独立资产。项目关联、导出与移入回收站不会混淆为同一个操作。",
+    fields: [{ name: "action", label: "选择操作", type: "select", options: ["查看书籍资料", "关联到项目", "导出书籍", "移入回收站"] }],
+    confirmLabel: "继续",
+    onConfirm: ({ action: selectedAction }) => showToast(`${selectedAction}（原型演示）`)
+  });
   if (action === "new-project") createProject();
   if (action === "add-volume") createVolume();
   if (action === "delete-volume") {
@@ -665,6 +739,7 @@ document.addEventListener("click", (event) => {
   if (action === "open-about") { document.querySelector("#settings-menu").hidden = true; showStandalonePage("about", renderAbout()); }
   if (action === "back-workspace") {
     if (previousScreen === "global") showStandalonePage("global", renderGlobalConversation("悬疑开场写作方法"));
+    else if (previousScreen === "bookshelf") showBookshelf();
     else showBookWorkspace();
   }
   if (action === "project-menu") { event.preventDefault(); event.stopPropagation(); openProjectActions(actionTarget.closest(".project-node")); }
@@ -712,6 +787,10 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     createGlobalConversation();
   }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" && state.screen === "bookshelf") {
+    event.preventDefault();
+    document.querySelector("#library-search")?.focus();
+  }
 });
 
 document.addEventListener("pointerdown", (event) => {
@@ -732,3 +811,4 @@ updateSidebarEmptyStates();
 renderCatalogForProject(activeProjectId);
 renderChapter("chapter-1");
 renderProjectConversationList();
+showBookshelf();
