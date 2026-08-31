@@ -1,4 +1,5 @@
 import { shell } from "electron";
+import path from "node:path";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ProjectNavigationReader from "../application/ProjectNavigationReader.ts";
 import type BookshelfApplication from "../application/BookshelfApplication.ts";
@@ -41,6 +42,7 @@ export type DesktopControllerDependencies = {
   readonly bookshelf: Pick<
     BookshelfApplication,
     | "listBooks"
+    | "createBook"
     | "listTrash"
     | "attachBookToProject"
     | "detachBookFromProject"
@@ -51,6 +53,7 @@ export type DesktopControllerDependencies = {
     | "exportBook"
     | "importBook"
     | "listProjectArchives"
+    | "listProjectArchiveSummaries"
     | "createProjectArchive"
     | "restoreProjectArchive"
   >;
@@ -163,6 +166,13 @@ export default class DesktopController {
     return this.dependencies.bookshelf.listBooks();
   }
 
+  createBookshelfBook(request: {
+    readonly title: string;
+    readonly synopsis: string;
+  }) {
+    return this.dependencies.bookshelf.createBook(request);
+  }
+
   getBookshelfTrash() {
     return this.dependencies.bookshelf.listTrash();
   }
@@ -211,13 +221,32 @@ export default class DesktopController {
     return this.dependencies.bookshelf.listProjectArchives(bookId);
   }
 
+  getBookProjectArchives(bookId: string) {
+    return this.dependencies.bookshelf.listProjectArchiveSummaries(bookId);
+  }
+
   async restoreProjectArchive(request: {
     readonly archiveId: string;
-    readonly targetPath: string;
+    readonly targetParentPath: string;
+    readonly projectName: string;
     readonly bookStrategy: "snapshot" | "current";
   }) {
+    const projectName = request.projectName.trim();
+    if (
+      !projectName ||
+      projectName === "." ||
+      projectName === ".." ||
+      projectName.includes("/") ||
+      projectName.includes("\\")
+    ) {
+      throw new Error("Project restore name must be a single folder name.");
+    }
     const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
-    const result = this.dependencies.bookshelf.restoreProjectArchive(request);
+    const result = this.dependencies.bookshelf.restoreProjectArchive({
+      archiveId: request.archiveId,
+      targetPath: path.join(request.targetParentPath, projectName),
+      bookStrategy: request.bookStrategy,
+    });
     try {
       await this.dependencies.runtime.activate(result.projectPath);
       this.dependencies.projects.switchProject(result.projectPath);

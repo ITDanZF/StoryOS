@@ -403,6 +403,7 @@ export function useAgentWorkspace() {
     if (applied && snapshot.projects.activeProjectId) {
       await loadProjectNavigation(snapshot.projects.activeProjectId);
     }
+    return snapshot;
   }, [applyWorkspaceSnapshot, beginConversationTransition, loadProjectNavigation]);
 
   const openProject = useCallback(async (projectPath: string) => {

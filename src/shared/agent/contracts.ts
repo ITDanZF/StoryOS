@@ -45,6 +45,24 @@ import type {
     NovelDto,
     VolumeDto,
 } from "../../main/agent/application/novelContracts.ts";
+import type {
+    BookshelfBookCard,
+    BookshelfTrashEntry,
+    CreateBookshelfBookRequest,
+    CreateBookshelfBookResult,
+} from "../../main/agent/application/bookshelfContracts.ts";
+import type { ImportBookResult } from "../../main/agent/application/bookTransferContracts.ts";
+import type {
+    ProjectArchiveSummary,
+    RestoreProjectArchiveResult,
+} from "../../main/agent/application/projectArchiveContracts.ts";
+
+export type RestoreProjectArchiveDesktopRequest = {
+    readonly archiveId: string;
+    readonly targetParentPath: string;
+    readonly projectName: string;
+    readonly bookStrategy: "snapshot" | "current";
+};
 
 export const AGENT_IPC_CHANNELS = Object.freeze({
     status: "agent:status",
@@ -70,6 +88,16 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     deleteConversation: "agent:conversation-delete",
     projectSnapshot: "agent:project-snapshot",
     projectNavigation: "agent:project-navigation",
+    bookshelfBooks: "agent:bookshelf-books",
+    createBookshelfBook: "agent:bookshelf-book-create",
+    importBookshelfBook: "agent:bookshelf-book-import",
+    exportBookshelfBook: "agent:bookshelf-book-export",
+    bookshelfTrash: "agent:bookshelf-trash",
+    moveBookshelfBookToTrash: "agent:bookshelf-book-trash",
+    restoreBookshelfBookFromTrash: "agent:bookshelf-book-restore",
+    permanentlyDeleteBookshelfBook: "agent:bookshelf-book-delete-permanently",
+    bookProjectArchives: "agent:bookshelf-project-archives",
+    restoreProjectArchive: "agent:bookshelf-project-archive-restore",
     bookWorkspace: "agent:book-workspace",
     createBook: "agent:book-create",
     createBookChapter: "agent:book-chapter-create",
@@ -129,6 +157,22 @@ export type AgentDesktopApi = {
     deleteConversation(request: ConversationRef): Promise<ConversationSnapshot>;
     getProjectSnapshot(): Promise<ProjectSnapshot>;
     getProjectNavigation(projectId: string): Promise<ProjectNavigationSnapshot>;
+    getBookshelfBooks(): Promise<readonly BookshelfBookCard[]>;
+    createBookshelfBook(request: CreateBookshelfBookRequest): Promise<CreateBookshelfBookResult>;
+    importBookshelfBook(request: { readonly packagePath: string }): Promise<ImportBookResult>;
+    exportBookshelfBook(request: { readonly bookId: string; readonly outputPath: string }): Promise<void>;
+    getBookshelfTrash(): Promise<readonly BookshelfTrashEntry[]>;
+    moveBookshelfBookToTrash(bookId: string): Promise<BookshelfTrashEntry>;
+    restoreBookshelfBookFromTrash(bookId: string): Promise<BookshelfBookCard>;
+    permanentlyDeleteBookshelfBook(request: {
+        readonly bookId: string;
+        readonly confirmationBookId: string;
+    }): Promise<void>;
+    getBookProjectArchives(bookId: string): Promise<readonly ProjectArchiveSummary[]>;
+    restoreProjectArchive(request: RestoreProjectArchiveDesktopRequest): Promise<{
+        readonly result: RestoreProjectArchiveResult;
+        readonly workspace: WorkspaceSnapshot;
+    }>;
     getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot>;
     createBook(request: CreateBookRequest): Promise<BookWorkspaceSnapshot>;
     createBookChapter(request: CreateBookChapterRequest): Promise<BookWorkspaceSnapshot>;
@@ -162,11 +206,15 @@ export type {
     AgentServiceStatus,
     AssistantBlockChannel,
     ApplicationEvent,
+    BookshelfBookCard,
+    BookshelfTrashEntry,
     BookChapterRevisionResult,
     BookWorkspaceChapterDto,
     BookWorkspaceSnapshot,
     ChapterGenerationMode,
     CreateBookRequest,
+    CreateBookshelfBookRequest,
+    CreateBookshelfBookResult,
     ConversationApplicationEvent,
     ConversationEvent,
     ConversationEventType,
@@ -180,15 +228,18 @@ export type {
     DeleteBookChapterRequest,
     DeleteBookVolumeRequest,
     MessageDto,
+    ImportBookResult,
     NovelDto,
     CreateProjectRequest,
     ProjectDto,
     ProjectSnapshot,
     ProjectNavigationSnapshot,
+    ProjectArchiveSummary,
     ReadyBookWorkspaceSnapshot,
     RenameProjectRequest,
     RendererEditorToolRequest,
     RendererEditorToolResponse,
+    RestoreProjectArchiveResult,
     RunSnapshot,
     SaveBookChapterContentRequest,
     SendConversationMessageRequest,

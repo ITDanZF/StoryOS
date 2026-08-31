@@ -6,11 +6,16 @@ import {
   rmSync,
 } from "node:fs";
 import type BookRuntimeManager from "../runtime/BookRuntimeManager.ts";
+import NovelApplication from "./NovelApplication.ts";
 import {
   getBookDeletionRoot,
   getBookLayout,
 } from "../storage/book/BookLayout.ts";
-import type { BookRecord, BookRegistry } from "./bookRegistryPorts.ts";
+import type {
+  BookRecord,
+  BookRegistry,
+  BookTrashRecord,
+} from "./bookRegistryPorts.ts";
 
 function samePath(first: string, second: string): boolean {
   const left = path.resolve(first);
@@ -40,15 +45,27 @@ export default class BookLifecycleService {
     private readonly runtimes: BookRuntimeManager,
   ) {}
 
-  moveToTrash(bookId: string): BookRecord {
+  moveToTrash(bookId: string): BookTrashRecord {
     const book = this.requireBook(bookId);
-    if (book.state === "trashed") return book;
-    if (book.state === "importing") {
-      throw new Error(`Importing books cannot be trashed: ${bookId}`);
+    if (book.state !== "available") {
+      throw new Error(`Only available books can be trashed: ${bookId}`);
     }
     this.requireUnlinked(bookId);
     this.runtimes.closeBook(bookId);
-    return this.books.updateStorageState(bookId, "trashed");
+    const lease = this.runtimes.acquire(bookId);
+    let title: string;
+    try {
+      const novel = new NovelApplication(lease.persistence).getProjectBook();
+      if (!novel) throw new Error(`Book contains no novel record: ${bookId}`);
+      title = novel.title;
+    } finally {
+      lease.close();
+    }
+    return this.books.moveBookToTrash({
+      bookId,
+      title,
+      trashedAt: new Date(),
+    });
   }
 
   restoreFromTrash(bookId: string): BookRecord {
@@ -58,7 +75,7 @@ export default class BookLifecycleService {
     }
     this.runtimes.closeBook(bookId);
     const health = this.runtimes.inspectStorage(bookId);
-    return this.books.updateStorageState(bookId, health.state);
+    return this.books.restoreBookFromTrash(bookId, health.state);
   }
 
   permanentlyDelete(input: {
@@ -69,8 +86,8 @@ export default class BookLifecycleService {
       throw new Error("Permanent book deletion requires the exact book id.");
     }
     const book = this.requireBook(input.bookId);
-    if (book.state === "importing") {
-      throw new Error(`Importing books cannot be deleted: ${book.id}`);
+    if (book.state !== "trashed") {
+      throw new Error(`Only trashed books can be permanently deleted: ${book.id}`);
     }
     this.requireUnlinked(book.id);
     this.runtimes.closeBook(book.id);

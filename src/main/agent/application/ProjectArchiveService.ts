@@ -31,6 +31,7 @@ import {
   type ProjectArchiveDto,
   type ProjectArchiveManifest,
   type ProjectArchiveRecord,
+  type ProjectArchiveSummary,
   type RestoreProjectArchiveRequest,
   type RestoreProjectArchiveResult,
 } from "./projectArchiveContracts.ts";
@@ -89,6 +90,64 @@ export default class ProjectArchiveService {
     readonly sourceProjectId?: string;
   } = {}): readonly ProjectArchiveDto[] {
     return Object.freeze(this.archives.list(input).map(toDto));
+  }
+
+  listSummaries(bookId: string): readonly ProjectArchiveSummary[] {
+    return Object.freeze(this.archives.list({ bookId }).map((record) => {
+      let manifest: ProjectArchiveManifest | null = null;
+      let state = record.state;
+      if (record.state !== "creating") {
+        try {
+          const layout = getPublishedProjectArchiveLayout(this.agentHome, record.id);
+          if (path.resolve(record.archivePath) !== layout.rootPath) {
+            throw new Error(`Project archive path is invalid: ${record.archivePath}`);
+          }
+          const verified = validateProjectArchive(layout);
+          if (
+            verified.manifest.archiveId !== record.id ||
+            verified.manifest.project.id !== record.sourceProjectId ||
+            (verified.manifest.book?.sourceBookId ?? null) !== record.bookId ||
+            verified.manifestHash !== record.manifestHash
+          ) {
+            throw new Error(`Project archive registration does not match: ${record.id}`);
+          }
+          manifest = verified.manifest;
+        } catch {
+          state = "corrupted";
+        }
+      }
+
+      const strategies: Array<"snapshot" | "current"> = [];
+      if (state === "available" && manifest?.book) {
+        strategies.push("snapshot");
+        const currentBook = this.books.getBookById(manifest.book.sourceBookId);
+        if (
+          currentBook?.state === "available" &&
+          this.books.listProjectIdsForBook(currentBook.id).length === 0
+        ) {
+          try {
+            if (this.bookRuntimes.inspectStorage(currentBook.id).state === "available") {
+              strategies.push("current");
+            }
+          } catch {
+            // A failed health inspection means the current-book strategy is unavailable.
+          }
+        }
+      }
+
+      return Object.freeze({
+        archiveId: record.id,
+        sourceProjectId: record.sourceProjectId,
+        projectName: manifest?.project.name ?? null,
+        originalProjectPath: manifest?.project.originalPath ?? null,
+        bookId: record.bookId,
+        state,
+        containsBookSnapshot: record.bookId !== null,
+        availableBookStrategies: Object.freeze(strategies),
+        createdAt: record.createdAt.toISOString(),
+        restoredAt: record.restoredAt?.toISOString() ?? null,
+      });
+    }));
   }
 
   async createForProjectDeletion(projectId: string): Promise<ProjectArchiveDto> {

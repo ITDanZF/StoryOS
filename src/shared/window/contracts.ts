@@ -1,6 +1,8 @@
 export const WINDOW_IPC_CHANNELS = Object.freeze({
     getState: 'window:get-state',
     pickDirectory: 'window:pick-directory',
+    pickFile: 'window:pick-file',
+    saveFile: 'window:save-file',
     minimize: 'window:minimize',
     toggleMaximize: 'window:toggle-maximize',
     close: 'window:close',
@@ -17,9 +19,24 @@ export type PickDirectoryRequest = {
     readonly defaultPath?: string;
 };
 
+export type FileDialogFilter = {
+    readonly name: string;
+    readonly extensions: readonly string[];
+};
+
+export type PickFileRequest = {
+    readonly title: string;
+    readonly defaultPath?: string;
+    readonly filters?: readonly FileDialogFilter[];
+};
+
+export type SaveFileRequest = PickFileRequest;
+
 export type WindowDesktopApi = {
     getState(): Promise<WindowState>;
     pickDirectory(request?: PickDirectoryRequest): Promise<string | null>;
+    pickFile(request: PickFileRequest): Promise<string | null>;
+    saveFile(request: SaveFileRequest): Promise<string | null>;
     minimize(): Promise<void>;
     toggleMaximize(): Promise<WindowState>;
     close(): void;

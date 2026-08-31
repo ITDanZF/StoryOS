@@ -16,10 +16,20 @@ export type BookRecord = {
 
 export type BookDeletionCleanupState = "pending" | "completed" | "failed";
 
+export type BookTrashRecord = {
+  readonly bookId: string;
+  readonly title: string;
+  readonly trashedAt: Date;
+};
+
 export interface BookRegistry {
   registerBookForProject(input: {
     readonly id: string;
     readonly projectId: string;
+    readonly storagePath: string;
+  }): BookRecord;
+  registerStandaloneBook(input: {
+    readonly id: string;
     readonly storagePath: string;
   }): BookRecord;
   registerImportedBook(input: {
@@ -36,6 +46,16 @@ export interface BookRegistry {
   }): void;
   detachBook(projectId: string): void;
   updateStorageState(bookId: string, state: BookStorageState): BookRecord;
+  listTrash(): readonly BookTrashRecord[];
+  moveBookToTrash(input: {
+    readonly bookId: string;
+    readonly title: string;
+    readonly trashedAt: Date;
+  }): BookTrashRecord;
+  restoreBookFromTrash(
+    bookId: string,
+    state: "available" | "missing" | "corrupted",
+  ): BookRecord;
   touchOpened(bookId: string): BookRecord;
   deleteBookRegistration(input: {
     readonly bookId: string;

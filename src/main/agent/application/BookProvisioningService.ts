@@ -19,6 +19,18 @@ export type ProvisionedProjectBook = {
   readonly lease: BookRuntimeLease;
 };
 
+export type ProvisionedStandaloneBook = {
+  readonly operationId: string;
+  readonly bookId: string;
+  readonly novel: NovelRecord;
+};
+
+type ProvisionedBookStorage = {
+  readonly operationId: string;
+  readonly bookId: string;
+  readonly novel: NovelRecord;
+};
+
 export type BookProvisioningStage =
   | "preparing"
   | "database_created"
@@ -60,6 +72,33 @@ export default class BookProvisioningService {
       throw new Error(`Project already has a book: ${projectId}`);
     }
 
+    const provisioned = this.provision(input, projectId);
+    try {
+      const lease = this.runtimes.acquire(provisioned.bookId);
+      return Object.freeze({
+        ...provisioned,
+        lease,
+      });
+    } catch (error) {
+      throw new BookProvisioningError(
+        provisioned.operationId,
+        "registered",
+        "registered_for_recovery",
+        error,
+      );
+    }
+  }
+
+  createStandalone(
+    input: Omit<NovelRecord, "createdAt" | "updatedAt">,
+  ): ProvisionedStandaloneBook {
+    return this.provision(input, null);
+  }
+
+  private provision(
+    input: Omit<NovelRecord, "createdAt" | "updatedAt">,
+    projectId: string | null,
+  ): ProvisionedBookStorage {
     const operationId = `create_${crypto.randomUUID()}`;
     const bookId = `book_${crypto.randomUUID()}`;
     const creationRoot = getBookCreationRoot(this.agentHome);
@@ -91,20 +130,24 @@ export default class BookProvisioningService {
       renameSync(temporaryRoot, finalLayout.rootPath);
       movedToFinalLocation = true;
       stage = "published";
-      this.books.registerBookForProject({
-        id: bookId,
-        projectId,
-        storagePath: finalLayout.rootPath,
-      });
+      if (projectId) {
+        this.books.registerBookForProject({
+          id: bookId,
+          projectId,
+          storagePath: finalLayout.rootPath,
+        });
+      } else {
+        this.books.registerStandaloneBook({
+          id: bookId,
+          storagePath: finalLayout.rootPath,
+        });
+      }
       registered = true;
       stage = "registered";
-      const lease = this.runtimes.acquire(bookId);
-      stage = "opened";
       return Object.freeze({
         operationId,
         bookId,
         novel,
-        lease,
       });
     } catch (error) {
       if (registered) {

@@ -2,6 +2,7 @@
 
 > 状态：Stage 0～5 后端能力已实施；书架页面接入仍按产品阶段另行完成
 > 前置文档：`docs/todo/book-storage-architecture-refactor.md`  
+> 第一版页面实施：`docs/todo/bookshelf-v1-implementation.md`
 > 适用基线：ApplicationDatabase、ProjectDatabase、BookDatabase 三库边界已经落地  
 > 当前范围：A 类全局架构闸门，以及关联、导入导出、恢复、删除生命周期相关的 B 类局部闸门  
 > 明确排除：Three.js、封面资源、事件图、人物关系，以及全部 C 类优化

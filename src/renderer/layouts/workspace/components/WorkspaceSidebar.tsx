@@ -11,7 +11,9 @@ import type {
 } from "../../../../shared/agent/contracts.ts";
 import { cn } from "../../../../lib/utils.ts";
 import StoryLogo from "../../../components/StoryLogo.tsx";
-import CreateProjectDialog from "./CreateProjectDialog.tsx";
+import CreateProjectDialog, {
+  type CreateProjectDialogValue,
+} from "../../../features/project/components/CreateProjectDialog.tsx";
 import ProjectConversationTree from "./ProjectConversationTree.tsx";
 import RenameProjectDialog from "./RenameProjectDialog.tsx";
 import SettingsLauncher, { type SettingsPage } from "./SettingsLauncher.tsx";
@@ -82,8 +84,17 @@ export default function WorkspaceSidebar({
     return () => document.removeEventListener("pointerdown", closeProjectMenu);
   }, [projectMenuOpen]);
 
-  const createProject = async (name: string, parentPath: string) => {
-    await onCreateProject({ name, parentPath, createAgentsFile: false });
+  const createProject = async ({
+    name,
+    parentPath,
+    bookId,
+  }: CreateProjectDialogValue) => {
+    await onCreateProject({
+      name,
+      parentPath,
+      createAgentsFile: false,
+      ...(bookId ? { bookId } : {}),
+    });
     setCreateProjectOpen(false);
     onClose();
   };
@@ -149,7 +160,7 @@ export default function WorkspaceSidebar({
           </div>
           {projectMenuOpen && (
             <div className="absolute left-2 right-2 top-10 z-50 w-auto rounded-xl border border-neutral-200 bg-white p-1 text-neutral-800 shadow-[0_12px_32px_rgba(0,0,0,0.13)] sm:left-auto sm:right-0 sm:w-max sm:min-w-[184px] lg:left-[calc(100%-1.5rem)] lg:right-auto">
-              <button className="group flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-left text-xs transition hover:bg-neutral-200" type="button" onClick={() => { setProjectMenuOpen(false); setCreateProjectOpen(true); }}><Plus size={16} className="text-neutral-500 group-hover:text-neutral-800" /><span className="whitespace-nowrap">新建空白项目</span></button>
+              <button className="group flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-left text-xs transition hover:bg-neutral-200" type="button" onClick={() => { setProjectMenuOpen(false); setCreateProjectOpen(true); }}><Plus size={16} className="text-neutral-500 group-hover:text-neutral-800" /><span className="whitespace-nowrap">新建项目</span></button>
               <button className="group flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-left text-xs transition hover:bg-neutral-200" type="button" onClick={() => void openProject()}><FolderOpen size={16} className="text-neutral-500 group-hover:text-neutral-800" /><span className="whitespace-nowrap">使用现有文件夹</span></button>
             </div>
           )}
@@ -178,7 +189,7 @@ export default function WorkspaceSidebar({
 
         <SettingsLauncher onSelect={onOpenSettings} />
       </aside>
-      {createProjectOpen && projects && <CreateProjectDialog defaultParentPath={projects.creationDefaults.parentPath} onClose={() => setCreateProjectOpen(false)} onCreate={createProject} />}
+      {createProjectOpen && projects && <CreateProjectDialog allowBookshelfImport defaultParentPath={projects.creationDefaults.parentPath} onClose={() => setCreateProjectOpen(false)} onCreate={createProject} />}
       {renameTarget && <RenameProjectDialog projectName={renameTarget.name} onClose={() => setRenameTarget(null)} onRename={(name) => onRenameProject({ projectPath: renameTarget.path, name })} />}
     </>
   );

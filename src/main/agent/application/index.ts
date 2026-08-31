@@ -9,8 +9,10 @@ export { default as ProjectArchiveService } from "./ProjectArchiveService.ts";
 export type {
   ProjectArchiveDto,
   ProjectArchiveManifest,
+  ProjectArchiveBookStrategy,
   ProjectArchiveRecord,
   ProjectArchiveState,
+  ProjectArchiveSummary,
   RestoreProjectArchiveRequest,
   RestoreProjectArchiveResult,
 } from "./projectArchiveContracts.ts";
@@ -20,8 +22,11 @@ export type {
   BookshelfBookCard,
   BookshelfStorageState,
   BookshelfTrashEntry,
+  CreateBookshelfBookRequest,
+  CreateBookshelfBookResult,
   UnavailableBookshelfBookCard,
 } from "./bookshelfContracts.ts";
+export type { BookTrashRecord } from "./bookRegistryPorts.ts";
 export type {
   ApplicationEvent,
   ApplicationEventHandler,

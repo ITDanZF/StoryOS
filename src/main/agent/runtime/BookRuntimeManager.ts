@@ -90,12 +90,6 @@ export default class BookRuntimeManager {
         persistence: new SqliteNovelStore(database.handle),
         referenceCount: 0,
       };
-      try {
-        this.registry.touchOpened(book.id);
-      } catch (error) {
-        database.close();
-        throw error;
-      }
       this.runtimes.set(book.id, runtime);
     }
     const acquiredRuntime = runtime;

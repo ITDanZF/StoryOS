@@ -188,6 +188,22 @@ const migrations: readonly SqliteMigration[] = [
       `);
     },
   },
+  {
+    version: 6,
+    up(database) {
+      database.exec(`
+        CREATE TABLE book_trash_entries (
+          book_id TEXT PRIMARY KEY
+            REFERENCES books(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          trashed_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX idx_book_trash_entries_trashed_at
+          ON book_trash_entries(trashed_at DESC);
+      `);
+    },
+  },
 ];
 
 export default class ApplicationDatabase extends SqliteDatabase {

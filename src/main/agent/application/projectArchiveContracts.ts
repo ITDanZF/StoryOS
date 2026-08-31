@@ -52,10 +52,25 @@ export type ProjectArchiveDto = Omit<
   readonly restoredAt: string | null;
 };
 
+export type ProjectArchiveBookStrategy = "snapshot" | "current";
+
+export type ProjectArchiveSummary = {
+  readonly archiveId: string;
+  readonly sourceProjectId: string;
+  readonly projectName: string | null;
+  readonly originalProjectPath: string | null;
+  readonly bookId: string | null;
+  readonly state: ProjectArchiveState;
+  readonly containsBookSnapshot: boolean;
+  readonly availableBookStrategies: readonly ProjectArchiveBookStrategy[];
+  readonly createdAt: string;
+  readonly restoredAt: string | null;
+};
+
 export type RestoreProjectArchiveRequest = {
   readonly archiveId: string;
   readonly targetPath: string;
-  readonly bookStrategy: "snapshot" | "current";
+  readonly bookStrategy: ProjectArchiveBookStrategy;
 };
 
 export type RestoreProjectArchiveResult = {
@@ -63,7 +78,7 @@ export type RestoreProjectArchiveResult = {
   readonly projectId: string;
   readonly projectPath: string;
   readonly bookId: string | null;
-  readonly bookStrategy: "snapshot" | "current";
+  readonly bookStrategy: ProjectArchiveBookStrategy;
 };
 
 export type ProjectArchiveOperationState =
@@ -77,7 +92,7 @@ export type ProjectArchiveOperationRecord = {
   readonly id: string;
   readonly archiveId: string;
   readonly targetPath: string;
-  readonly bookStrategy: "snapshot" | "current";
+  readonly bookStrategy: ProjectArchiveBookStrategy;
   readonly restoredBookId: string | null;
   readonly state: ProjectArchiveOperationState;
   readonly errorMessage: string | null;

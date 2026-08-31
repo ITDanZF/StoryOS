@@ -25,6 +25,7 @@ export default class ProjectBookNovelStore implements NovelPersistence {
     if (book.state !== "available") {
       throw new Error(`Project book storage is unavailable: ${book.id}`);
     }
+    registry.touchOpened(book.id);
     this.bind(runtimes.acquire(book.id));
   }
 

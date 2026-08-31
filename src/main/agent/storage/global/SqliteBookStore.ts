@@ -4,6 +4,7 @@ import type {
   BookRecord,
   BookRegistry,
   BookStorageState,
+  BookTrashRecord,
 } from "../../application/bookRegistryPorts.ts";
 
 type BookRow = {
@@ -13,6 +14,13 @@ type BookRow = {
   readonly created_at: number;
   readonly updated_at: number;
   readonly last_opened_at: number | null;
+};
+
+type BookTrashRow = {
+  readonly book_id: string;
+  readonly title: string | null;
+  readonly trashed_at: number | null;
+  readonly updated_at: number;
 };
 
 function storagePathKey(storagePath: string): string {
@@ -69,6 +77,27 @@ export default class SqliteBookStore implements BookRegistry {
         id, storage_path, path_key, state,
         created_at, updated_at, last_opened_at
       ) VALUES (?, ?, ?, 'importing', ?, ?, NULL)
+    `).run(
+      input.id,
+      storagePath,
+      storagePathKey(storagePath),
+      now,
+      now,
+    );
+    return this.requireBook(input.id);
+  }
+
+  registerStandaloneBook(input: {
+    readonly id: string;
+    readonly storagePath: string;
+  }): BookRecord {
+    const storagePath = path.resolve(input.storagePath);
+    const now = Date.now();
+    this.database.prepare(`
+      INSERT INTO books(
+        id, storage_path, path_key, state,
+        created_at, updated_at, last_opened_at
+      ) VALUES (?, ?, ?, 'available', ?, ?, NULL)
     `).run(
       input.id,
       storagePath,
@@ -158,6 +187,84 @@ export default class SqliteBookStore implements BookRegistry {
     `).run(state, Date.now(), bookId);
     if (result.changes !== 1) throw new Error(`Book not found: ${bookId}`);
     return this.requireBook(bookId);
+  }
+
+  listTrash(): readonly BookTrashRecord[] {
+    const rows = this.database.prepare(`
+      SELECT
+        books.id AS book_id,
+        book_trash_entries.title,
+        book_trash_entries.trashed_at,
+        books.updated_at
+      FROM books
+      LEFT JOIN book_trash_entries
+        ON book_trash_entries.book_id = books.id
+      WHERE books.state = 'trashed'
+      ORDER BY COALESCE(book_trash_entries.trashed_at, books.updated_at) DESC,
+        books.id ASC
+    `).all() as BookTrashRow[];
+    return Object.freeze(rows.map((row) => Object.freeze({
+      bookId: row.book_id,
+      title: row.title ?? row.book_id,
+      trashedAt: new Date(row.trashed_at ?? row.updated_at),
+    })));
+  }
+
+  moveBookToTrash(input: {
+    readonly bookId: string;
+    readonly title: string;
+    readonly trashedAt: Date;
+  }): BookTrashRecord {
+    const title = input.title.trim();
+    if (!title) throw new Error("Book trash title is required.");
+    return this.database.transaction(() => {
+      const book = this.requireBook(input.bookId);
+      if (book.state !== "available") {
+        throw new Error(`Only available books can be trashed: ${input.bookId}`);
+      }
+      const linkedProject = this.database.prepare(
+        "SELECT project_id FROM project_books WHERE book_id = ?",
+      ).get(input.bookId) as { readonly project_id: string } | undefined;
+      if (linkedProject) {
+        throw new Error(`Book is still attached to a project: ${input.bookId}`);
+      }
+      const trashedAt = input.trashedAt.getTime();
+      this.database.prepare(`
+        INSERT INTO book_trash_entries(book_id, title, trashed_at)
+        VALUES (?, ?, ?)
+      `).run(input.bookId, title, trashedAt);
+      this.database.prepare(`
+        UPDATE books
+        SET state = 'trashed', updated_at = ?
+        WHERE id = ?
+      `).run(trashedAt, input.bookId);
+      return Object.freeze({
+        bookId: input.bookId,
+        title,
+        trashedAt: new Date(trashedAt),
+      });
+    })();
+  }
+
+  restoreBookFromTrash(
+    bookId: string,
+    state: "available" | "missing" | "corrupted",
+  ): BookRecord {
+    return this.database.transaction(() => {
+      const book = this.requireBook(bookId);
+      if (book.state !== "trashed") {
+        throw new Error(`Book is not in the bookshelf trash: ${bookId}`);
+      }
+      this.database.prepare(
+        "DELETE FROM book_trash_entries WHERE book_id = ?",
+      ).run(bookId);
+      this.database.prepare(`
+        UPDATE books
+        SET state = ?, updated_at = ?
+        WHERE id = ?
+      `).run(state, Date.now(), bookId);
+      return this.requireBook(bookId);
+    })();
   }
 
   touchOpened(bookId: string): BookRecord {

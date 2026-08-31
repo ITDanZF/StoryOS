@@ -5,6 +5,7 @@ import type BookRegistryReconciler from "./BookRegistryReconciler.ts";
 import type BookLifecycleService from "./BookLifecycleService.ts";
 import type BookTransferService from "./BookTransferService.ts";
 import type ProjectArchiveService from "./ProjectArchiveService.ts";
+import type BookProvisioningService from "./BookProvisioningService.ts";
 import type { BookRegistry } from "./bookRegistryPorts.ts";
 import type { BookReconciliationResult } from "./BookRegistryReconciler.ts";
 import type {
@@ -15,6 +16,8 @@ import type {
 import type {
   BookshelfBookCard,
   BookshelfTrashEntry,
+  CreateBookshelfBookRequest,
+  CreateBookshelfBookResult,
 } from "./bookshelfContracts.ts";
 import type {
   RestoreProjectArchiveRequest,
@@ -29,6 +32,7 @@ export default class BookshelfApplication {
     private readonly lifecycle: BookLifecycleService,
     private readonly transfer: BookTransferService,
     private readonly projectArchives: ProjectArchiveService,
+    private readonly provisioning: BookProvisioningService,
   ) {
     this.catalog = new BookCatalogReader(runtimes);
   }
@@ -39,28 +43,62 @@ export default class BookshelfApplication {
     return Object.freeze(this.books.listBooks()
       .filter((book) => book.state !== "trashed")
       .map((book) => {
-      const linkedProjectCount = this.books.listProjectIdsForBook(book.id).length;
+      const linkedProjectIds = this.books.listProjectIdsForBook(book.id);
       try {
-        return this.catalog.read(book, linkedProjectCount);
+        return this.catalog.read(book, linkedProjectIds);
       } catch (error) {
         return Object.freeze({
           availability: "unavailable",
           bookId: book.id,
           storageState: "corrupted",
-          linkedProjectCount,
+          linkedProjectId: linkedProjectIds[0] ?? null,
+          linkedProjectCount: linkedProjectIds.length,
+          lastOpenedAt: book.lastOpenedAt?.toISOString() ?? null,
           reason: error instanceof Error ? error.message : String(error),
         });
       }
       }));
   }
 
+  createBook(
+    request: CreateBookshelfBookRequest,
+  ): CreateBookshelfBookResult {
+    const title = request.title.trim();
+    if (!title) throw new Error("Book title is required.");
+    if (title.length > 200) {
+      throw new Error("Book title must be 200 characters or fewer.");
+    }
+    const synopsis = request.synopsis.trim();
+    if (synopsis.length > 20_000) {
+      throw new Error("Book synopsis must be 20000 characters or fewer.");
+    }
+    const provisioned = this.provisioning.createStandalone({
+      id: `novel_${crypto.randomUUID()}`,
+      title,
+      synopsis,
+      status: "planning",
+    });
+    const registered = this.books.getBookById(provisioned.bookId);
+    if (!registered) {
+      throw new Error(`Provisioned book was not registered: ${provisioned.bookId}`);
+    }
+    const card = this.catalog.read(registered, []);
+    if (card.availability !== "ready") {
+      throw new Error(`Provisioned book is unavailable: ${provisioned.bookId}`);
+    }
+    return Object.freeze({
+      bookId: provisioned.bookId,
+      book: card,
+    });
+  }
+
   listTrash(): readonly BookshelfTrashEntry[] {
-    return Object.freeze(this.books.listBooks()
-      .filter((book) => book.state === "trashed")
+    return Object.freeze(this.books.listTrash()
       .map((book) => Object.freeze({
-        bookId: book.id,
+        bookId: book.bookId,
+        title: book.title,
         storageState: "trashed" as const,
-        trashedAt: book.updatedAt.toISOString(),
+        trashedAt: book.trashedAt.toISOString(),
       })));
   }
 
@@ -76,12 +114,19 @@ export default class BookshelfApplication {
     return this.reconciler.reconcile();
   }
 
-  moveBookToTrash(bookId: string): void {
-    this.lifecycle.moveToTrash(bookId);
+  moveBookToTrash(bookId: string): BookshelfTrashEntry {
+    const entry = this.lifecycle.moveToTrash(bookId);
+    return Object.freeze({
+      bookId: entry.bookId,
+      title: entry.title,
+      storageState: "trashed",
+      trashedAt: entry.trashedAt.toISOString(),
+    });
   }
 
-  restoreBookFromTrash(bookId: string): void {
-    this.lifecycle.restoreFromTrash(bookId);
+  restoreBookFromTrash(bookId: string): BookshelfBookCard {
+    const book = this.lifecycle.restoreFromTrash(bookId);
+    return this.catalog.read(book, this.books.listProjectIdsForBook(bookId));
   }
 
   permanentlyDeleteBook(input: {
@@ -101,6 +146,10 @@ export default class BookshelfApplication {
 
   listProjectArchives(bookId?: string) {
     return this.projectArchives.list(bookId ? { bookId } : {});
+  }
+
+  listProjectArchiveSummaries(bookId: string) {
+    return this.projectArchives.listSummaries(bookId);
   }
 
   createProjectArchive(projectId: string) {

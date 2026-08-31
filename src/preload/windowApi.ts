@@ -5,6 +5,8 @@ import type { WindowDesktopApi, WindowState } from '../shared/window/contracts.t
 const windowApi: WindowDesktopApi = {
     getState: () => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.getState),
     pickDirectory: (request) => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.pickDirectory, request),
+    pickFile: (request) => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.pickFile, request),
+    saveFile: (request) => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.saveFile, request),
     minimize: () => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.minimize),
     toggleMaximize: () => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.toggleMaximize),
     close: () => ipcRenderer.send(WINDOW_IPC_CHANNELS.close),

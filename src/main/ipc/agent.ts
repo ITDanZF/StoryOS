@@ -24,12 +24,23 @@ import type {
 import type { NovelStatus } from "../agent/application/novelPorts.ts";
 import type RendererEditorToolBridge from "../agent/electron/RendererEditorToolBridge.ts";
 import type { RendererEditorToolResponse } from "../agent/tools/editor/contracts.ts";
+import type { CreateBookshelfBookRequest } from "../agent/application/bookshelfContracts.ts";
+import type { RestoreProjectArchiveDesktopRequest } from "../../shared/agent/contracts.ts";
 
 function requireApprovalDecision(decision: ToolApprovalDecision): ToolApprovalDecision {
     if (!["allow_once", "allow_session", "deny"].includes(decision)) {
         throw new Error("Invalid tool approval decision.");
     }
     return decision;
+}
+
+function requireProjectArchiveBookStrategy(
+    value: unknown,
+): RestoreProjectArchiveDesktopRequest["bookStrategy"] {
+    if (value !== "snapshot" && value !== "current") {
+        throw new Error("Invalid project archive book strategy.");
+    }
+    return value;
 }
 
 function requireConversationScope(scope: ConversationScope): ConversationScope {
@@ -113,6 +124,18 @@ function requireConversationTurnContext(
 function requireString(value: unknown, label: string): string {
     if (typeof value !== "string") throw new Error(`${label} must be a string.`);
     return value;
+}
+
+function requireBoundedString(
+    value: unknown,
+    label: string,
+    maximumLength: number,
+): string {
+    const result = requireString(value, label);
+    if (result.length > maximumLength) {
+        throw new Error(`${label} must be ${maximumLength} characters or fewer.`);
+    }
+    return result;
 }
 
 function requireNonNegativeInteger(value: unknown, label: string): number {
@@ -205,6 +228,59 @@ export function registerAgentIpc(
         service.requireController().getProjectNavigation(
             requireText(projectId, "Project id"),
         ));
+    handle(AGENT_IPC_CHANNELS.bookshelfBooks, () =>
+        service.requireController().getBookshelfBooks());
+    handle(AGENT_IPC_CHANNELS.createBookshelfBook, (
+        request: CreateBookshelfBookRequest,
+    ) => service.requireController().createBookshelfBook({
+        title: requireText(request?.title, "Book title"),
+        synopsis: requireBoundedString(request?.synopsis, "Book synopsis", 20_000),
+    }));
+    handle(AGENT_IPC_CHANNELS.importBookshelfBook, (
+        request: { readonly packagePath: string },
+    ) => service.requireController().importBookshelfBook({
+        packagePath: requireText(request?.packagePath, "Book package path"),
+    }));
+    handle(AGENT_IPC_CHANNELS.exportBookshelfBook, (
+        request: { readonly bookId: string; readonly outputPath: string },
+    ) => service.requireController().exportBookshelfBook({
+        bookId: requireText(request?.bookId, "Book id"),
+        outputPath: requireText(request?.outputPath, "Book export path"),
+    }));
+    handle(AGENT_IPC_CHANNELS.bookshelfTrash, () =>
+        service.requireController().getBookshelfTrash());
+    handle(AGENT_IPC_CHANNELS.moveBookshelfBookToTrash, (bookId: string) =>
+        service.requireController().moveBookshelfBookToTrash(
+            requireText(bookId, "Book id"),
+        ));
+    handle(AGENT_IPC_CHANNELS.restoreBookshelfBookFromTrash, (bookId: string) =>
+        service.requireController().restoreBookshelfBookFromTrash(
+            requireText(bookId, "Book id"),
+        ));
+    handle(AGENT_IPC_CHANNELS.permanentlyDeleteBookshelfBook, (
+        request: { readonly bookId: string; readonly confirmationBookId: string },
+    ) => service.requireController().permanentlyDeleteBookshelfBook({
+        bookId: requireText(request?.bookId, "Book id"),
+        confirmationBookId: requireText(
+            request?.confirmationBookId,
+            "Book deletion confirmation id",
+        ),
+    }));
+    handle(AGENT_IPC_CHANNELS.bookProjectArchives, (bookId: string) =>
+        service.requireController().getBookProjectArchives(
+            requireText(bookId, "Book id"),
+        ));
+    handle(AGENT_IPC_CHANNELS.restoreProjectArchive, (
+        request: RestoreProjectArchiveDesktopRequest,
+    ) => service.requireController().restoreProjectArchive({
+        archiveId: requireText(request?.archiveId, "Project archive id"),
+        targetParentPath: requireText(
+            request?.targetParentPath,
+            "Project restore parent path",
+        ),
+        projectName: requireText(request?.projectName, "Project restore name"),
+        bookStrategy: requireProjectArchiveBookStrategy(request?.bookStrategy),
+    }));
     handle(AGENT_IPC_CHANNELS.bookWorkspace, (projectId: string) =>
         service.requireController().getBookWorkspace(
             requireText(projectId, "Project id"),

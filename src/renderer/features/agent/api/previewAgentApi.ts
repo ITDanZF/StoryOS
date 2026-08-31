@@ -1,6 +1,7 @@
 import type {
   AgentDesktopApi,
   ApplicationEvent,
+  BookshelfBookCard,
   BookWorkspaceChapterDto,
   BookWorkspaceSnapshot,
   ReadyBookWorkspaceSnapshot,
@@ -37,6 +38,13 @@ if (previewEnabled && !window.storyOSAgent) {
   let activeProjectId: string | null = null;
   let projects: ProjectDto[] = [];
   const bookWorkspaces = new Map<string, BookWorkspaceSnapshot>();
+  const standaloneBooks = new Map<string, ReadyBookWorkspaceSnapshot>();
+  const trashedBooks = new Map<string, {
+    readonly title: string;
+    readonly trashedAt: string;
+    readonly workspace: ReadyBookWorkspaceSnapshot;
+  }>();
+  const projectBookIds = new Map<string, string>();
   const threadsByScope = new Map<string, ThreadDto[]>();
   const activeThreads = new Map<string, string>();
   const messages = new Map<string, MessageDto[]>();
@@ -72,6 +80,48 @@ if (previewEnabled && !window.storyOSAgent) {
     };
   };
   const workspaceSnapshot = () => ({ projects: projectSnapshot(), threads: threadSnapshot() });
+  const bookshelfCards = (): readonly BookshelfBookCard[] => {
+    const linkedBookIds = new Set(projectBookIds.values());
+    const entries: Array<{
+      readonly bookId: string;
+      readonly projectId: string | null;
+      readonly workspace: ReadyBookWorkspaceSnapshot;
+    }> = [
+      ...Array.from(projectBookIds.entries()).flatMap(([projectId, bookId]) => {
+        const workspace = bookWorkspaces.get(projectId);
+        return workspace?.state === "ready"
+          ? [{ bookId, projectId, workspace }]
+          : [];
+      }),
+      ...Array.from(standaloneBooks.entries()).flatMap(([bookId, workspace]) =>
+        linkedBookIds.has(bookId)
+          ? []
+          : [{ bookId, projectId: null as string | null, workspace }]),
+    ];
+    return entries.map(({ bookId, projectId, workspace }) => ({
+      availability: "ready" as const,
+      bookId,
+      title: workspace.book.title,
+      synopsis: workspace.book.synopsis,
+      status: workspace.book.status,
+      storageState: "available" as const,
+      volumeCount: workspace.volumes.length,
+      chapterCount: workspace.chapters.length,
+      characterCount: workspace.chapters.reduce(
+        (total, chapter) => total + chapter.characterCount,
+        0,
+      ),
+      linkedProjectId: projectId,
+      linkedProjectCount: projectId ? 1 : 0,
+      updatedAt: workspace.chapters.reduce(
+        (latest, chapter) => chapter.updatedAt > latest ? chapter.updatedAt : latest,
+        workspace.book.updatedAt,
+      ),
+      lastOpenedAt: projectId
+        ? projects.find((project) => project.id === projectId)?.lastOpenedAt ?? null
+        : null,
+    }));
+  };
   const bookWorkspace = (projectId: string): BookWorkspaceSnapshot => {
     const project = projects.find((item) => item.id === projectId);
     if (!project) throw new Error(`Project not found: ${projectId}`);
@@ -103,6 +153,24 @@ if (previewEnabled && !window.storyOSAgent) {
     ...event,
     conversationScope,
   }));
+  type PreviewBookMutation = Extract<
+    ApplicationEvent,
+    { type: "book_changed" }
+  >["mutation"];
+  const emitBookChanged = (
+    projectId: string,
+    kind: PreviewBookMutation["kind"],
+    references: Omit<PreviewBookMutation, "id" | "kind"> = {},
+  ) => {
+    const eventId = `book_change_${crypto.randomUUID()}`;
+    emit({
+      type: "book_changed",
+      eventId,
+      projectId,
+      mutation: { id: eventId, kind, ...references },
+      timestamp: new Date().toISOString(),
+    }, { kind: "project", projectId });
+  };
   const sendPreviewMessage = async (
     request: { readonly threadId: string; readonly content: string },
     scope: ConversationScope,
@@ -235,6 +303,93 @@ if (previewEnabled && !window.storyOSAgent) {
         }),
       };
     },
+    getBookshelfBooks: async () => bookshelfCards(),
+    createBookshelfBook: async ({ title, synopsis }) => {
+      const createdAt = new Date().toISOString();
+      const bookId = `book_${crypto.randomUUID()}`;
+      const workspace: ReadyBookWorkspaceSnapshot = {
+        state: "ready",
+        book: {
+          id: `novel_${crypto.randomUUID()}`,
+          title,
+          synopsis,
+          status: "planning",
+          createdAt,
+          updatedAt: createdAt,
+        },
+        volumes: [],
+        chapters: [],
+      };
+      standaloneBooks.set(bookId, workspace);
+      const book = bookshelfCards().find((candidate) =>
+        candidate.availability === "ready" && candidate.bookId === bookId);
+      if (!book || book.availability !== "ready") {
+        throw new Error(`Preview book not found: ${bookId}`);
+      }
+      return { bookId, book };
+    },
+    importBookshelfBook: async () => {
+      const result = await api.createBookshelfBook({
+        title: "导入的书籍",
+        synopsis: "来自 .storyos-book 的预览书籍。",
+      });
+      return {
+        operationId: `preview_import_${crypto.randomUUID()}`,
+        bookId: result.bookId,
+        sourceBookId: "preview_source",
+        title: result.book.title,
+      };
+    },
+    exportBookshelfBook: async () => undefined,
+    getBookshelfTrash: async () => Array.from(trashedBooks.entries()).map(
+      ([bookId, entry]) => ({
+        bookId,
+        title: entry.title,
+        storageState: "trashed" as const,
+        trashedAt: entry.trashedAt,
+      }),
+    ),
+    moveBookshelfBookToTrash: async (bookId) => {
+      const card = bookshelfCards().find((candidate) => candidate.bookId === bookId);
+      if (!card || card.availability !== "ready") {
+        throw new Error(`Preview book not found: ${bookId}`);
+      }
+      if (card.linkedProjectId) {
+        throw new Error(`Book is still attached to a project: ${bookId}`);
+      }
+      const workspace = standaloneBooks.get(bookId);
+      if (!workspace) throw new Error(`Preview book workspace not found: ${bookId}`);
+      const trashedAt = new Date().toISOString();
+      trashedBooks.set(bookId, { title: card.title, trashedAt, workspace });
+      standaloneBooks.delete(bookId);
+      return {
+        bookId,
+        title: card.title,
+        storageState: "trashed" as const,
+        trashedAt,
+      };
+    },
+    restoreBookshelfBookFromTrash: async (bookId) => {
+      const entry = trashedBooks.get(bookId);
+      if (!entry) throw new Error(`Preview trashed book not found: ${bookId}`);
+      standaloneBooks.set(bookId, entry.workspace);
+      trashedBooks.delete(bookId);
+      const card = bookshelfCards().find((candidate) => candidate.bookId === bookId);
+      if (!card) throw new Error(`Preview restored book not found: ${bookId}`);
+      return card;
+    },
+    permanentlyDeleteBookshelfBook: async ({ bookId, confirmationBookId }) => {
+      if (bookId !== confirmationBookId) {
+        throw new Error("Permanent book deletion requires the exact book id.");
+      }
+      if (!trashedBooks.delete(bookId)) {
+        throw new Error(`Preview trashed book not found: ${bookId}`);
+      }
+    },
+    getBookProjectArchives: async () => [],
+    restoreProjectArchive: async () => {
+      throw new Error("Preview mode has no restorable project archives.");
+    },
     getBookWorkspace: async (projectId) => bookWorkspace(projectId),
     createBook: async ({ projectId, title, synopsis, status }) => {
       const current = bookWorkspace(projectId);
@@ -256,6 +411,12 @@ if (previewEnabled && !window.storyOSAgent) {
         chapters: [],
       };
       bookWorkspaces.set(projectId, next);
+      const bookId = `book_${crypto.randomUUID()}`;
+      projectBookIds.set(projectId, bookId);
+      standaloneBooks.set(bookId, next);
+      emitBookChanged(projectId, "novel_created", {
+        novelId: next.book.id,
+      });
       return next;
     },
     createBookChapter: async ({ projectId, volumeId, title }) => {
@@ -288,6 +449,11 @@ if (previewEnabled && !window.storyOSAgent) {
         chapters: [...current.chapters, chapter],
       };
       bookWorkspaces.set(projectId, next);
+      emitBookChanged(projectId, "chapter_created", {
+        novelId: current.book.id,
+        volumeId,
+        chapterId: chapter.id,
+      });
       return next;
     },
     createBookVolume: async ({ projectId, title }) => {
@@ -312,6 +478,11 @@ if (previewEnabled && !window.storyOSAgent) {
         ],
       };
       bookWorkspaces.set(projectId, next);
+      const volume = next.volumes[next.volumes.length - 1];
+      emitBookChanged(projectId, "volume_created", {
+        novelId: current.book.id,
+        ...(volume ? { volumeId: volume.id } : {}),
+      });
       return next;
     },
     deleteBookVolume: async ({ projectId, volumeId }) => {
@@ -325,6 +496,7 @@ if (previewEnabled && !window.storyOSAgent) {
             : chapter),
       };
       bookWorkspaces.set(projectId, next);
+      emitBookChanged(projectId, "volume_deleted", { volumeId });
       return next;
     },
     deleteBookChapter: async ({ projectId, chapterId }) => {
@@ -336,6 +508,10 @@ if (previewEnabled && !window.storyOSAgent) {
         ),
       };
       bookWorkspaces.set(projectId, next);
+      emitBookChanged(projectId, "chapter_deleted", {
+        novelId: current.book.id,
+        chapterId,
+      });
       return next;
     },
     updateBook: async ({ projectId, title, synopsis, status }) => {
@@ -351,6 +527,9 @@ if (previewEnabled && !window.storyOSAgent) {
         },
       };
       bookWorkspaces.set(projectId, next);
+      emitBookChanged(projectId, "novel_updated", {
+        novelId: next.book.id,
+      });
       return next;
     },
     updateBookChapter: async ({ projectId, chapterId, title }) => {
@@ -363,6 +542,10 @@ if (previewEnabled && !window.storyOSAgent) {
             : chapter),
       };
       bookWorkspaces.set(projectId, next);
+      emitBookChanged(projectId, "chapter_updated", {
+        novelId: current.book.id,
+        chapterId,
+      });
       return next;
     },
     saveBookChapterContent: async ({ projectId, chapterId, content }) => {
@@ -397,10 +580,17 @@ if (previewEnabled && !window.storyOSAgent) {
         chapters: current.chapters.map((item) =>
           item.id === chapterId ? chapter : item),
       });
+      emitBookChanged(projectId, "chapter_revision_saved", {
+        novelId: current.book.id,
+        ...(chapter.volumeId ? { volumeId: chapter.volumeId } : {}),
+        chapterId,
+        revisionId: revision.id,
+        revisionNumber,
+      });
       return { chapter, revision };
     },
     getWorkspaceSnapshot: async () => workspaceSnapshot(),
-    createProject: async ({ name, parentPath }) => {
+    createProject: async ({ name, parentPath, bookId }) => {
       const createdAt = new Date().toISOString();
       const project: ProjectDto = {
         id: `prj_${crypto.randomUUID()}`,
@@ -414,6 +604,12 @@ if (previewEnabled && !window.storyOSAgent) {
       };
       projects = [project, ...projects];
       activeProjectId = project.id;
+      if (bookId) {
+        const workspace = standaloneBooks.get(bookId);
+        if (!workspace) throw new Error(`Book not found: ${bookId}`);
+        bookWorkspaces.set(project.id, workspace);
+        projectBookIds.set(project.id, bookId);
+      }
       return workspaceSnapshot();
     },
     openProject: async (projectPath) => {
@@ -451,7 +647,15 @@ if (previewEnabled && !window.storyOSAgent) {
       const removed = projects.find((project) => project.path === projectPath);
       projects = projects.filter((project) => project.path !== projectPath);
       if (removed?.id === activeProjectId) activeProjectId = null;
-      if (removed) bookWorkspaces.delete(removed.id);
+      if (removed) {
+        const workspace = bookWorkspaces.get(removed.id);
+        const bookId = projectBookIds.get(removed.id);
+        if (workspace?.state === "ready" && bookId) {
+          standaloneBooks.set(bookId, workspace);
+        }
+        bookWorkspaces.delete(removed.id);
+        projectBookIds.delete(removed.id);
+      }
       return workspaceSnapshot();
     },
     listRuns: async () => [],

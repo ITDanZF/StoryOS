@@ -63,7 +63,7 @@ export default function WorkspaceLayout() {
       <WindowTitleBar />
       <WorkspaceSidebar
         open={sidebarOpen}
-        bookshelfActive={location.pathname === "/bookshelf"}
+        bookshelfActive={location.pathname.startsWith("/bookshelf")}
         projects={state.projects}
         activeBookProjectId={
           location.pathname.match(/^\/projects\/([^/]+)\/book$/)?.[1] ?? null

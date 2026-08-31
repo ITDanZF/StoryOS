@@ -22,33 +22,45 @@ function toUnavailableStorageState(
 export default class BookCatalogReader {
   constructor(private readonly runtimes: BookRuntimeManager) {}
 
-  read(book: BookRecord, linkedProjectCount: number): BookshelfBookCard {
+  read(
+    book: BookRecord,
+    linkedProjectIds: readonly string[],
+  ): BookshelfBookCard {
+    const linkedProjectId = linkedProjectIds[0] ?? null;
+    const linkedProjectCount = linkedProjectIds.length;
     if (book.state !== "available") {
       return this.createUnavailable(
-        book.id,
+        book,
+        linkedProjectId,
         linkedProjectCount,
-        book.state,
         `Book storage is ${book.state}: ${book.id}`,
       );
     }
 
     try {
-      return this.readAvailable(book.id, linkedProjectCount);
+      return this.readAvailable(
+        book,
+        linkedProjectId,
+        linkedProjectCount,
+      );
     } catch (error) {
       if (!(error instanceof BookRuntimeOpenError)) throw error;
       return this.createUnavailable(
-        book.id,
+        book,
+        linkedProjectId,
         linkedProjectCount,
-        toUnavailableStorageState(error.code),
         error.message,
+        toUnavailableStorageState(error.code),
       );
     }
   }
 
   private readAvailable(
-    bookId: string,
+    book: BookRecord,
+    linkedProjectId: string | null,
     linkedProjectCount: number,
   ): AvailableBookshelfBookCard {
+    const bookId = book.id;
     const lease = this.runtimes.acquire(bookId);
     try {
       const novels = new NovelApplication(lease.persistence);
@@ -61,8 +73,11 @@ export default class BookCatalogReader {
       }
       const volumes = novels.listVolumes(novel.id);
       const chapters = novels.listChapters(novel.id);
-      const characterCount = chapters.reduce((total, chapter) => {
-        if (!chapter.currentRevisionId) return total;
+      let characterCount = 0;
+      let updatedAt = novel.updatedAt;
+      for (const chapter of chapters) {
+        if (chapter.updatedAt > updatedAt) updatedAt = chapter.updatedAt;
+        if (!chapter.currentRevisionId) continue;
         const revision = novels.getCurrentRevision(chapter.id);
         if (!revision) {
           throw new BookRuntimeOpenError(
@@ -70,18 +85,23 @@ export default class BookCatalogReader {
             `Current chapter revision not found: ${chapter.id}`,
           );
         }
-        return total + revision.characterCount;
-      }, 0);
+        characterCount += revision.characterCount;
+        if (revision.createdAt > updatedAt) updatedAt = revision.createdAt;
+      }
       return Object.freeze({
         availability: "ready",
         bookId,
         title: novel.title,
+        synopsis: novel.synopsis,
         status: novel.status,
         storageState: "available",
         volumeCount: volumes.length,
         chapterCount: chapters.length,
         characterCount,
+        linkedProjectId,
         linkedProjectCount,
+        updatedAt,
+        lastOpenedAt: book.lastOpenedAt?.toISOString() ?? null,
       });
     } finally {
       lease.close();
@@ -89,16 +109,19 @@ export default class BookCatalogReader {
   }
 
   private createUnavailable(
-    bookId: string,
+    book: BookRecord,
+    linkedProjectId: string | null,
     linkedProjectCount: number,
-    storageState: "missing" | "importing" | "trashed" | "corrupted",
     reason: string,
+    storageState: "missing" | "importing" | "trashed" | "corrupted" = book.state as Exclude<BookRecord["state"], "available">,
   ): UnavailableBookshelfBookCard {
     return Object.freeze({
       availability: "unavailable",
-      bookId,
+      bookId: book.id,
       storageState,
+      linkedProjectId,
       linkedProjectCount,
+      lastOpenedAt: book.lastOpenedAt?.toISOString() ?? null,
       reason,
     });
   }

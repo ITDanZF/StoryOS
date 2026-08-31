@@ -261,6 +261,7 @@ export default class StoryAgentService {
                 bookLifecycle,
                 bookTransfer,
                 projectArchives,
+                bookProvisioning,
             );
             const controller = new DesktopController({
                 projects,
