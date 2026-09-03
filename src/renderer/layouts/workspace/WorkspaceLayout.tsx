@@ -4,6 +4,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ConversationScope } from "../../../shared/agent/contracts.ts";
 import WindowTitleBar from "../../components/WindowTitleBar.tsx";
 import "../../features/agent/api/previewAgentApi.ts";
+import "../../features/file-browser/previewWindowApi.ts";
 import { useAgentWorkspace } from "../../features/agent/hooks/useAgentWorkspace.ts";
 import WorkspaceSidebar from "./components/WorkspaceSidebar.tsx";
 

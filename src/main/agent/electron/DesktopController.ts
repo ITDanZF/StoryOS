@@ -52,6 +52,13 @@ export type DesktopControllerDependencies = {
     | "permanentlyDeleteBook"
     | "exportBook"
     | "importBook"
+    | "listTransferFormats"
+    | "prepareBookImport"
+    | "commitBookImport"
+    | "cancelBookImport"
+    | "prepareBookExport"
+    | "commitBookExport"
+    | "cancelBookExport"
     | "listProjectArchives"
     | "listProjectArchiveSummaries"
     | "createProjectArchive"
@@ -215,6 +222,34 @@ export default class DesktopController {
 
   importBookshelfBook(request: { readonly packagePath: string }) {
     return this.dependencies.bookshelf.importBook(request);
+  }
+
+  getBookTransferFormats() {
+    return this.dependencies.bookshelf.listTransferFormats();
+  }
+
+  prepareBookshelfBookImport(request: Parameters<DesktopControllerDependencies["bookshelf"]["prepareBookImport"]>[0]) {
+    return this.dependencies.bookshelf.prepareBookImport(request);
+  }
+
+  commitBookshelfBookImport(request: Parameters<DesktopControllerDependencies["bookshelf"]["commitBookImport"]>[0]) {
+    return this.dependencies.bookshelf.commitBookImport(request);
+  }
+
+  cancelBookshelfBookImport(sessionId: string): void {
+    this.dependencies.bookshelf.cancelBookImport(sessionId);
+  }
+
+  prepareBookshelfBookExport(request: Parameters<DesktopControllerDependencies["bookshelf"]["prepareBookExport"]>[0]) {
+    return this.dependencies.bookshelf.prepareBookExport(request);
+  }
+
+  commitBookshelfBookExport(request: Parameters<DesktopControllerDependencies["bookshelf"]["commitBookExport"]>[0]) {
+    return this.dependencies.bookshelf.commitBookExport(request);
+  }
+
+  cancelBookshelfBookExport(exportId: string): void {
+    this.dependencies.bookshelf.cancelBookExport(exportId);
   }
 
   listProjectArchives(bookId?: string) {

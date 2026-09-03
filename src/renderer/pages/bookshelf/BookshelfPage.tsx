@@ -29,6 +29,8 @@ import {
 import useBookshelf from "./useBookshelf.ts";
 import BookArchivesDialog from "./archives/BookArchivesDialog.tsx";
 import useBookshelfTrash from "./trash/useBookshelfTrash.ts";
+import ImportBookDialog from "./transfer/ImportBookDialog.tsx";
+import ExportBookDialog from "./transfer/ExportBookDialog.tsx";
 
 type ReadyBook = Extract<BookshelfBookCard, { availability: "ready" }>;
 
@@ -45,6 +47,8 @@ export default function BookshelfPage() {
   const [view, setView] = useState<BookshelfView>("grid");
   const [query, setQuery] = useState("");
   const [newBookOpen, setNewBookOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportTarget, setExportTarget] = useState<ReadyBook | null>(null);
   const [projectTargetBookId, setProjectTargetBookId] = useState<string | null>(null);
   const [openingBookId, setOpeningBookId] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -159,7 +163,7 @@ export default function BookshelfPage() {
 
         <div className="flex shrink-0 items-center gap-2">
           <button className="relative flex size-9 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white text-[10px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 sm:w-auto sm:px-3" type="button" aria-label="打开书架回收站" onClick={() => navigate("/bookshelf/trash")}><Trash2 size={14} /><span className="hidden sm:inline">回收站</span>{trash.entries.length > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-w-4 place-items-center rounded-full bg-neutral-900 px-1 text-[8px] leading-4 text-white">{trash.entries.length}</span>}</button>
-          <button className="flex size-9 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white text-[10px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 sm:w-auto sm:px-3" type="button" aria-label="导入书籍" disabled={busy} onClick={() => void bookshelf.importBook()}><Upload size={14} /><span className="hidden sm:inline">{bookshelf.pendingAction?.kind === "import" ? "正在导入" : "导入书籍"}</span></button>
+          <button className="flex size-9 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white text-[10px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 sm:w-auto sm:px-3" type="button" aria-label="导入书籍" disabled={busy} onClick={() => setImportOpen(true)}><Upload size={14} /><span className="hidden sm:inline">导入书籍</span></button>
           <button className="flex h-9 items-center gap-2 rounded-xl border border-neutral-900 bg-neutral-900 px-3 text-[10px] font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-black disabled:opacity-50" type="button" disabled={busy} onClick={() => setNewBookOpen(true)}><Plus size={14} />新建书籍</button>
         </div>
       </header>
@@ -183,7 +187,7 @@ export default function BookshelfPage() {
               <strong className="mt-4 text-sm text-neutral-800">书架还是空的</strong>
               <p className="mb-5 mt-2 text-[11px] text-neutral-500">新建第一本书，或导入已有的 StoryOS 书籍。</p>
               <div className="flex gap-2">
-                <button className="h-9 rounded-xl border border-neutral-200 bg-white px-4 text-[10px] font-semibold hover:bg-neutral-50" type="button" onClick={() => void bookshelf.importBook()}>导入书籍</button>
+                <button className="h-9 rounded-xl border border-neutral-200 bg-white px-4 text-[10px] font-semibold hover:bg-neutral-50" type="button" onClick={() => setImportOpen(true)}>导入书籍</button>
                 <button className="h-9 rounded-xl border border-neutral-900 bg-neutral-900 px-4 text-[10px] font-semibold text-white hover:bg-black" type="button" onClick={() => setNewBookOpen(true)}>新建书籍</button>
               </div>
             </div>
@@ -205,7 +209,7 @@ export default function BookshelfPage() {
                 {visibleBooks.length > 0 ? (
                   <div className={cn("grid gap-4", view === "grid" ? "md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1")}>
                     {visibleBooks.map((book, index) => (
-                      <BookshelfBookCardView book={book} index={index} view={view} busy={busy} exporting={bookshelf.pendingAction?.kind === "export" && bookshelf.pendingAction.bookId === book.bookId} onOpen={(readyBook) => void openBook(readyBook)} onExport={(readyBook) => void bookshelf.exportBook(readyBook)} onArchives={setArchiveTarget} onTrash={(readyBook) => void moveBookToTrash(readyBook)} key={book.bookId} />
+                      <BookshelfBookCardView book={book} index={index} view={view} busy={busy} onOpen={(readyBook) => void openBook(readyBook)} onExport={setExportTarget} onArchives={setArchiveTarget} onTrash={(readyBook) => void moveBookToTrash(readyBook)} key={book.bookId} />
                     ))}
                   </div>
                 ) : (
@@ -230,6 +234,10 @@ export default function BookshelfPage() {
       )}
 
       {archiveTarget && <BookArchivesDialog book={archiveTarget} onClose={() => setArchiveTarget(null)} />}
+
+      {importOpen && <ImportBookDialog onClose={() => setImportOpen(false)} onImported={async () => { await bookshelf.load(); }} />}
+
+      {exportTarget && <ExportBookDialog book={exportTarget} onClose={() => setExportTarget(null)} />}
 
       {newBookOpen && (
         <NewBookDialog

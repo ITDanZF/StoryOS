@@ -51,7 +51,18 @@ import type {
     CreateBookshelfBookRequest,
     CreateBookshelfBookResult,
 } from "../../main/agent/application/bookshelfContracts.ts";
-import type { ImportBookResult } from "../../main/agent/application/bookTransferContracts.ts";
+import type {
+    BookTransferFormatCapability,
+    CommitBookExportRequest,
+    CommitBookImportRequest,
+    ExportBookResult,
+    ExportBookOptions,
+    ExportPreview,
+    ImportBookResult,
+    ImportPreview,
+    PrepareBookExportRequest,
+    PrepareBookImportRequest,
+} from "../../main/agent/application/bookTransferContracts.ts";
 import type {
     ProjectArchiveSummary,
     RestoreProjectArchiveResult,
@@ -92,6 +103,13 @@ export const AGENT_IPC_CHANNELS = Object.freeze({
     createBookshelfBook: "agent:bookshelf-book-create",
     importBookshelfBook: "agent:bookshelf-book-import",
     exportBookshelfBook: "agent:bookshelf-book-export",
+    bookTransferFormats: "agent:book-transfer-formats",
+    prepareBookshelfBookImport: "agent:book-transfer-import-prepare",
+    commitBookshelfBookImport: "agent:book-transfer-import-commit",
+    cancelBookshelfBookImport: "agent:book-transfer-import-cancel",
+    prepareBookshelfBookExport: "agent:book-transfer-export-prepare",
+    commitBookshelfBookExport: "agent:book-transfer-export-commit",
+    cancelBookshelfBookExport: "agent:book-transfer-export-cancel",
     bookshelfTrash: "agent:bookshelf-trash",
     moveBookshelfBookToTrash: "agent:bookshelf-book-trash",
     restoreBookshelfBookFromTrash: "agent:bookshelf-book-restore",
@@ -161,6 +179,13 @@ export type AgentDesktopApi = {
     createBookshelfBook(request: CreateBookshelfBookRequest): Promise<CreateBookshelfBookResult>;
     importBookshelfBook(request: { readonly packagePath: string }): Promise<ImportBookResult>;
     exportBookshelfBook(request: { readonly bookId: string; readonly outputPath: string }): Promise<void>;
+    getBookTransferFormats(): Promise<readonly BookTransferFormatCapability[]>;
+    prepareBookshelfBookImport(request: PrepareBookImportRequest): Promise<ImportPreview>;
+    commitBookshelfBookImport(request: CommitBookImportRequest): Promise<ImportBookResult>;
+    cancelBookshelfBookImport(sessionId: string): Promise<void>;
+    prepareBookshelfBookExport(request: PrepareBookExportRequest): Promise<ExportPreview>;
+    commitBookshelfBookExport(request: CommitBookExportRequest): Promise<ExportBookResult>;
+    cancelBookshelfBookExport(exportId: string): Promise<void>;
     getBookshelfTrash(): Promise<readonly BookshelfTrashEntry[]>;
     moveBookshelfBookToTrash(bookId: string): Promise<BookshelfTrashEntry>;
     restoreBookshelfBookFromTrash(bookId: string): Promise<BookshelfBookCard>;
@@ -211,6 +236,7 @@ export type {
     BookChapterRevisionResult,
     BookWorkspaceChapterDto,
     BookWorkspaceSnapshot,
+    BookTransferFormatCapability,
     ChapterGenerationMode,
     CreateBookRequest,
     CreateBookshelfBookRequest,
@@ -229,6 +255,12 @@ export type {
     DeleteBookVolumeRequest,
     MessageDto,
     ImportBookResult,
+    ImportPreview,
+    ExportPreview,
+    ExportBookResult,
+    ExportBookOptions,
+    PrepareBookImportRequest,
+    PrepareBookExportRequest,
     NovelDto,
     CreateProjectRequest,
     ProjectDto,

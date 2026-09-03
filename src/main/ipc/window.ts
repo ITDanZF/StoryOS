@@ -7,7 +7,10 @@ import type {
     PickFileRequest,
     SaveFileRequest,
     WindowState,
+    ListFileBrowserDirectoryRequest,
+    ResolveFileBrowserTargetRequest,
 } from '../../shared/window/contracts.ts';
+import DesktopFileBrowserService from '../desktop/file-browser/DesktopFileBrowserService.ts';
 
 function requireSenderWindow(event: IpcMainEvent | IpcMainInvokeEvent): BrowserWindow {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -52,6 +55,7 @@ function normalizeFileFilters(value: unknown): Electron.FileFilter[] {
 }
 
 export function registerWindowIpc(): () => void {
+    const fileBrowser = new DesktopFileBrowserService();
     const closeWindow = (event: IpcMainEvent) => {
         requireSenderWindow(event).close();
     };
@@ -89,6 +93,22 @@ export function registerWindowIpc(): () => void {
         });
         return result.canceled ? null : result.filePath ?? null;
     });
+    ipcMain.handle(WINDOW_IPC_CHANNELS.fileBrowserLocations, () =>
+        fileBrowser.getLocations());
+    ipcMain.handle(WINDOW_IPC_CHANNELS.fileBrowserDirectory, (
+        _event,
+        request: ListFileBrowserDirectoryRequest,
+    ) => fileBrowser.listDirectory(request));
+    ipcMain.handle(WINDOW_IPC_CHANNELS.fileBrowserTarget, (
+        _event,
+        request: ResolveFileBrowserTargetRequest,
+    ) => fileBrowser.resolveTarget(request));
+    ipcMain.handle(WINDOW_IPC_CHANNELS.revealFile, (_event, filePath: string) =>
+        fileBrowser.revealFile(filePath));
+    ipcMain.handle(WINDOW_IPC_CHANNELS.rememberTransferLocation, (
+        _event,
+        fileOrDirectoryPath: string,
+    ) => fileBrowser.rememberLocation(fileOrDirectoryPath));
     ipcMain.handle(WINDOW_IPC_CHANNELS.minimize, (event) => {
         requireSenderWindow(event).minimize();
     });
@@ -106,6 +126,11 @@ export function registerWindowIpc(): () => void {
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.pickDirectory);
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.pickFile);
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.saveFile);
+        ipcMain.removeHandler(WINDOW_IPC_CHANNELS.fileBrowserLocations);
+        ipcMain.removeHandler(WINDOW_IPC_CHANNELS.fileBrowserDirectory);
+        ipcMain.removeHandler(WINDOW_IPC_CHANNELS.fileBrowserTarget);
+        ipcMain.removeHandler(WINDOW_IPC_CHANNELS.revealFile);
+        ipcMain.removeHandler(WINDOW_IPC_CHANNELS.rememberTransferLocation);
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.minimize);
         ipcMain.removeHandler(WINDOW_IPC_CHANNELS.toggleMaximize);
         ipcMain.removeListener(WINDOW_IPC_CHANNELS.close, closeWindow);

@@ -341,6 +341,42 @@ if (previewEnabled && !window.storyOSAgent) {
       };
     },
     exportBookshelfBook: async () => undefined,
+    getBookTransferFormats: async () => [
+      { id: "storyos" as const, label: "StoryOS 完整备份", description: "完整保留书籍结构和修订历史。", extensions: ["storyos-book"], canImport: true, canExport: true, preservesStructure: true, preservesRichText: true, preservesRevisions: true, outputKind: "file" as const },
+      { id: "docx" as const, label: "Word 文稿", description: "适合编辑协作。", extensions: ["docx"], canImport: true, canExport: true, preservesStructure: true, preservesRichText: true, preservesRevisions: false, outputKind: "file" as const },
+      { id: "markdown" as const, label: "Markdown", description: "适合开放交换和版本管理。", extensions: ["md", "zip"], canImport: true, canExport: true, preservesStructure: true, preservesRichText: true, preservesRevisions: false, outputKind: "archive" as const },
+      { id: "text" as const, label: "纯文本", description: "兼容性最高。", extensions: ["txt"], canImport: true, canExport: true, preservesStructure: true, preservesRichText: false, preservesRevisions: false, outputKind: "file" as const },
+      { id: "epub" as const, label: "EPUB 电子书", description: "电子书阅读版。", extensions: ["epub"], canImport: false, canExport: true, preservesStructure: true, preservesRichText: true, preservesRevisions: false, outputKind: "file" as const },
+      { id: "pdf" as const, label: "PDF 阅读版", description: "打印与分享。", extensions: ["pdf"], canImport: false, canExport: true, preservesStructure: true, preservesRichText: true, preservesRevisions: false, outputKind: "file" as const },
+    ],
+    prepareBookshelfBookImport: async ({ filePath, expectedFormat }) => ({
+      sessionId: `preview_import_${crypto.randomUUID()}`,
+      format: expectedFormat ?? "storyos",
+      fileName: filePath.split(/[\\/]/).pop() ?? "预览书籍.storyos-book",
+      fileSize: 128000,
+      fingerprint: "preview",
+      title: "导入预览",
+      synopsis: "这是浏览器预览环境中的导入摘要。",
+      volumes: [{ key: "volume-1", title: "第一卷", chapters: [{ key: "chapter-1", title: "第一章", characterCount: 1280 }] }],
+      ungroupedChapters: [],
+      chapterCount: 1,
+      characterCount: 1280,
+      includesRevisionHistory: (expectedFormat ?? "storyos") === "storyos",
+      sourceApplicationVersion: "1.0.0",
+      sourceFormatVersion: 1,
+      exportedAt: new Date().toISOString(),
+      warnings: [],
+    }),
+    commitBookshelfBookImport: async () => api.importBookshelfBook({ packagePath: "preview.storyos-book" }),
+    cancelBookshelfBookImport: async () => undefined,
+    prepareBookshelfBookExport: async ({ bookId, format, options }) => {
+      const card = bookshelfCards().find((candidate) => candidate.bookId === bookId);
+      if (!card || card.availability !== "ready") throw new Error(`Preview book not found: ${bookId}`);
+      const extension = format === "markdown" && options?.markdownBundle ? "zip" : ({ storyos: "storyos-book", text: "txt", markdown: "md", docx: "docx", epub: "epub", pdf: "pdf" } as const)[format];
+      return { exportId: `preview_export_${crypto.randomUUID()}`, bookId, title: card.title, format, extension, suggestedFileName: `${card.title}.${extension}`, chapterCount: card.chapterCount, characterCount: card.characterCount, warnings: [] };
+    },
+    commitBookshelfBookExport: async ({ outputPath }) => ({ operationId: `preview_export_${crypto.randomUUID()}`, bookId: "preview", title: "预览书籍", format: "storyos" as const, outputPath, byteLength: 128000 }),
+    cancelBookshelfBookExport: async () => undefined,
     getBookshelfTrash: async () => Array.from(trashedBooks.entries()).map(
       ([bookId, entry]) => ({
         bookId,

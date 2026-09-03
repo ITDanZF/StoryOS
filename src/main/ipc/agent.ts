@@ -26,6 +26,14 @@ import type RendererEditorToolBridge from "../agent/electron/RendererEditorToolB
 import type { RendererEditorToolResponse } from "../agent/tools/editor/contracts.ts";
 import type { CreateBookshelfBookRequest } from "../agent/application/bookshelfContracts.ts";
 import type { RestoreProjectArchiveDesktopRequest } from "../../shared/agent/contracts.ts";
+import type {
+    BookTransferFormat,
+    CommitBookExportRequest,
+    CommitBookImportRequest,
+    ExportBookOptions,
+    PrepareBookExportRequest,
+    PrepareBookImportRequest,
+} from "../agent/application/bookTransferContracts.ts";
 
 function requireApprovalDecision(decision: ToolApprovalDecision): ToolApprovalDecision {
     if (!["allow_once", "allow_session", "deny"].includes(decision)) {
@@ -160,6 +168,37 @@ function requireNovelStatus(value: unknown): NovelStatus {
     return value as NovelStatus;
 }
 
+function requireBookTransferFormat(value: unknown): BookTransferFormat {
+    if (!["storyos", "text", "markdown", "docx", "epub", "pdf"].includes(value as string)) {
+        throw new Error("Invalid book transfer format.");
+    }
+    return value as BookTransferFormat;
+}
+
+function requireBookExportOptions(value: unknown): ExportBookOptions {
+    if (value === undefined) return Object.freeze({});
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("Invalid book export options.");
+    }
+    const input = value as Record<string, unknown>;
+    const keys = [
+        "includeTitlePage",
+        "includeSynopsis",
+        "includeVolumeSummaries",
+        "includeTableOfContents",
+        "chapterPageBreaks",
+        "markdownBundle",
+        "splitTextFiles",
+    ] as const;
+    const result: Record<string, boolean> = {};
+    for (const key of keys) {
+        if (input[key] === undefined) continue;
+        if (typeof input[key] !== "boolean") throw new Error(`Invalid export option: ${key}`);
+        result[key] = input[key] as boolean;
+    }
+    return Object.freeze(result);
+}
+
 export function registerAgentIpc(
     service: StoryAgentService,
     rendererEditorTools?: RendererEditorToolBridge,
@@ -247,6 +286,48 @@ export function registerAgentIpc(
         bookId: requireText(request?.bookId, "Book id"),
         outputPath: requireText(request?.outputPath, "Book export path"),
     }));
+    handle(AGENT_IPC_CHANNELS.bookTransferFormats, () =>
+        service.requireController().getBookTransferFormats());
+    handle(AGENT_IPC_CHANNELS.prepareBookshelfBookImport, (
+        request: PrepareBookImportRequest,
+    ) => {
+        const expected = request?.expectedFormat === undefined
+            ? undefined
+            : requireBookTransferFormat(request.expectedFormat);
+        if (expected === "epub" || expected === "pdf") {
+            throw new Error("Selected format cannot be imported.");
+        }
+        return service.requireController().prepareBookshelfBookImport({
+            filePath: requireText(request?.filePath, "Book import path"),
+            ...(expected ? { expectedFormat: expected } : {}),
+        });
+    });
+    handle(AGENT_IPC_CHANNELS.commitBookshelfBookImport, (
+        request: CommitBookImportRequest,
+    ) => service.requireController().commitBookshelfBookImport({
+        sessionId: requireText(request?.sessionId, "Book import session id"),
+    }));
+    handle(AGENT_IPC_CHANNELS.cancelBookshelfBookImport, (sessionId: string) =>
+        service.requireController().cancelBookshelfBookImport(
+            requireText(sessionId, "Book import session id"),
+        ));
+    handle(AGENT_IPC_CHANNELS.prepareBookshelfBookExport, (
+        request: PrepareBookExportRequest,
+    ) => service.requireController().prepareBookshelfBookExport({
+        bookId: requireText(request?.bookId, "Book id"),
+        format: requireBookTransferFormat(request?.format),
+        options: requireBookExportOptions(request?.options),
+    }));
+    handle(AGENT_IPC_CHANNELS.commitBookshelfBookExport, (
+        request: CommitBookExportRequest,
+    ) => service.requireController().commitBookshelfBookExport({
+        exportId: requireText(request?.exportId, "Book export id"),
+        outputPath: requireText(request?.outputPath, "Book export path"),
+    }));
+    handle(AGENT_IPC_CHANNELS.cancelBookshelfBookExport, (exportId: string) =>
+        service.requireController().cancelBookshelfBookExport(
+            requireText(exportId, "Book export id"),
+        ));
     handle(AGENT_IPC_CHANNELS.bookshelfTrash, () =>
         service.requireController().getBookshelfTrash());
     handle(AGENT_IPC_CHANNELS.moveBookshelfBookToTrash, (bookId: string) =>

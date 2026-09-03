@@ -66,7 +66,6 @@ export default function BookshelfBookCard({
   index,
   view,
   busy,
-  exporting,
   onOpen,
   onExport,
   onArchives,
@@ -76,7 +75,6 @@ export default function BookshelfBookCard({
   readonly index: number;
   readonly view: BookshelfView;
   readonly busy: boolean;
-  readonly exporting: boolean;
   readonly onOpen: (book: ReadyBook) => void;
   readonly onExport: (book: ReadyBook) => void;
   readonly onArchives: (book: ReadyBook) => void;
@@ -104,7 +102,7 @@ export default function BookshelfBookCard({
         <details className="absolute right-2.5 top-2.5 z-10">
           <summary className="grid size-7 list-none place-items-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 [&::-webkit-details-marker]:hidden" aria-label={`管理《${book.title}》`}><MoreHorizontal size={15} /></summary>
           <div className="absolute right-0 top-8 w-36 rounded-xl border border-neutral-200 bg-white p-1 shadow-xl">
-            <button className="flex h-8 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[10px] text-neutral-600 hover:bg-neutral-100 disabled:opacity-50" type="button" disabled={busy} onClick={() => onExport(book)}><Download size={13} />{exporting ? "正在导出" : "导出书籍"}</button>
+            <button className="flex h-8 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[10px] text-neutral-600 hover:bg-neutral-100 disabled:opacity-50" type="button" disabled={busy} onClick={() => onExport(book)}><Download size={13} />导出书籍</button>
             <button className="flex h-8 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[10px] text-neutral-600 hover:bg-neutral-100 disabled:opacity-50" type="button" disabled={busy} onClick={() => onArchives(book)}><ArchiveRestore size={13} />项目归档</button>
             <button className="flex h-8 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[10px] text-red-600 hover:bg-red-50 disabled:opacity-50" type="button" disabled={busy} aria-disabled={book.linkedProjectId !== null} title={book.linkedProjectId ? "书籍仍关联写作项目，不能回收" : "移入回收站"} onClick={() => onTrash(book)}><Trash2 size={13} />移入回收站</button>
           </div>

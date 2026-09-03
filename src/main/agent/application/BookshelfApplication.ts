@@ -12,6 +12,10 @@ import type {
   ExportBookRequest,
   ImportBookRequest,
   ImportBookResult,
+  CommitBookExportRequest,
+  CommitBookImportRequest,
+  PrepareBookExportRequest,
+  PrepareBookImportRequest,
 } from "./bookTransferContracts.ts";
 import type {
   BookshelfBookCard,
@@ -142,6 +146,34 @@ export default class BookshelfApplication {
 
   importBook(request: ImportBookRequest): ImportBookResult {
     return this.transfer.importBook(request);
+  }
+
+  listTransferFormats() {
+    return this.transfer.listFormats();
+  }
+
+  prepareBookImport(request: PrepareBookImportRequest) {
+    return this.transfer.prepareImport(request);
+  }
+
+  commitBookImport(request: CommitBookImportRequest) {
+    return this.transfer.commitImport(request);
+  }
+
+  cancelBookImport(sessionId: string): void {
+    this.transfer.cancelImport(sessionId);
+  }
+
+  prepareBookExport(request: PrepareBookExportRequest) {
+    return this.transfer.prepareExport(request);
+  }
+
+  commitBookExport(request: CommitBookExportRequest) {
+    return this.transfer.commitExport(request);
+  }
+
+  cancelBookExport(exportId: string): void {
+    this.transfer.cancelExport(exportId);
   }
 
   listProjectArchives(bookId?: string) {
