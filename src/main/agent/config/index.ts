@@ -2,6 +2,7 @@ import { ConfigKey, REQUIRED_CONFIG_KEYS } from "../enum/Config.constant.ts";
 import { getAgentHome } from "../workspace/path.ts";
 import path from "node:path";
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 export type InfoType = Partial<Record<ConfigKey, string>>;
 export default class Configuration {
   private BaseProjectInfo: InfoType;
@@ -13,7 +14,7 @@ export default class Configuration {
   /**
    * 保存配置信息
    */
-  saveConfig(config: InfoType) {
+  saveConfig(config: InfoType, applyToEnvironment = true) {
     const userHomePath = getAgentHome();
     const configPath = path.join(userHomePath, "config.json");
 
@@ -21,8 +22,14 @@ export default class Configuration {
       throw new Error(`该用户目录 ${configPath}不存在`);
     }
 
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
-    Object.entries(config).forEach(([key, value]) => {
+    const temporaryPath = `${configPath}.${randomUUID()}.tmp`;
+    try {
+      fs.writeFileSync(temporaryPath, JSON.stringify(config, null, 2), { encoding: "utf-8", mode: 0o600 });
+      fs.renameSync(temporaryPath, configPath);
+    } finally {
+      if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
+    }
+    if (applyToEnvironment) Object.entries(config).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
         process.env[key] = String(value);
       }
@@ -32,7 +39,7 @@ export default class Configuration {
   /**
    * 加载配置信息
    */
-  loadConfig(): InfoType | null {
+  loadConfig(applyToEnvironment = true): InfoType | null {
     const userHomePath = getAgentHome();
     const configPath = path.join(userHomePath, "config.json");
     if (!fs.existsSync(configPath)) {
@@ -52,8 +59,8 @@ export default class Configuration {
         return null;
       }
 
-      Object.entries(config).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
+      if (applyToEnvironment) Object.entries(config).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
           process.env[key] = String(value);
         }
       });

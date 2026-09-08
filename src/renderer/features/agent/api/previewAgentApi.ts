@@ -1,5 +1,6 @@
 import type {
   AgentDesktopApi,
+  AgentServiceStatus,
   ApplicationEvent,
   BookshelfBookCard,
   BookWorkspaceChapterDto,
@@ -226,9 +227,20 @@ if (previewEnabled && !window.storyOSAgent) {
     return { runId, threads: threadSnapshotFor(scope) };
   };
 
+  const initialStatus: AgentServiceStatus = { configured: true, initialized: true, provider: "deepseek", modelName: "deepseek-chat", baseUrl: "https://api.deepseek.com", workspacePath: "", restartRequired: false };
+  let previewStatus = initialStatus;
   const api: AgentDesktopApi = {
-    getStatus: async () => ({ configured: true, initialized: true, provider: "deepseek", modelName: "deepseek-chat", baseUrl: "https://api.deepseek.com" }),
-    configure: async () => ({ configured: true, initialized: true }),
+    getStatus: async () => ({ ...previewStatus }),
+    configure: async (request) => {
+      const canReuseKey = request.provider === previewStatus.provider && request.baseUrl.trim() === previewStatus.baseUrl;
+      if (!request.apiKey.trim() && !canReuseKey) throw new Error("请填写此模型服务的 API Key。");
+      previewStatus = {
+        configured: true, initialized: true,
+        provider: request.provider, modelName: request.modelName.trim(), baseUrl: request.baseUrl.trim(), workspacePath: request.workspacePath?.trim() ?? "",
+        restartRequired: Boolean(request.workspacePath?.trim()),
+      };
+      return { ...previewStatus };
+    },
     getThreadSnapshot: async () => threadSnapshot(),
     getConversationSnapshot: async (scope) => ({
       scope,

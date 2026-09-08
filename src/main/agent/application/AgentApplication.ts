@@ -88,6 +88,7 @@ function serializeError(error: unknown): SerializableError {
 }
 
 export type AgentApplicationOptions = {
+  readonly withRunContext?: <T>(operation: () => T) => T;
   readonly checkpointPath?: string;
   readonly eventRecorder?: ApplicationEventRecorder;
   readonly initialRuns?: readonly RunSnapshot[];
@@ -185,7 +186,7 @@ export default class AgentApplication {
     };
     this.runs.set(runId, record);
     this.activeRunIdsByThread.set(threadId, runId);
-    const promise = this.executeRun(
+    const execute = () => this.executeRun(
       runId,
       threadId,
       {
@@ -194,7 +195,8 @@ export default class AgentApplication {
       },
       startedAt,
     );
-    record.promise = promise;
+    // Capture the model before executeRun's first asynchronous event or planning step.
+    record.promise = this.options.withRunContext ? this.options.withRunContext(execute) : execute();
     return runId;
   }
 

@@ -169,6 +169,11 @@ export default class ChapterGenerationService {
   ) {}
 
   async generate(input: GenerateChapterInput): Promise<GenerateChapterResult> {
+    const generate = () => this.generateWithSnapshot(input);
+    return this.model.withSnapshot ? this.model.withSnapshot(generate) : generate();
+  }
+
+  private async generateWithSnapshot(input: GenerateChapterInput): Promise<GenerateChapterResult> {
     const generationId = `chapter_generation_${crypto.randomUUID()}`;
     const chapter = this.novels.getChapter(input.chapterId);
     const revision = this.novels.getCurrentRevision(chapter.id);

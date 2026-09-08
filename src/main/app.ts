@@ -8,6 +8,8 @@ import { registerAgentIpc } from './ipc/agent';
 import { registerWindowIpc } from './ipc/window';
 import { getAgentHome } from './agent/workspace/path';
 import RendererEditorToolBridge from './agent/electron/RendererEditorToolBridge';
+import DeveloperDatabaseService from './developer/DeveloperDatabaseService';
+import { registerDeveloperDatabaseIpc } from './ipc/developerDatabase';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -18,6 +20,7 @@ const MainAppWin = new AppWindowManager({ isOpenDev: !app.isPackaged });
 let agentService: StoryAgentService | null = null;
 let unregisterAgentIpc: (() => void) | null = null;
 let unregisterWindowIpc: (() => void) | null = null;
+let unregisterDeveloperIpc: (() => void) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 let shutdownComplete = false;
 const rendererEditorTools = new RendererEditorToolBridge();
@@ -37,6 +40,10 @@ app.whenReady().then(async () => {
     });
     await agentService.initialize();
     unregisterAgentIpc = registerAgentIpc(agentService, rendererEditorTools);
+    unregisterDeveloperIpc = registerDeveloperDatabaseIpc(new DeveloperDatabaseService(getAgentHome(), {
+        pause: () => agentService.pauseForDeveloper(),
+        resume: () => agentService.resumeFromDeveloper(),
+    }));
     unregisterWindowIpc = registerWindowIpc();
     MainAppWin.createMainWindow();
 }).catch((error) => {
@@ -54,6 +61,8 @@ app.on('before-quit', (event) => {
         unregisterAgentIpc = null;
         unregisterWindowIpc?.();
         unregisterWindowIpc = null;
+        unregisterDeveloperIpc?.();
+        unregisterDeveloperIpc = null;
         await agentService?.shutdown();
         rendererEditorTools.close();
         agentService = null;

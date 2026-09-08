@@ -51,18 +51,19 @@ export default function WorkspaceLayout() {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        if (location.pathname === "/settings") return;
         void openConversation();
       }
       if (event.key === "Escape") setSidebarOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [openConversation]);
+  }, [openConversation, location.pathname]);
 
   return (
-    <main className="mt-8 flex h-[calc(100dvh-32px)] w-full min-w-0 overflow-hidden bg-neutral-100 font-sans text-neutral-900 antialiased [font-synthesis:none] [text-rendering:optimizeLegibility] [&_button:disabled]:cursor-not-allowed [&_button:not(:disabled)]:cursor-pointer">
+    <main className="flex h-dvh w-full min-w-0 overflow-hidden bg-neutral-100 pt-8 font-sans text-neutral-900 antialiased [font-synthesis:none] [text-rendering:optimizeLegibility] [&_button:disabled]:cursor-not-allowed [&_button:not(:disabled)]:cursor-pointer">
       <WindowTitleBar />
-      <WorkspaceSidebar
+      {location.pathname !== "/settings" && <WorkspaceSidebar
         open={sidebarOpen}
         bookshelfActive={location.pathname.startsWith("/bookshelf")}
         projects={state.projects}
@@ -122,9 +123,11 @@ export default function WorkspaceLayout() {
         }}
         onOpenSettings={(page) => {
           setSidebarOpen(false);
-          navigate(page === "settings" ? "/settings" : "/about");
+          navigate(page === "settings" ? "/settings" : "/about", {
+            state: { returnTo: `${location.pathname}${location.search}` },
+          });
         }}
-      />
+      />}
 
       <Outlet context={{ ...workspace, openSidebar: () => setSidebarOpen(true) }} />
 

@@ -7,8 +7,10 @@ import ConversationPage from "../pages/conversation/ConversationPage.tsx";
 import BookWorkspacePage from "../pages/book/BookWorkspacePage.tsx";
 import SettingsPage from "../pages/settings/SettingsPage.tsx";
 import RouteErrorPage from "../pages/404/RouteErrorPage.tsx";
+import DeveloperPage from "../pages/developer/DeveloperPage.tsx";
 
 export const router = createHashRouter([
+  ...(import.meta.env.DEV ? [{ path: "/developer", Component: DeveloperPage, ErrorBoundary: RouteErrorPage }] : []),
   {
     path: "/",
     Component: WorkspaceLayout,

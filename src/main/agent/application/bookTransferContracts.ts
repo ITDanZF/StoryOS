@@ -99,6 +99,8 @@ export type ExportPreview = {
 export type CommitBookExportRequest = {
   readonly exportId: string;
   readonly outputPath: string;
+  /** Only set after the user accepts the save dialog, including its overwrite prompt. */
+  readonly overwrite?: boolean;
 };
 
 export type ExportBookResult = {
@@ -132,6 +134,7 @@ export type StoryOSBookChecksums = {
 export type ExportBookRequest = {
   readonly bookId: string;
   readonly outputPath: string;
+  readonly overwrite?: boolean;
 };
 
 export type ImportBookRequest = {

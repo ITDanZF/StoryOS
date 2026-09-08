@@ -1,5 +1,6 @@
 import path from "node:path";
 import {
+  constants,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -223,10 +224,10 @@ export default class BookTransferService {
     const session = this.exportSessions.get(request.exportId);
     if (!session) throw new Error("Book export session has expired or was cancelled.");
     const outputPath = this.requireFormatOutputPath(request.outputPath, session.preview.extension);
-    if (existsSync(outputPath)) throw new Error(`Export target already exists: ${outputPath}`);
+    this.requireExportTarget(outputPath, request.overwrite === true);
     try {
       if (session.format === "storyos") {
-        await this.exportBook({ bookId: session.snapshot.bookId, outputPath });
+        await this.exportBook({ bookId: session.snapshot.bookId, outputPath, overwrite: request.overwrite });
       } else {
         const content = await this.renderExport(session.snapshot, session.format, session.options);
         const temporary = path.join(
@@ -235,7 +236,7 @@ export default class BookTransferService {
         );
         try {
           writeFileSync(temporary, content, { flag: "wx" });
-          renameSync(temporary, outputPath);
+          this.publishExportFile(temporary, outputPath, request.overwrite === true);
         } finally {
           rmSync(temporary, { force: true });
         }
@@ -264,9 +265,7 @@ export default class BookTransferService {
       throw new Error(`Book storage is unavailable: ${book.id}`);
     }
     const outputPath = this.requirePackagePath(request.outputPath);
-    if (existsSync(outputPath)) {
-      throw new Error(`Export target already exists: ${outputPath}`);
-    }
+    this.requireExportTarget(outputPath, request.overwrite === true);
     const outputParent = path.dirname(outputPath);
     if (!existsSync(outputParent) || !statSync(outputParent).isDirectory()) {
       throw new Error(`Export directory does not exist: ${outputParent}`);
@@ -314,7 +313,7 @@ export default class BookTransferService {
       );
       writeFileSync(temporaryOutput, packageContent, { flag: "wx" });
       readStoryOSBookPackage(readFileSync(temporaryOutput));
-      renameSync(temporaryOutput, outputPath);
+      this.publishExportFile(temporaryOutput, outputPath, request.overwrite === true);
     } finally {
       rmSync(temporaryOutput, { force: true });
       rmSync(workRoot, { recursive: true, force: true });
@@ -388,6 +387,37 @@ export default class BookTransferService {
       throw error;
     } finally {
       rmSync(importingRoot, { recursive: true, force: true });
+    }
+  }
+
+  private requireExportTarget(outputPath: string, overwrite: boolean): void {
+    if (!existsSync(outputPath)) return;
+    if (!statSync(outputPath).isFile()) {
+      throw new Error(`导出目标不是文件，请选择其他保存位置：${outputPath}`);
+    }
+    if (!overwrite) {
+      throw new Error(`目标文件已存在，请确认覆盖或使用其他文件名：${outputPath}`);
+    }
+  }
+
+  private publishExportFile(temporary: string, outputPath: string, overwrite: boolean): void {
+    try {
+      if (overwrite) {
+        // Replace only after generation succeeds; never delete the old file first.
+        renameSync(temporary, outputPath);
+      } else {
+        // An existing file may appear while the asynchronous renderer is running.
+        copyFileSync(temporary, outputPath, constants.COPYFILE_EXCL);
+      }
+    } catch (cause) {
+      const code = (cause as NodeJS.ErrnoException).code;
+      if (code === "EEXIST") {
+        throw new Error(`目标文件已存在，请确认覆盖或使用其他文件名：${outputPath}`);
+      }
+      if (code === "EACCES" || code === "EPERM" || code === "EBUSY") {
+        throw new Error(`无法保存文件，文件可能正被其他程序占用或没有写入权限。请关闭占用程序或选择其他位置后重试：${outputPath}`);
+      }
+      throw cause;
     }
   }
 

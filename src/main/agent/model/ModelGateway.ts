@@ -16,6 +16,7 @@ export type ModelStreamPart = {
 };
 
 export interface ModelGateway {
+  withSnapshot?<T>(operation: () => T): T;
   stream(input: ModelRunInput): AsyncIterable<string | ModelStreamPart>;
   invokeText?(input: ModelRunInput): Promise<string>;
 }

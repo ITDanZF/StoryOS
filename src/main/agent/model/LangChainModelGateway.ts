@@ -1,4 +1,4 @@
-import { ChatOpenAI } from "@langchain/openai";
+import LiveModelConnection from "./LiveModelConnection.ts";
 import { AIMessageChunk, createAgent, HumanMessage } from "langchain";
 import type { ModelConnectionConfiguration } from "./ModelConfiguration.ts";
 import type { ModelGateway, ModelRunInput, ModelStreamPart } from "./ModelGateway.ts";
@@ -20,23 +20,24 @@ function hasInternalRunTag(metadata: unknown): boolean {
 
 export type LangChainModelGatewayOptions = {
   readonly configuration: ModelConnectionConfiguration;
+  readonly connection?: LiveModelConnection;
   readonly sessions: ModelSessionStore;
 };
 
 export default class LangChainModelGateway implements ModelGateway {
-  private readonly chatModel: ChatOpenAI;
+  private readonly connection: LiveModelConnection;
 
   constructor(private readonly options: LangChainModelGatewayOptions) {
-    this.chatModel = new ChatOpenAI({
-      model: options.configuration.modelName,
-      apiKey: options.configuration.apiKey,
-      configuration: { baseURL: options.configuration.baseUrl },
-    });
+    this.connection = options.connection ?? new LiveModelConnection(options.configuration);
+  }
+
+  withSnapshot<T>(operation: () => T): T {
+    return this.connection.withSnapshot(operation);
   }
 
   private createRuntimeAgent(input: ModelRunInput) {
     return createAgent({
-      model: this.chatModel,
+      model: this.connection.getClient(),
       tools: input.tools,
       systemPrompt: input.systemPrompt,
       checkpointer: this.options.sessions.getCheckpointer(),
@@ -44,6 +45,10 @@ export default class LangChainModelGateway implements ModelGateway {
   }
 
   invoke(input: ModelRunInput) {
+    return this.withSnapshot(() => this.invokeWithSnapshot(input));
+  }
+
+  private invokeWithSnapshot(input: ModelRunInput) {
     const runtimeAgent = this.createRuntimeAgent(input);
     return runtimeAgent.invoke(
       { messages: [new HumanMessage(input.prompt)] },
@@ -70,6 +75,21 @@ export default class LangChainModelGateway implements ModelGateway {
   }
 
   async *stream(input: ModelRunInput): AsyncGenerator<ModelStreamPart, void, unknown> {
+    // Async generators execute on next(), so bind every iteration as well as creation.
+    const inScope = this.connection.captureScope();
+    const iterator = this.streamWithSnapshot(input);
+    try {
+      while (true) {
+        const part = await inScope(() => iterator.next());
+        if (part.done === true) return;
+        yield part.value;
+      }
+    } finally {
+      await inScope(() => iterator.return());
+    }
+  }
+
+  private async *streamWithSnapshot(input: ModelRunInput): AsyncGenerator<ModelStreamPart, void, unknown> {
     const runtimeAgent = this.createRuntimeAgent(input);
     const internal = input.visibility === "internal";
     const stream = await runtimeAgent.stream(

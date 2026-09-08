@@ -15,6 +15,7 @@ import ThreadApplication from "../application/ThreadApplication.ts";
 import Memory from "../Memory/index.ts";
 import type { ModelConnectionConfiguration } from "../model/ModelConfiguration.ts";
 import Model from "../model/Model.ts";
+import LiveModelConnection from "../model/LiveModelConnection.ts";
 import SkillApplication from "../skills/SkillApplication.ts";
 import SkillContextProviderService from "../skills/SkillContextProvider.ts";
 import SkillDraftService from "../skills/SkillDraftService.ts";
@@ -74,6 +75,7 @@ export default class WorkspaceRuntimeManager {
     new Set<ConversationApplicationEventHandler>();
   private globalRuntime: ActiveWorkspaceRuntime | null = null;
   private projectRuntime: ActiveWorkspaceRuntime | null = null;
+  private readonly modelConnection: LiveModelConnection;
 
   private constructor(
     private readonly projects: ProjectApplication,
@@ -82,7 +84,13 @@ export default class WorkspaceRuntimeManager {
     private readonly bookProvisioning: BookProvisioningService,
     private readonly modelConfiguration: ModelConnectionConfiguration,
     private readonly rendererEditorTools?: RendererEditorToolClient,
-  ) {}
+  ) {
+    this.modelConnection = new LiveModelConnection(modelConfiguration);
+  }
+
+  prepareModelConfiguration(configuration: ModelConnectionConfiguration): () => void {
+    return this.modelConnection.prepareUpdate(configuration);
+  }
 
   static create(
     projects: ProjectApplication,
@@ -284,6 +292,7 @@ export default class WorkspaceRuntimeManager {
       resources.modelSessions = modelSessions;
       const model = new Model({
         configuration: this.modelConfiguration,
+        connection: this.modelConnection,
         sessions: modelSessions,
       });
       const chapterGeneration = project
@@ -334,6 +343,7 @@ export default class WorkspaceRuntimeManager {
         }),
         {
           checkpointPath: layout.checkpointPath,
+          withRunContext: (operation) => this.modelConnection.withNewTask(operation),
           eventRecorder: {
             record: async (event) => {
               await Promise.all([
@@ -405,6 +415,16 @@ export default class WorkspaceRuntimeManager {
       this.closeRuntime(projectRuntime),
       this.closeRuntime(globalRuntime),
     ]);
+    this.bookRuntimes.closeAll();
+    this.subscribers.clear();
+  }
+
+  async closeForDeveloper(): Promise<void> {
+    if (this.hasActiveRun()) throw new Error("仍有 AI 任务运行，请等待完成。");
+    await this.closeRuntime(this.projectRuntime);
+    this.projectRuntime = null;
+    await this.closeRuntime(this.globalRuntime);
+    this.globalRuntime = null;
     this.bookRuntimes.closeAll();
     this.subscribers.clear();
   }

@@ -13,7 +13,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useBlocker, useParams, useSearchParams } from "react-router-dom";
 import { cn } from "../../../lib/utils.ts";
 import type {
   ConversationTurnContext,
@@ -130,6 +130,13 @@ export default function BookWorkspacePage() {
   const [editorContext, setEditorContext] =
     useState<ChapterEditorLiveContext | null>(null);
   const editorBridgeRef = useRef<ChapterEditorBridge | null>(null);
+  const settingsBlocker = useBlocker(({ nextLocation }) =>
+    Boolean(editorBridgeRef.current) && ["/settings", "/developer"].includes(nextLocation.pathname));
+  useEffect(() => {
+    if (settingsBlocker.state !== "blocked") return;
+    void editorBridgeRef.current.flushPending().then(() => settingsBlocker.proceed())
+      .catch(() => settingsBlocker.reset()); // The chapter save hook displays the persistence error.
+  }, [settingsBlocker]);
   const readyWorkspace = workspace?.state === "ready" ? workspace : null;
   const chapterGroups = useMemo(
     () => createBookChapterGroups(

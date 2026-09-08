@@ -208,7 +208,7 @@ export function registerAgentIpc(
         channel: string,
         listener: (...args: TArgs) => unknown,
     ) => {
-        ipcMain.handle(channel, (_event, ...args) => listener(...args as TArgs));
+        ipcMain.handle(channel, (_event, ...args) => service.runBusinessRequest(() => listener(...args as TArgs)));
         registeredChannels.push(channel);
     };
 
@@ -323,6 +323,7 @@ export function registerAgentIpc(
     ) => service.requireController().commitBookshelfBookExport({
         exportId: requireText(request?.exportId, "Book export id"),
         outputPath: requireText(request?.outputPath, "Book export path"),
+        overwrite: request?.overwrite === true,
     }));
     handle(AGENT_IPC_CHANNELS.cancelBookshelfBookExport, (exportId: string) =>
         service.requireController().cancelBookshelfBookExport(

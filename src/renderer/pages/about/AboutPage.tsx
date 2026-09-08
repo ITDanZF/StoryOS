@@ -1,6 +1,7 @@
 import { ArrowLeft, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import StoryLogo from "../../components/StoryLogo.tsx";
+import { APP_VERSION } from "../../../shared/appInfo.ts";
 
 export default function AboutPage() {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ export default function AboutPage() {
           <div className="flex items-center gap-3 border-t border-neutral-100 bg-neutral-50/70 px-5 py-4 text-xs sm:px-7">
             <span className="grid size-8 place-items-center rounded-lg bg-white text-neutral-500 shadow-sm"><Info size={16} /></span>
             <span className="text-neutral-500">当前版本</span>
-            <strong className="ml-auto font-medium text-neutral-800">1.0.0</strong>
+            <strong className="ml-auto font-medium text-neutral-800">{APP_VERSION}</strong>
           </div>
         </div>
       </div>

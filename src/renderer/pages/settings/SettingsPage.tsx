@@ -1,50 +1,68 @@
-import { ArrowLeft, Bot } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { ArrowLeft, LoaderCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useBlocker, useLocation, useNavigate } from "react-router-dom";
+import { APP_VERSION } from "../../../shared/appInfo.ts";
+import StoryLogo from "../../components/StoryLogo.tsx";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
-import { ConfigurationPanel } from "./components/ConfigurationDialog.tsx";
+import { ConfigurationPanel } from "./components/ConfigurationPanel.tsx";
 
 export default function SettingsPage() {
   const { state, configure } = useWorkspaceOutlet();
   const navigate = useNavigate();
-  const status = state.status;
-  const required = Boolean(status && !status.initialized);
-  const returnToConversation = () => navigate("/conversations");
+  const location = useLocation();
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const required = !state.status?.initialized;
+  const blocker = useBlocker(({ nextLocation }) => dirty || saving || (required && nextLocation.pathname !== "/developer"));
+  const previousPath = location.state?.returnTo;
+  const returnTo = typeof previousPath === "string" && /^\/(conversations|projects|bookshelf)(\/|\?|$)/.test(previousPath) ? previousPath : "/conversations";
+
+  useEffect(() => {
+    if (blocker.state === "blocked") dialogRef.current?.showModal();
+    else dialogRef.current?.close();
+  }, [blocker.state]);
+  useEffect(() => {
+    if (!dirty && !saving) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [dirty, saving]);
 
   return (
-    <section className="m-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 border-border bg-[#f7f7f6] sm:m-1.5 sm:rounded-xl sm:border lg:ml-2 2xl:mr-3" aria-label="设置面板">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-neutral-200 bg-white/90 px-4 backdrop-blur-xl sm:px-6">
-        <button
-          className="grid size-9 shrink-0 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-40"
-          type="button"
-          aria-label="返回工作区"
-          title={required ? "完成模型配置后即可返回" : "返回"}
-          disabled={required}
-          onClick={returnToConversation}
-        >
-          <ArrowLeft size={18} />
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-50" aria-label="设置面板">
+      <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-background px-4 sm:px-8">
+        <button className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-neutral-600 transition hover:bg-muted focus-visible:outline-2 disabled:opacity-40" type="button" title={required ? "完成模型配置后即可返回" : "返回工作区"} disabled={required || saving} onClick={() => navigate(returnTo)}>
+          <ArrowLeft size={17} /><span>返回工作区</span>
         </button>
-        <div className="min-w-0">
-          <h1 className="m-0 text-sm font-semibold tracking-tight text-neutral-900">设置面板</h1>
-          <p className="m-0 mt-0.5 text-[10px] text-neutral-400">管理 StoryOS 的模型连接</p>
-        </div>
+        <span className="h-4 w-px bg-border" /><span className="text-sm font-medium">设置</span>
       </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-8 sm:py-10">
-        <div className="mx-auto w-full max-w-3xl">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-neutral-900 text-white shadow-sm"><Bot size={20} /></span>
-            <div>
-              <h2 className="m-0 text-lg font-semibold tracking-tight text-neutral-900">AI 模型</h2>
-              <p className="m-0 mt-1 text-xs text-neutral-500">配置用于 StoryOS 对话与智能体任务的模型服务。</p>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-8">
+        <div className="mx-auto grid w-full max-w-[960px] gap-6">
+          <div><h1 className="text-2xl font-semibold tracking-tight">偏好设置</h1><p className="mt-2 text-sm text-muted-foreground">管理模型连接，查看应用信息。</p></div>
+          <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm" aria-label="AI 模型">
+            {state.status ? <ConfigurationPanel status={state.status} onConfigure={configure} onDirtyChange={setDirty} onSavingChange={setSaving} /> : (
+              <div className="flex flex-wrap items-center gap-3 p-7 text-sm text-muted-foreground" role="status">{state.loading ? <><LoaderCircle size={16} className="animate-spin" />正在读取配置…</> : <>配置读取失败。<button className="rounded-lg border border-border px-3 py-2 hover:bg-muted" onClick={() => window.location.reload()}>重新加载</button></>}</div>
+            )}
+          </section>
+          <section className="rounded-2xl border border-border bg-card px-5 py-5 shadow-sm sm:px-7" aria-labelledby="app-info-title">
+            <h2 id="app-info-title" className="text-sm font-semibold">应用信息</h2>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3"><StoryLogo className="size-11 rounded-xl border border-border" /><div><p className="text-sm font-semibold">StoryOS</p><p className="mt-1 text-xs text-muted-foreground">AI 创作工作空间</p></div></div>
+              <div className="text-right"><p className="text-xs text-muted-foreground">当前版本</p><p className="mt-1 font-mono text-sm font-medium">{APP_VERSION}</p></div>
             </div>
-          </div>
-          {status && (
-            <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_10px_35px_rgba(0,0,0,0.04)] sm:p-7">
-              <ConfigurationPanel status={status} onConfigure={configure} onConfigured={returnToConversation} />
-            </div>
-          )}
+          </section>
+          {import.meta.env.DEV && <section className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card px-5 py-5 shadow-sm sm:px-7"><div><h2 className="text-sm font-semibold">开发者工具</h2><p className="mt-2 text-xs text-muted-foreground">浏览本地 SQLite 数据库，管理数据表中的记录。</p></div><button className="shrink-0 rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted" onClick={() => navigate("/developer")}>打开数据管理</button></section>}
         </div>
       </div>
+      <dialog ref={dialogRef} className="fixed inset-0 m-auto w-[calc(100%-32px)] max-w-sm rounded-2xl border border-border bg-white p-6 text-foreground shadow-xl backdrop:bg-black/30" aria-labelledby="leave-settings-title" onCancel={(event) => { event.preventDefault(); if (blocker.state === "blocked") blocker.reset(); }}>
+        <h2 id="leave-settings-title" className="text-base font-semibold">{saving ? "正在保存设置" : required ? "请先完成模型配置" : "有尚未保存的修改"}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{saving ? "保存完成后即可离开此页面。" : required ? "配置模型后即可返回工作区开始使用。" : "离开此页面将放弃本次修改，已保存的配置不受影响。"}</p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button autoFocus className="h-9 rounded-lg border border-border px-3 text-sm hover:bg-muted" onClick={() => { if (blocker.state === "blocked") blocker.reset(); }}>继续编辑</button>
+          {!saving && !required && <button className="h-9 rounded-lg bg-primary px-3 text-sm text-primary-foreground" onClick={() => { if (blocker.state === "blocked") blocker.proceed(); }}>放弃修改</button>}
+        </div>
+      </dialog>
     </section>
   );
 }

@@ -378,8 +378,11 @@ export function useAgentWorkspace() {
     setError(null);
     const nextStatus = await window.storyOSAgent.configure(request);
     setStatus(nextStatus);
-    await loadChat();
-  }, [loadChat]);
+    if (!status?.initialized) {
+      // Configuration is already saved; a workspace load error must not report a failed save.
+      try { await loadChat(); } catch (cause) { setError(getErrorMessage(cause)); }
+    }
+  }, [loadChat, status?.initialized]);
 
   const createThread = useCallback(async (
     scope: ConversationScope = activeScopeRef.current,

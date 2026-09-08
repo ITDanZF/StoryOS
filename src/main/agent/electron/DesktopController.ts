@@ -1,5 +1,6 @@
 import { shell } from "electron";
 import path from "node:path";
+import type { ModelConnectionConfiguration } from "../model/ModelConfiguration.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ProjectNavigationReader from "../application/ProjectNavigationReader.ts";
 import type BookshelfApplication from "../application/BookshelfApplication.ts";
@@ -75,6 +76,10 @@ export default class DesktopController {
 
   subscribe(handler: ConversationApplicationEventHandler): () => void {
     return this.dependencies.runtime.subscribe(handler);
+  }
+
+  prepareModelConfiguration(configuration: ModelConnectionConfiguration): () => void {
+    return this.dependencies.runtime.prepareModelConfiguration(configuration);
   }
 
   sendMessage(request: { readonly threadId: string; readonly content: string }) {
@@ -625,6 +630,8 @@ export default class DesktopController {
   }
 
   shutdown(): Promise<void> { return this.dependencies.runtime.shutdown(); }
+  hasActiveRun(): boolean { return this.dependencies.runtime.hasActiveRun(); }
+  closeForDeveloper(): Promise<void> { return this.dependencies.runtime.closeForDeveloper(); }
 
   getSkillSnapshot() { return this.dependencies.runtime.skills.getSnapshot(); }
   getSkill(skillId: string) { return this.dependencies.runtime.skills.getSkill(skillId); }

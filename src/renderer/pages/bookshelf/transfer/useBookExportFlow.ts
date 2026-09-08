@@ -27,6 +27,11 @@ const DEFAULT_OPTIONS: ExportBookOptions = {
   splitTextFiles: false,
 };
 
+function exportErrorMessage(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "");
+}
+
 export default function useBookExportFlow(book: ReadyBook) {
   const [state, setState] = useState<ExportState>({ phase: "choose-format" });
 
@@ -41,7 +46,7 @@ export default function useBookExportFlow(book: ReadyBook) {
       });
       setState({ phase: "destination", format, preview });
     } catch (cause) {
-      setState({ phase: "error", format, preview: null, message: cause instanceof Error ? cause.message : String(cause) });
+      setState({ phase: "error", format, preview: null, message: exportErrorMessage(cause) });
     }
   };
   const commit = async (outputPath: string) => {
@@ -49,11 +54,16 @@ export default function useBookExportFlow(book: ReadyBook) {
     const { format, preview } = state;
     setState({ phase: "exporting", format, preview });
     try {
-      const result = await window.storyOSAgent.commitBookshelfBookExport({ exportId: preview.exportId, outputPath });
+      // commit is called only after the native save dialog accepts the destination.
+      const result = await window.storyOSAgent.commitBookshelfBookExport({
+        exportId: preview.exportId,
+        outputPath,
+        overwrite: true,
+      });
       await window.storyOSWindow.rememberTransferLocation(outputPath);
       setState({ phase: "success", result });
     } catch (cause) {
-      setState({ phase: "error", format, preview, message: cause instanceof Error ? cause.message : String(cause) });
+      setState({ phase: "error", format, preview, message: exportErrorMessage(cause) });
     }
   };
   const back = async () => {
@@ -70,7 +80,7 @@ export default function useBookExportFlow(book: ReadyBook) {
     }
   };
   const dispose = async () => {
-    if (state.phase === "destination" || state.phase === "exporting") {
+    if (state.phase === "destination" || state.phase === "exporting" || (state.phase === "error" && state.preview)) {
       await window.storyOSAgent.cancelBookshelfBookExport(state.preview.exportId);
     }
   };
