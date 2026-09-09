@@ -1,23 +1,19 @@
-import SkillBootstrap from "./SkillBootstrap.ts";
+import type { SkillSnapshot } from "../../../shared/engine/skills/SkillApplication.ts";
 import type { SkillBootstrapResult } from "./SkillBootstrap.ts";
-import SkillLoader from "./SkillLoader.ts";
-import type { SkillLoadIssue } from "./SkillLoader.ts";
-import SkillRegistry from "./SkillRegistry.ts";
-import SkillDraftService from "./SkillDraftService.ts";
+import SkillBootstrap from "./SkillBootstrap.ts";
 import type { SkillDraftRequest } from "./SkillDraftService.ts";
-import SkillScaffoldService from "./SkillScaffoldService.ts";
+import SkillDraftService from "./SkillDraftService.ts";
+import type { SkillLoadIssue } from "./SkillLoader.ts";
+import SkillLoader from "./SkillLoader.ts";
+import SkillRegistry from "./SkillRegistry.ts";
 import type {
   CreateUserSkillFromContentRequest,
   CreateUserSkillRequest,
   CreatedUserSkill,
 } from "./SkillScaffoldService.ts";
+import SkillScaffoldService from "./SkillScaffoldService.ts";
 import type { SkillDefinition, SkillDetail, SkillSummary } from "./SkillTypes.ts";
-
-export type SkillSnapshot = {
-  readonly skills: readonly SkillSummary[];
-  readonly issues: readonly SkillLoadIssue[];
-  readonly loadedAt: string;
-};
+export type { SkillSnapshot } from "../../../shared/engine/skills/SkillApplication.ts";
 
 export type SkillDoctorResult = SkillSnapshot & {
   readonly ok: boolean;
@@ -25,10 +21,7 @@ export type SkillDoctorResult = SkillSnapshot & {
   readonly issueCount: number;
 };
 
-function metadataBoolean(
-  skill: SkillDefinition,
-  key: string,
-): boolean | null {
+function metadataBoolean(skill: SkillDefinition, key: string): boolean | null {
   const value = skill.manifest.metadata?.[key];
   return typeof value === "boolean" ? value : null;
 }
@@ -98,21 +91,25 @@ export default class SkillApplication {
       try {
         registry.register(skill);
       } catch (error) {
-        issues.push(Object.freeze({
-          sourceType: skill.source.type,
-          root: skill.source.root,
-          filePath: skill.source.filePath,
-          message: error instanceof Error ? error.message : String(error),
-        }));
+        issues.push(
+          Object.freeze({
+            sourceType: skill.source.type,
+            root: skill.source.root,
+            filePath: skill.source.filePath,
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
       }
     }
 
     for (const warning of syncResult.warnings) {
-      issues.push(Object.freeze({
-        sourceType: "system",
-        root: "SkillBootstrap",
-        message: warning,
-      }));
+      issues.push(
+        Object.freeze({
+          sourceType: "system",
+          root: "SkillBootstrap",
+          message: warning,
+        }),
+      );
     }
 
     this.registry = registry;
@@ -143,9 +140,7 @@ export default class SkillApplication {
     return this.scaffold.renderTemplate({ id });
   }
 
-  async createUserSkillTemplate(
-    request: CreateUserSkillRequest,
-  ): Promise<CreatedUserSkill> {
+  async createUserSkillTemplate(request: CreateUserSkillRequest): Promise<CreatedUserSkill> {
     const created = await this.scaffold.createUserSkill(request);
     await this.reload();
     return created;
@@ -167,9 +162,7 @@ export default class SkillApplication {
     return this.draft.generate(request);
   }
 
-  async createUserSkillFromDraft(
-    request: SkillDraftRequest,
-  ): Promise<CreatedUserSkill> {
+  async createUserSkillFromDraft(request: SkillDraftRequest): Promise<CreatedUserSkill> {
     const content = await this.draftSkill(request);
     return this.createUserSkillFromContent({
       id: request.id,

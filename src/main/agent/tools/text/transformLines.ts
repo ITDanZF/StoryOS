@@ -95,13 +95,9 @@ function applyLineStep(lines: string[], step: LineStep): string[] {
       return step.direction === "descending" ? sorted.reverse() : sorted;
     }
     case "add_prefix":
-      return lines.map((line) =>
-        step.non_empty_only && !line ? line : `${step.text}${line}`,
-      );
+      return lines.map((line) => (step.non_empty_only && !line ? line : `${step.text}${line}`));
     case "add_suffix":
-      return lines.map((line) =>
-        step.non_empty_only && !line ? line : `${line}${step.text}`,
-      );
+      return lines.map((line) => (step.non_empty_only && !line ? line : `${line}${step.text}`));
   }
 }
 
@@ -151,9 +147,7 @@ export function createTransformLinesTool(context: WorkspaceToolContext) {
           revision: source.revision,
           result: {
             content: updatedContent,
-            lines_before: source.content
-              ? source.content.split("\n").length
-              : 0,
+            lines_before: source.content ? source.content.split("\n").length : 0,
             lines_after: lines.length,
             steps: stepResults,
           },
@@ -161,12 +155,7 @@ export function createTransformLinesTool(context: WorkspaceToolContext) {
         });
       }
 
-      const written = await writeTextSource(
-        context,
-        source,
-        updatedContent,
-        expected_revision,
-      );
+      const written = await writeTextSource(context, source, updatedContent, expected_revision);
       return stringifyTextToolResult({
         source: "file",
         path: written.path,

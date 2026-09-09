@@ -1,0 +1,214 @@
+import type {
+  BookshelfBookCard,
+  BookshelfTrashEntry,
+  CreateBookshelfBookRequest,
+  CreateBookshelfBookResult,
+} from "../../../../shared/contracts/books/bookshelfContracts.ts";
+import type BookRuntimeManager from "../../runtime/BookRuntimeManager.ts";
+import type { RestoreProjectArchiveRequest } from "../projects/projectArchiveContracts.ts";
+import type ProjectArchiveService from "../projects/ProjectArchiveService.ts";
+import type ProjectBookBindingService from "../projects/ProjectBookBindingService.ts";
+import type {
+  CommitBookExportRequest,
+  CommitBookImportRequest,
+  ExportBookRequest,
+  ImportBookRequest,
+  ImportBookResult,
+  PrepareBookExportRequest,
+  PrepareBookImportRequest,
+} from "../transfers/bookTransferContracts.ts";
+import type BookTransferService from "../transfers/BookTransferService.ts";
+import BookCatalogReader from "./BookCatalogReader.ts";
+import type BookLifecycleService from "./BookLifecycleService.ts";
+import type BookProvisioningService from "./BookProvisioningService.ts";
+import type { BookRegistry } from "./bookRegistryPorts.ts";
+import type BookRegistryReconciler from "./BookRegistryReconciler.ts";
+import type { BookReconciliationResult } from "./BookRegistryReconciler.ts";
+
+export default class BookshelfApplication {
+  constructor(
+    private readonly books: BookRegistry,
+    runtimes: BookRuntimeManager,
+    private readonly bindings: ProjectBookBindingService,
+    private readonly reconciler: BookRegistryReconciler,
+    private readonly lifecycle: BookLifecycleService,
+    private readonly transfer: BookTransferService,
+    private readonly projectArchives: ProjectArchiveService,
+    private readonly provisioning: BookProvisioningService,
+  ) {
+    this.catalog = new BookCatalogReader(runtimes);
+  }
+
+  private readonly catalog: BookCatalogReader;
+
+  listBooks(page?: { after?: string; limit: number }): readonly BookshelfBookCard[] {
+    return Object.freeze(
+      this.books
+        .listBooks(page ? { ...page, excludeTrashed: true } : undefined)
+        .filter((book) => book.state !== "trashed")
+        .map((book) => {
+          const linkedProjectIds = this.books.listProjectIdsForBook(book.id);
+          try {
+            return {
+              ...this.catalog.read(book, linkedProjectIds),
+              ...(page
+                ? {
+                    listCursor: JSON.stringify({
+                      time: book.lastOpenedAt?.getTime() ?? book.updatedAt.getTime(),
+                      id: book.id,
+                    }),
+                  }
+                : {}),
+            };
+          } catch (error) {
+            return Object.freeze({
+              availability: "unavailable",
+              ...(page
+                ? {
+                    listCursor: JSON.stringify({
+                      time: book.lastOpenedAt?.getTime() ?? book.updatedAt.getTime(),
+                      id: book.id,
+                    }),
+                  }
+                : {}),
+              bookId: book.id,
+              storageState: "corrupted",
+              linkedProjectId: linkedProjectIds[0] ?? null,
+              linkedProjectCount: linkedProjectIds.length,
+              lastOpenedAt: book.lastOpenedAt?.toISOString() ?? null,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }),
+    );
+  }
+
+  createBook(request: CreateBookshelfBookRequest): CreateBookshelfBookResult {
+    const title = request.title.trim();
+    if (!title) throw new Error("Book title is required.");
+    if (title.length > 200) {
+      throw new Error("Book title must be 200 characters or fewer.");
+    }
+    const synopsis = request.synopsis.trim();
+    if (synopsis.length > 20_000) {
+      throw new Error("Book synopsis must be 20000 characters or fewer.");
+    }
+    const provisioned = this.provisioning.createStandalone({
+      id: `novel_${crypto.randomUUID()}`,
+      title,
+      synopsis,
+      status: "planning",
+    });
+    const registered = this.books.getBookById(provisioned.bookId);
+    if (!registered) {
+      throw new Error(`Provisioned book was not registered: ${provisioned.bookId}`);
+    }
+    const card = this.catalog.read(registered, []);
+    if (card.availability !== "ready") {
+      throw new Error(`Provisioned book is unavailable: ${provisioned.bookId}`);
+    }
+    return Object.freeze({
+      bookId: provisioned.bookId,
+      book: card,
+    });
+  }
+
+  listTrash(): readonly BookshelfTrashEntry[] {
+    return Object.freeze(
+      this.books.listTrash().map((book) =>
+        Object.freeze({
+          bookId: book.bookId,
+          title: book.title,
+          storageState: "trashed" as const,
+          trashedAt: book.trashedAt.toISOString(),
+        }),
+      ),
+    );
+  }
+
+  attachBookToProject(projectId: string, bookId: string): Promise<void> {
+    return this.bindings.attachExistingBook(projectId, bookId);
+  }
+
+  detachBookFromProject(projectId: string): Promise<void> {
+    return this.bindings.detachBook(projectId);
+  }
+
+  reconcileRegistry(): readonly BookReconciliationResult[] {
+    return this.reconciler.reconcile();
+  }
+
+  moveBookToTrash(bookId: string): BookshelfTrashEntry {
+    const entry = this.lifecycle.moveToTrash(bookId);
+    return Object.freeze({
+      bookId: entry.bookId,
+      title: entry.title,
+      storageState: "trashed",
+      trashedAt: entry.trashedAt.toISOString(),
+    });
+  }
+
+  restoreBookFromTrash(bookId: string): BookshelfBookCard {
+    const book = this.lifecycle.restoreFromTrash(bookId);
+    return this.catalog.read(book, this.books.listProjectIdsForBook(bookId));
+  }
+
+  permanentlyDeleteBook(input: {
+    readonly bookId: string;
+    readonly confirmationBookId: string;
+  }): void {
+    this.lifecycle.permanentlyDelete(input);
+  }
+
+  exportBook(request: ExportBookRequest): Promise<void> {
+    return this.transfer.exportBook(request);
+  }
+
+  importBook(request: ImportBookRequest): ImportBookResult {
+    return this.transfer.importBook(request);
+  }
+
+  listTransferFormats() {
+    return this.transfer.listFormats();
+  }
+
+  prepareBookImport(request: PrepareBookImportRequest) {
+    return this.transfer.prepareImport(request);
+  }
+
+  commitBookImport(request: CommitBookImportRequest) {
+    return this.transfer.commitImport(request);
+  }
+
+  cancelBookImport(sessionId: string): void {
+    this.transfer.cancelImport(sessionId);
+  }
+
+  prepareBookExport(request: PrepareBookExportRequest) {
+    return this.transfer.prepareExport(request);
+  }
+
+  commitBookExport(request: CommitBookExportRequest) {
+    return this.transfer.commitExport(request);
+  }
+
+  cancelBookExport(exportId: string): void {
+    this.transfer.cancelExport(exportId);
+  }
+
+  listProjectArchives(bookId?: string) {
+    return this.projectArchives.list(bookId ? { bookId } : {});
+  }
+
+  listProjectArchiveSummaries(bookId: string) {
+    return this.projectArchives.listSummaries(bookId);
+  }
+
+  createProjectArchive(projectId: string) {
+    return this.projectArchives.createForProjectDeletion(projectId);
+  }
+
+  restoreProjectArchive(request: RestoreProjectArchiveRequest) {
+    return this.projectArchives.restore(request);
+  }
+}

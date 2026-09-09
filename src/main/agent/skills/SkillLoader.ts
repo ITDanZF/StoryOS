@@ -1,17 +1,12 @@
 import { constants as fsConstants } from "node:fs";
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import type { SkillLoadIssue } from "../../../shared/engine/skills/SkillLoader.ts";
 import { KNOWN_M0_TOOL_NAMES } from "./DefaultSkillIndex.ts";
 import { parseSkillFile, validateSkillManifest } from "./SkillManifest.ts";
 import { getSystemSkillRoot, getUserSkillRoot } from "./SkillPaths.ts";
 import type { SkillDefinition, SkillSourceType } from "./SkillTypes.ts";
-
-export type SkillLoadIssue = {
-  readonly sourceType: SkillSourceType;
-  readonly root: string;
-  readonly filePath?: string;
-  readonly message: string;
-};
+export type { SkillLoadIssue } from "../../../shared/engine/skills/SkillLoader.ts";
 
 export type SkillLoadResult = {
   readonly skills: readonly SkillDefinition[];
@@ -40,7 +35,7 @@ async function loadRoot(input: {
   readonly knownToolNames: readonly string[];
   readonly loadedAt: Date;
 }): Promise<SkillLoadResult> {
-  if (!await exists(input.root)) {
+  if (!(await exists(input.root))) {
     return Object.freeze({ skills: Object.freeze([]), issues: Object.freeze([]) });
   }
 
@@ -56,13 +51,15 @@ async function loadRoot(input: {
     const skillRoot = path.join(input.root, entry.name);
     const filePath = path.join(skillRoot, "SKILL.md");
 
-    if (!await exists(filePath)) {
-      issues.push(Object.freeze({
-        sourceType: input.sourceType,
-        root: skillRoot,
-        filePath,
-        message: "Skill directory is missing SKILL.md.",
-      }));
+    if (!(await exists(filePath))) {
+      issues.push(
+        Object.freeze({
+          sourceType: input.sourceType,
+          root: skillRoot,
+          filePath,
+          message: "Skill directory is missing SKILL.md.",
+        }),
+      );
       continue;
     }
 
@@ -76,23 +73,27 @@ async function loadRoot(input: {
         throw new Error(`Skill directory must match manifest id: ${entry.name} != ${manifest.id}`);
       }
 
-      skills.push(Object.freeze({
-        manifest,
-        body: parsed.body,
-        source: Object.freeze({
-          type: input.sourceType,
+      skills.push(
+        Object.freeze({
+          manifest,
+          body: parsed.body,
+          source: Object.freeze({
+            type: input.sourceType,
+            root: skillRoot,
+            filePath,
+          }),
+          loadedAt: input.loadedAt,
+        }),
+      );
+    } catch (error) {
+      issues.push(
+        Object.freeze({
+          sourceType: input.sourceType,
           root: skillRoot,
           filePath,
+          message: error instanceof Error ? error.message : String(error),
         }),
-        loadedAt: input.loadedAt,
-      }));
-    } catch (error) {
-      issues.push(Object.freeze({
-        sourceType: input.sourceType,
-        root: skillRoot,
-        filePath,
-        message: error instanceof Error ? error.message : String(error),
-      }));
+      );
     }
   }
 
@@ -140,8 +141,16 @@ export default class SkillLoader {
       : Object.freeze({ skills: Object.freeze([]), issues: Object.freeze([]) });
 
     return Object.freeze({
-      skills: Object.freeze([...systemResult.skills, ...userResult.skills, ...projectResult.skills]),
-      issues: Object.freeze([...systemResult.issues, ...userResult.issues, ...projectResult.issues]),
+      skills: Object.freeze([
+        ...systemResult.skills,
+        ...userResult.skills,
+        ...projectResult.skills,
+      ]),
+      issues: Object.freeze([
+        ...systemResult.issues,
+        ...userResult.issues,
+        ...projectResult.issues,
+      ]),
     });
   }
 }

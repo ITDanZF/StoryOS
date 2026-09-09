@@ -51,12 +51,7 @@ export function createEditTextRangeTool(context: WorkspaceToolContext) {
         });
       }
 
-      const written = await writeTextSource(
-        context,
-        source,
-        updatedContent,
-        expected_revision,
-      );
+      const written = await writeTextSource(context, source, updatedContent, expected_revision);
       return stringifyTextToolResult({
         source: "file",
         path: written.path,

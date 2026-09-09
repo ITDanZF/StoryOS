@@ -39,7 +39,8 @@ try {
     book = await api.createBookChapter({ projectId, volumeId: book.volumes[0].id, title: "灯下" });
     const chapterId = book.chapters[0].id;
     const content = JSON.stringify({ schemaVersion: 1, document: { type: "doc", content: Array.from({ length: 100 }, (_, i) => ({ type: "paragraph", content: [{ type: "text", text: `第${i + 1}段。山中的灯火照亮回家的路。晚风穿过树林，读者在书页之间，找到新的故事。` }] })) } });
-    const saved = await api.saveBookChapterContent({ projectId, chapterId, content, expectedCurrentRevisionId: null });
+    const original = await api.getBookChapterContent({ projectId, chapterId });
+    const saved = await api.saveBookChapterContent({ projectId, chapterId, content, expectedCurrentRevisionId: original.currentRevisionId, expectedRowVersion: original.rowVersion });
     const standalone = await api.createBookshelfBook({ title: "独立书籍", synopsis: "" });
     const standaloneSnapshot = await api.openBookReader(standalone.bookId);
     if (standaloneSnapshot.book.title !== "独立书籍") throw new Error("standalone reader failed");

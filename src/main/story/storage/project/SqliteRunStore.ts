@@ -1,0 +1,260 @@
+import type { Database as BetterSqliteDatabase } from "better-sqlite3";
+import type {
+  ApplicationEvent,
+  RunSnapshot,
+  RunStatus,
+} from "../../../../shared/contracts/conversations/applicationContracts.ts";
+import type { RunHistoryStore } from "../../application/conversations/runPorts.ts";
+import { appendConversationEvent } from "./conversationProjection.ts";
+
+const DEFAULT_MAX_RUNS = 500;
+
+type RunRow = {
+  readonly id: string;
+  readonly thread_id: string;
+  readonly status: RunStatus;
+  readonly started_at: number;
+  readonly completed_at: number | null;
+  readonly duration_ms: number | null;
+  readonly output: string | null;
+  readonly error_name: string | null;
+  readonly error_message: string | null;
+  readonly error_code: string | null;
+  readonly error_phase: "routing" | "planning" | "execution" | "review" | null;
+  readonly error_retryable: number | null;
+};
+
+export default class SqliteRunStore implements RunHistoryStore {
+  constructor(
+    private readonly database: BetterSqliteDatabase,
+    private readonly maxRuns = DEFAULT_MAX_RUNS,
+    private readonly metadata?: () => {
+      providerKey: string;
+      modelKey: string;
+      bookId: string | null;
+    },
+  ) {
+    if (!Number.isInteger(maxRuns) || maxRuns <= 0) {
+      throw new Error("maxRuns must be a positive integer.");
+    }
+    this.recoverInterruptedRuns();
+  }
+
+  async record(event: ApplicationEvent): Promise<void> {
+    this.recordSync(event);
+  }
+
+  recordSync(event: ApplicationEvent): void {
+    if (event.type === "run_started") {
+      const metadata = this.metadata?.();
+      this.database
+        .prepare(
+          `
+        INSERT INTO agent_runs(id, thread_id, status, started_at, created_at, provider_key,model_key,book_id)
+        VALUES (?, ?, 'running', ?, ?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET
+          thread_id = excluded.thread_id,
+          status = 'running',
+          started_at = excluded.started_at,
+          completed_at = NULL,
+          duration_ms = NULL,
+          output = NULL,
+          error_name = NULL,
+          error_message = NULL,
+          error_code = NULL,
+          error_phase = NULL,
+          error_retryable = NULL
+      `,
+        )
+        .run(
+          event.runId,
+          event.threadId,
+          Date.parse(event.timestamp),
+          Date.parse(event.timestamp),
+          metadata?.providerKey ?? null,
+          metadata?.modelKey ?? null,
+          metadata?.bookId ?? null,
+        );
+      return;
+    }
+
+    if (event.type === "run_completed") {
+      this.finishRun(event.runId, "completed", event.timestamp, event.durationMs, {
+        output: event.content,
+      });
+      this.prune();
+      return;
+    }
+
+    if (["run_aborted", "run_timed_out", "run_failed"].includes(event.type)) {
+      const terminal = event as Extract<
+        ApplicationEvent,
+        {
+          readonly type: "run_aborted" | "run_timed_out" | "run_failed";
+        }
+      >;
+      this.finishRun(
+        terminal.runId,
+        terminal.type.replace("run_", "") as RunStatus,
+        terminal.timestamp,
+        terminal.durationMs,
+        {
+          errorName: terminal.error.name,
+          errorMessage: terminal.error.message,
+          errorCode: terminal.error.code,
+          errorPhase: terminal.error.phase,
+          errorRetryable: terminal.error.retryable,
+        },
+      );
+      this.prune();
+    }
+  }
+
+  async loadRunSnapshots(limit = this.maxRuns): Promise<readonly RunSnapshot[]> {
+    if (!Number.isInteger(limit) || limit < 0) {
+      throw new Error("Run history limit must be a non-negative integer.");
+    }
+    const rows = this.database
+      .prepare(
+        `
+      SELECT * FROM agent_runs
+      ORDER BY started_at DESC, id DESC
+      LIMIT ?
+    `,
+      )
+      .all(limit) as RunRow[];
+    return Object.freeze(rows.map((row) => this.toSnapshot(row)));
+  }
+
+  private recoverInterruptedRuns(): void {
+    const now = Date.now();
+    this.database.transaction(() => {
+      const interrupted = this.database
+        .prepare(
+          "SELECT id,thread_id,started_at FROM agent_runs WHERE status IN ('queued','running','cancelling')",
+        )
+        .all() as Pick<RunRow, "id" | "thread_id" | "started_at">[];
+      for (const run of interrupted) {
+        const sequence = this.database
+          .prepare(
+            "SELECT COALESCE(MAX(run_sequence),0)+1 AS n FROM conversation_events WHERE run_id=?",
+          )
+          .get(run.id) as { n: number };
+        appendConversationEvent(this.database, {
+          event_id: `recovered_run_${run.id}`,
+          thread_id: run.thread_id,
+          run_id: run.id,
+          run_sequence: sequence.n,
+          type: "turn.failed",
+          step_id: null,
+          block_id: null,
+          payload: JSON.stringify({
+            error: "Application exited before the run completed.",
+            code: "run.cancelled",
+            retryable: false,
+            durationMs: Math.max(0, now - run.started_at),
+          }),
+          created_at: now,
+        });
+      }
+      this.database
+        .prepare(
+          `
+      UPDATE agent_runs
+      SET status = 'aborted',
+          completed_at = ?,
+          duration_ms = MAX(0, ? - started_at),
+          error_name = 'RunInterruptedError',
+          error_message = 'Application exited before the run completed.',
+          error_code = 'run.cancelled',
+          error_phase = 'execution',
+          error_retryable = 0
+      WHERE status IN ('queued', 'running', 'cancelling')
+    `,
+        )
+        .run(now, now);
+    })();
+  }
+
+  private finishRun(
+    runId: string,
+    status: RunStatus,
+    completedAt: string,
+    durationMs: number,
+    result: {
+      readonly output?: string;
+      readonly errorName?: string;
+      readonly errorMessage?: string;
+      readonly errorCode?: string;
+      readonly errorPhase?: "routing" | "planning" | "execution" | "review";
+      readonly errorRetryable?: boolean;
+    },
+  ): void {
+    this.database
+      .prepare(
+        `
+      UPDATE agent_runs
+      SET status = ?, completed_at = ?, duration_ms = ?, output = ?,
+          error_name = ?, error_message = ?, error_code = ?,
+          error_phase = ?, error_retryable = ?
+      WHERE id = ?
+    `,
+      )
+      .run(
+        status,
+        Date.parse(completedAt),
+        durationMs,
+        result.output ?? null,
+        result.errorName ?? null,
+        result.errorMessage ?? null,
+        result.errorCode ?? null,
+        result.errorPhase ?? null,
+        result.errorRetryable === undefined ? null : Number(result.errorRetryable),
+        runId,
+      );
+  }
+
+  private prune(): void {
+    this.database
+      .prepare(
+        `
+      DELETE FROM agent_runs
+      WHERE status NOT IN ('queued', 'running', 'cancelling')
+        AND NOT EXISTS(SELECT 1 FROM conversation_events e WHERE e.run_id=agent_runs.id)
+        AND NOT EXISTS(SELECT 1 FROM agent_runs child WHERE child.parent_run_id=agent_runs.id)
+        AND id NOT IN (
+          SELECT id FROM agent_runs
+          WHERE status NOT IN ('queued', 'running', 'cancelling')
+          ORDER BY started_at DESC, id DESC
+          LIMIT ?
+        )
+    `,
+      )
+      .run(this.maxRuns);
+  }
+
+  private toSnapshot(row: RunRow): RunSnapshot {
+    return Object.freeze({
+      runId: row.id,
+      threadId: row.thread_id,
+      status: row.status,
+      startedAt: new Date(row.started_at).toISOString(),
+      ...(row.completed_at === null
+        ? {}
+        : { completedAt: new Date(row.completed_at).toISOString() }),
+      ...(row.duration_ms === null ? {} : { durationMs: row.duration_ms }),
+      ...(row.output === null ? {} : { content: row.output }),
+      ...(row.error_name === null || row.error_message === null
+        ? {}
+        : {
+            error: Object.freeze({
+              name: row.error_name,
+              message: row.error_message,
+              code: row.error_code ?? "run.failed",
+              phase: row.error_phase ?? "execution",
+              retryable: row.error_retryable === 1,
+            }),
+          }),
+    });
+  }
+}

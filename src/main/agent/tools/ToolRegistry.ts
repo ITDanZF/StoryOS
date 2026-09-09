@@ -1,16 +1,17 @@
 import type { ClientTool } from "@langchain/core/tools";
-import {
-  createToolManifest,
-  type RegisteredTool,
-  type ToolManifest,
-} from "./ToolManifest.ts";
+import { createToolManifest, type RegisteredTool, type ToolManifest } from "./ToolManifest.ts";
 
 export default class ToolRegistry {
   private readonly tools = new Map<string, RegisteredTool>();
 
-  constructor(implementations: readonly ClientTool[]) {
+  constructor(
+    implementations: readonly ClientTool[],
+    manifestFactory: (tool: ClientTool) => ToolManifest = createToolManifest,
+  ) {
     for (const implementation of implementations) {
-      const manifest = createToolManifest(implementation);
+      const manifest = manifestFactory(implementation);
+      if (manifest.id !== implementation.name)
+        throw new Error(`Tool manifest id mismatch: ${implementation.name}`);
       if (this.tools.has(manifest.id)) {
         throw new Error(`Tool already registered: ${manifest.id}`);
       }
@@ -47,4 +48,3 @@ export default class ToolRegistry {
     return Object.freeze([...this.tools.keys()]);
   }
 }
-

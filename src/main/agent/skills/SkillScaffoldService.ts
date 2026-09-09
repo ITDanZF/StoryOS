@@ -52,11 +52,13 @@ function normalizeSkillId(skillId: string): string {
 }
 
 function toDefaultName(skillId: string): string {
-  return skillId
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-    .join(" ") || "Example Skill";
+  return (
+    skillId
+      .split(/[-_]+/)
+      .filter(Boolean)
+      .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+      .join(" ") || "Example Skill"
+  );
 }
 
 export default class SkillScaffoldService {
@@ -71,8 +73,8 @@ export default class SkillScaffoldService {
   renderTemplate(request: SkillTemplateRequest = {}): string {
     const skillId = request.id ? normalizeSkillId(request.id) : "example-skill";
     const name = request.name?.trim() || toDefaultName(skillId);
-    const description = request.description?.trim() ||
-      "简短说明这个 Skill 解决什么问题、适用于什么场景。";
+    const description =
+      request.description?.trim() || "简短说明这个 Skill 解决什么问题、适用于什么场景。";
 
     return `---
 id: ${skillId}
@@ -143,9 +145,7 @@ metadata:
       throw new Error(`User skill already exists: ${skillId}`);
     }
 
-    const content = request.content.endsWith("\n")
-      ? request.content
-      : `${request.content}\n`;
+    const content = request.content.endsWith("\n") ? request.content : `${request.content}\n`;
     const parsed = parseSkillFile(content);
     validateSkillManifest(parsed.manifest, {
       knownToolNames: this.knownToolNames,
@@ -167,8 +167,8 @@ metadata:
 
   private isInsideUserSkillRoot(candidatePath: string): boolean {
     const relativePath = path.relative(this.userSkillRoot, candidatePath);
-    return relativePath === "" || (
-      !relativePath.startsWith("..") && !path.isAbsolute(relativePath)
+    return (
+      relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
     );
   }
 }

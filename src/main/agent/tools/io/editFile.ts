@@ -1,5 +1,5 @@
-import { stat } from "node:fs/promises";
 import { tool } from "langchain";
+import { stat } from "node:fs/promises";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { atomicWriteTextFile } from "../common/atomicWrite.ts";
@@ -41,7 +41,9 @@ export function createEditFileTool(context: WorkspaceToolContext) {
       }
 
       if (!fileExists && normalizedOld !== "") {
-        throw new Error("File does not exist. To create it with edit_file, use an empty old_string.");
+        throw new Error(
+          "File does not exist. To create it with edit_file, use an empty old_string.",
+        );
       }
 
       if (normalizedOld === "") {
@@ -58,7 +60,9 @@ export function createEditFileTool(context: WorkspaceToolContext) {
 
       const matches = countOccurrences(currentContent, normalizedOld);
       if (matches === 0) {
-        throw new Error(`String to replace was not found in ${context.paths.toRelative(absolutePath)}.`);
+        throw new Error(
+          `String to replace was not found in ${context.paths.toRelative(absolutePath)}.`,
+        );
       }
 
       if (matches > 1 && !replace_all) {
@@ -87,12 +91,11 @@ export function createEditFileTool(context: WorkspaceToolContext) {
         "Edit a text file by replacing an exact string. Existing files must be read first. Use replace_all only when every match should change.",
       schema: z.object({
         path: z.string().describe("File path, relative to the workspace or absolute inside it."),
-        old_string: z.string().describe("Exact text to replace. Use an empty string only to create a new file."),
+        old_string: z
+          .string()
+          .describe("Exact text to replace. Use an empty string only to create a new file."),
         new_string: z.string().describe("Replacement text."),
-        replace_all: z
-          .boolean()
-          .optional()
-          .describe("Replace all occurrences. Defaults to false."),
+        replace_all: z.boolean().optional().describe("Replace all occurrences. Defaults to false."),
       }),
     },
   );

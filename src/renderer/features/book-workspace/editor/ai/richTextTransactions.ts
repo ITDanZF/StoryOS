@@ -4,7 +4,7 @@ import type {
   EditorStyleChange,
   EditorTargetedStyleOperation,
   EditorTextRange,
-} from "../../../../../main/agent/tools/editor/contracts.ts";
+} from "../../../../../shared/contracts/editor/contracts.ts";
 import { resolveEditorTargetSelector } from "./richTextTargeting.ts";
 
 export type ResolvedEditorStyleOperation = {

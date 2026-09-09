@@ -1,3 +1,4 @@
+import { skillDraftPrompt } from "../prompts/skillDraftPrompt.ts";
 import type { ModelRunInput } from "../model/Model.ts";
 import { KNOWN_M0_TOOL_NAMES } from "./DefaultSkillIndex.ts";
 import { parseSkillFile, validateSkillManifest } from "./SkillManifest.ts";
@@ -41,16 +42,17 @@ function validateDraftContent(
   validateSkillManifest(parsed.manifest, { knownToolNames });
 
   if (parsed.manifest.id !== expectedId) {
-    throw new Error(`Generated skill id mismatch: expected ${expectedId}, got ${parsed.manifest.id}`);
+    throw new Error(
+      `Generated skill id mismatch: expected ${expectedId}, got ${parsed.manifest.id}`,
+    );
   }
 
   return content.endsWith("\n") ? content : `${content}\n`;
 }
 
 function renderDraftPrompt(request: SkillDraftRequest, knownToolNames: readonly string[]): string {
-  const tools = normalizeList(request.tools).length > 0
-    ? normalizeList(request.tools)
-    : DEFAULT_TOOLS;
+  const tools =
+    normalizeList(request.tools).length > 0 ? normalizeList(request.tools) : DEFAULT_TOOLS;
   const triggers = normalizeList(request.triggers);
 
   return [
@@ -88,21 +90,13 @@ export default class SkillDraftService {
     const response = await this.model.invokeText({
       prompt: renderDraftPrompt(request, this.knownToolNames),
       threadId: `skill-create/${request.id}`,
-      systemPrompt: [
-        "你是 mini-agent 的 Skill 设计器。",
-        "你只生成符合项目 SKILL.md schema 的文件内容。",
-        "不得声明未知工具；不得更改用户指定的 id。",
-      ].join("\n"),
+      systemPrompt: skillDraftPrompt,
       tools: [],
       maxTurns: 1,
       visibility: "internal",
     });
 
-    return validateDraftContent(
-      extractSkillMarkdown(response),
-      request.id,
-      this.knownToolNames,
-    );
+    return validateDraftContent(extractSkillMarkdown(response), request.id, this.knownToolNames);
   }
 }
 

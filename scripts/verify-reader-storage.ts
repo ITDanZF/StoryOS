@@ -7,12 +7,12 @@ const doc = (text: string) =>
 import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdirSync } from "node:fs";
-import ApplicationDatabase from "../src/main/agent/storage/global/ApplicationDatabase.ts";
-import SqliteBookStore from "../src/main/agent/storage/global/SqliteBookStore.ts";
-import SqliteBookReadingStateStore from "../src/main/agent/storage/global/SqliteBookReadingStateStore.ts";
-import BookRuntimeManager from "../src/main/agent/runtime/BookRuntimeManager.ts";
-import BookProvisioningService from "../src/main/agent/application/BookProvisioningService.ts";
-import BookReaderApplication from "../src/main/agent/application/BookReaderApplication.ts";
+import ApplicationDatabase from "../src/main/story/storage/global/ApplicationDatabase.ts";
+import SqliteBookStore from "../src/main/story/storage/global/SqliteBookStore.ts";
+import SqliteBookReadingStateStore from "../src/main/story/storage/global/SqliteBookReadingStateStore.ts";
+import BookRuntimeManager from "../src/main/story/runtime/BookRuntimeManager.ts";
+import BookProvisioningService from "../src/main/story/application/books/BookProvisioningService.ts";
+import BookReaderApplication from "../src/main/story/application/books/BookReaderApplication.ts";
 import { DEFAULT_READER_PREFERENCES } from "../src/shared/book/reader.ts";
 import {
   createReaderAnchor,

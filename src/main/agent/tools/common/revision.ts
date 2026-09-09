@@ -1,9 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  detectLineEnding,
-  normalizeLineEndings,
-  type LineEnding,
-} from "./text.ts";
+import { detectLineEnding, normalizeLineEndings, type LineEnding } from "./text.ts";
 
 export function calculateTextRevision(
   content: string,

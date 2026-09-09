@@ -51,11 +51,7 @@ function cjkNgrams(content: string): string[] {
 }
 
 export function normalizeSearchText(content: string): string {
-  return content
-    .normalize("NFKC")
-    .toLocaleLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+  return content.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
 
 export function tokenizeSearchText(content: string): readonly string[] {
@@ -70,13 +66,8 @@ export function tokenizeSearchText(content: string): readonly string[] {
   return Object.freeze(tokens);
 }
 
-export function normalizedNgrams(
-  content: string,
-  size = 3,
-): ReadonlySet<string> {
-  const characters = [
-    ...normalizeSearchText(content).replace(/[\p{P}\p{S}\s]/gu, ""),
-  ];
+export function normalizedNgrams(content: string, size = 3): ReadonlySet<string> {
+  const characters = [...normalizeSearchText(content).replace(/[\p{P}\p{S}\s]/gu, "")];
   const values = new Set<string>();
   if (characters.length < size) {
     if (characters.length > 0) values.add(characters.join(""));

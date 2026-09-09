@@ -1,6 +1,10 @@
+import type { SkillSourceType } from "../../../shared/engine/skills/SkillTypes.ts";
 import type { SkillManifest } from "./SkillManifest.ts";
-
-export type SkillSourceType = "system" | "user" | "project";
+export type {
+  SkillDetail,
+  SkillSourceType,
+  SkillSummary,
+} from "../../../shared/engine/skills/SkillTypes.ts";
 
 export type SkillSource = {
   readonly type: SkillSourceType;
@@ -13,24 +17,4 @@ export type SkillDefinition = {
   readonly body: string;
   readonly source: SkillSource;
   readonly loadedAt: Date;
-};
-
-export type SkillSummary = {
-  readonly id: string;
-  readonly name: string;
-  readonly version: number;
-  readonly description: string;
-  readonly sourceType: SkillSourceType;
-  readonly enabled: boolean;
-  readonly managed: boolean;
-  readonly agentEnabled: boolean;
-  readonly readOnly: boolean | null;
-};
-
-export type SkillDetail = SkillSummary & {
-  readonly triggers: readonly string[];
-  readonly tools: readonly string[];
-  readonly agentTools: readonly string[];
-  readonly filePath: string;
-  readonly body: string;
 };

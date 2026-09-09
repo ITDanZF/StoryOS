@@ -1,0 +1,195 @@
+import { existsSync, mkdirSync, renameSync } from "node:fs";
+import path from "node:path";
+import {
+  markOperationDirectory,
+  ownsOperationDirectory,
+  removeOperationDirectory,
+} from "../../storage/common/operationOwnership.ts";
+import type BookRuntimeManager from "../../runtime/BookRuntimeManager.ts";
+import { getBookDeletionRoot, getBookLayout } from "../../storage/book/BookLayout.ts";
+import type { BookRecord, BookRegistry, BookTrashRecord } from "./bookRegistryPorts.ts";
+import NovelApplication from "./NovelApplication.ts";
+
+function samePath(first: string, second: string): boolean {
+  const left = path.resolve(first);
+  const right = path.resolve(second);
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+export class BookDeletionCleanupError extends Error {
+  constructor(
+    readonly bookId: string,
+    readonly cleanupPath: string,
+    cause: unknown,
+  ) {
+    super(`Book registration was deleted but file cleanup failed: ${bookId}`, {
+      cause,
+    });
+    this.name = "BookDeletionCleanupError";
+  }
+}
+
+export default class BookLifecycleService {
+  constructor(
+    private readonly agentHome: string,
+    private readonly books: BookRegistry,
+    private readonly runtimes: BookRuntimeManager,
+  ) {}
+
+  moveToTrash(bookId: string): BookTrashRecord {
+    const book = this.requireBook(bookId);
+    if (book.state !== "available") {
+      throw new Error(`Only available books can be trashed: ${bookId}`);
+    }
+    this.requireUnlinked(bookId);
+    this.runtimes.closeBook(bookId);
+    const lease = this.runtimes.acquire(bookId);
+    let title: string;
+    try {
+      const novel = new NovelApplication(lease.persistence).getProjectBook();
+      if (!novel) throw new Error(`Book contains no novel record: ${bookId}`);
+      title = novel.title;
+    } finally {
+      lease.close();
+    }
+    return this.books.moveBookToTrash({
+      bookId,
+      title,
+      trashedAt: new Date(),
+    });
+  }
+
+  restoreFromTrash(bookId: string): BookRecord {
+    const book = this.requireBook(bookId);
+    if (book.state !== "trashed") {
+      throw new Error(`Book is not in the bookshelf trash: ${bookId}`);
+    }
+    this.runtimes.closeBook(bookId);
+    const health = this.runtimes.inspectStorage(bookId);
+    return this.books.restoreBookFromTrash(bookId, health.state);
+  }
+
+  permanentlyDelete(input: { readonly bookId: string; readonly confirmationBookId: string }): void {
+    if (input.confirmationBookId !== input.bookId) {
+      throw new Error("Permanent book deletion requires the exact book id.");
+    }
+    const book = this.requireBook(input.bookId);
+    if (book.state !== "trashed") {
+      throw new Error(`Only trashed books can be permanently deleted: ${book.id}`);
+    }
+    this.requireUnlinked(book.id);
+    this.runtimes.closeBook(book.id);
+    const layout = getBookLayout(this.agentHome, book.id);
+    if (!samePath(book.storagePath, layout.rootPath)) {
+      throw new Error(`Invalid registered book path: ${book.storagePath}`);
+    }
+
+    const deletionRoot = getBookDeletionRoot(this.agentHome);
+    const operationId = `book_delete_${crypto.randomUUID()}`;
+    const operationPath = path.resolve(deletionRoot, operationId);
+    if (path.dirname(operationPath) !== deletionRoot) {
+      throw new Error(`Book deletion path escapes its root: ${operationPath}`);
+    }
+    this.books.beginBookCleanup({
+      operationId,
+      bookId: book.id,
+      stagingPath: operationPath,
+    });
+    let moved = false;
+    if (existsSync(layout.rootPath)) {
+      mkdirSync(deletionRoot, { recursive: true });
+      markOperationDirectory(layout.rootPath, operationId);
+      renameSync(layout.rootPath, operationPath);
+      moved = true;
+    }
+    try {
+      this.books.deleteBookRegistration({
+        bookId: book.id,
+        operationId,
+        deletedAt: new Date(),
+      });
+    } catch (error) {
+      if (moved) {
+        try {
+          renameSync(operationPath, layout.rootPath);
+        } catch (recoveryError) {
+          throw new AggregateError(
+            [error, recoveryError],
+            `Permanent book deletion recovery failed: ${book.id}`,
+          );
+        }
+      }
+      throw error;
+    }
+    if (!moved) {
+      this.books.updateBookDeletionCleanup(operationId, "completed");
+      return;
+    }
+    try {
+      removeOperationDirectory(operationPath, operationId);
+    } catch (error) {
+      try {
+        this.books.updateBookDeletionCleanup(operationId, "failed");
+      } catch (recordError) {
+        throw new AggregateError(
+          [error, recordError],
+          `Book deletion cleanup and audit update failed: ${book.id}`,
+        );
+      }
+      throw new BookDeletionCleanupError(book.id, operationPath, error);
+    }
+    this.books.updateBookDeletionCleanup(operationId, "completed");
+  }
+
+  recoverPendingCleanups(): void {
+    for (const operation of this.books.listPendingBookCleanups()) {
+      try {
+        const deletionRoot = getBookDeletionRoot(this.agentHome);
+        const staged = path.resolve(deletionRoot, operation.operationId);
+        if (
+          !/^book_delete_[0-9a-f-]{36}$/i.test(operation.operationId) ||
+          path.dirname(staged) !== deletionRoot ||
+          !samePath(staged, operation.stagingPath)
+        )
+          throw new Error("Cleanup path ownership mismatch.");
+        const registered = this.books.getBookById(operation.bookId);
+        if (registered) {
+          if (registered.state !== "trashed") throw new Error("Cleanup book is no longer trashed.");
+          this.requireUnlinked(registered.id);
+          const original = getBookLayout(this.agentHome, registered.id).rootPath;
+          if (!samePath(registered.storagePath, original))
+            throw new Error("Cleanup registration path mismatch.");
+          if (!existsSync(staged) && existsSync(original)) {
+            if (!ownsOperationDirectory(original, operation.operationId))
+              throw new Error("Cleanup source ownership mismatch.");
+            renameSync(original, staged);
+          }
+          if (existsSync(staged) && !ownsOperationDirectory(staged, operation.operationId))
+            throw new Error("Cleanup staging ownership mismatch.");
+          this.books.deleteBookRegistration({
+            bookId: registered.id,
+            operationId: operation.operationId,
+            deletedAt: new Date(),
+          });
+        }
+        removeOperationDirectory(staged, operation.operationId);
+        this.books.updateBookDeletionCleanup(operation.operationId, "completed");
+      } catch (error) {
+        this.books.updateBookDeletionCleanup(operation.operationId, "failed");
+        console.error("Book cleanup retained for retry", operation.operationId, error);
+      }
+    }
+  }
+
+  private requireBook(bookId: string): BookRecord {
+    const book = this.books.getBookById(bookId);
+    if (!book) throw new Error(`Book not found: ${bookId}`);
+    return book;
+  }
+
+  private requireUnlinked(bookId: string): void {
+    if (this.books.listProjectIdsForBook(bookId).length > 0) {
+      throw new Error(`Book is still attached to a project: ${bookId}`);
+    }
+  }
+}

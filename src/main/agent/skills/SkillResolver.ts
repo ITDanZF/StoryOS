@@ -165,24 +165,27 @@ export default class SkillResolver {
     const normalizedInput = normalizeText(request.input);
 
     if (!normalizedInput) {
-    return Object.freeze([]);
-  }
+      return Object.freeze([]);
+    }
 
     const activeSkillIds = normalizeSkillIds(request.activeSkillIds);
     const disabledSkillIds = normalizeSkillIds(request.disabledSkillIds);
 
     return Object.freeze(
       request.skills
-        .filter((skill) =>
-          activeSkillIds.has(skill.manifest.id) || !disabledSkillIds.has(skill.manifest.id),
+        .filter(
+          (skill) =>
+            activeSkillIds.has(skill.manifest.id) || !disabledSkillIds.has(skill.manifest.id),
         )
         .map((skill) => scoreSkill(skill, normalizedInput, activeSkillIds.has(skill.manifest.id)))
-        .filter((selection): selection is SkillSelection =>
-          selection !== null && selection.score >= minScore,
+        .filter(
+          (selection): selection is SkillSelection =>
+            selection !== null && selection.score >= minScore,
         )
-        .sort((left, right) =>
-          right.score - left.score ||
-          left.skill.manifest.id.localeCompare(right.skill.manifest.id),
+        .sort(
+          (left, right) =>
+            right.score - left.score ||
+            left.skill.manifest.id.localeCompare(right.skill.manifest.id),
         )
         .slice(0, maxSkills),
     );

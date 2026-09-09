@@ -30,10 +30,18 @@
     "test:reader:packaged": "node scripts/verify-reader-packaged.mjs",
     "test:packaged:smoke": "node scripts/verify-packaged-smoke.cjs",
     "test:packaged:business": "node scripts/verify-packaged-business-flow.cjs",
-    "check": "npm run typecheck && npm run test && npm run lint:agent",
-    "lint:agent": "eslint src/main/agent src/main/ipc/agent.ts src/preload/agentApi.ts src/shared/agent tests/agent --ext .ts",
+    "check": "npm run typecheck && npm run test && npm run lint:backend",
+    "lint:agent": "eslint src/main/agent src/shared/engine --ext .ts",
     "lint:frontend": "eslint src/renderer --ext .ts,.tsx",
-    "test:frontend:models": "node scripts/verify-frontend-models.mjs"
+    "test:frontend:models": "node scripts/verify-frontend-models.mjs",
+    "lint:backend": "eslint src/main src/preload src/shared tests/agent tests/engine tests/developer --ext .ts",
+    "test:backend": "npm run native:node && vitest run tests/agent tests/engine tests/developer",
+    "check:backend": "npm run check:agent-boundary && npm run typecheck && npm run typecheck:backend && npm run test:backend && npm run lint:backend",
+    "typecheck:backend": "tsc --noEmit -p tsconfig.backend.json",
+    "test:packaged:resources": "node scripts/verify-backend-resources.cjs",
+    "check:agent-boundary": "node scripts/verify-agent-boundary.cjs",
+    "check:agent": "npm run check:agent-boundary && tsc --noEmit -p tsconfig.agent.json && npm run lint:agent",
+    "test:agent": "npm run native:node && vitest run tests/engine"
   },
   "keywords": [],
   "author": {

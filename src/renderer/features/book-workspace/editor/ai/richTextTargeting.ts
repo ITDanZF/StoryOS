@@ -4,7 +4,7 @@ import type {
   EditorTargetSelector,
   EditorTextQuery,
   EditorTextRange,
-} from "../../../../../main/agent/tools/editor/contracts.ts";
+} from "../../../../../shared/contracts/editor/contracts.ts";
 
 export type EditorTextMatch = EditorTextRange & {
   readonly index: number;

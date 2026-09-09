@@ -1,0 +1,3 @@
+export function pdfStyles(chapterPageBreaks: boolean): string {
+  return `@page{size:A4;margin:22mm 20mm}body{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;color:#171717;line-height:1.85;font-size:12pt}.title-page{display:flex;min-height:85vh;flex-direction:column;justify-content:center;text-align:center;page-break-after:always}.title-page h1{font-size:28pt}.volume{page-break-before:always;text-align:center;padding-top:30vh}.chapter{${!chapterPageBreaks ? "" : "page-break-before:always;"}}.chapter h2{text-align:center;margin-bottom:2em}.chapter p{text-indent:2em;margin:.65em 0}.chapter blockquote{border-left:3px solid #aaa;padding-left:1em;color:#555}`;
+}

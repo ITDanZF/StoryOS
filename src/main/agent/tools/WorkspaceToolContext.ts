@@ -11,10 +11,11 @@ export default class WorkspaceToolContext {
 
   constructor(
     workspaceRoot: string,
-    textIndexRoot = path.join(workspaceRoot, ".storyos", "text-index"),
+    textIndexRoot = path.join(workspaceRoot, ".agent", "text-index"),
     textIndexStore?: TextIndexStore,
+    deniedDirectories: readonly string[] = [".agent"],
   ) {
-    this.paths = new WorkspacePathResolver(workspaceRoot);
+    this.paths = new WorkspacePathResolver(workspaceRoot, deniedDirectories);
     this.files = new FileStateTracker();
     this.textIndexRoot = path.resolve(textIndexRoot);
     this.textIndexStore = textIndexStore;

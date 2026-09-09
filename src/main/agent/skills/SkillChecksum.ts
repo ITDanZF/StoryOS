@@ -11,7 +11,7 @@ async function listFiles(root: string, currentDirectory = root): Promise<string[
   for (const entry of entries) {
     const entryPath = path.join(currentDirectory, entry.name);
     if (entry.isDirectory()) {
-      files.push(...await listFiles(root, entryPath));
+      files.push(...(await listFiles(root, entryPath)));
     } else if (entry.isFile()) {
       files.push(path.relative(root, entryPath));
     }
@@ -34,9 +34,7 @@ export async function checksumSkillDirectory(
     throw new Error(`Skill root is not a directory: ${root}`);
   }
 
-  const files = (await listFiles(root))
-    .filter((filePath) => !excludedFiles.has(filePath))
-    .sort();
+  const files = (await listFiles(root)).filter((filePath) => !excludedFiles.has(filePath)).sort();
   const hash = createHash("sha256");
 
   for (const relativePath of files) {

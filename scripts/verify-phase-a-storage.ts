@@ -1,29 +1,29 @@
-import BookTransferService from "../src/main/agent/application/BookTransferService.ts";
+import BookTransferService from "../src/main/story/application/transfers/BookTransferService.ts";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import Database from "better-sqlite3";
-import ApplicationDatabase from "../src/main/agent/storage/global/ApplicationDatabase.ts";
-import BookDatabase from "../src/main/agent/storage/book/BookDatabase.ts";
-import ProjectDatabase from "../src/main/agent/storage/project/ProjectDatabase.ts";
-import SqliteProjectStore from "../src/main/agent/storage/global/SqliteProjectStore.ts";
-import SqliteBookStore from "../src/main/agent/storage/global/SqliteBookStore.ts";
-import BookCatalogProjection from "../src/main/agent/storage/global/BookCatalogProjection.ts";
-import SqliteBookReadingStateStore from "../src/main/agent/storage/global/SqliteBookReadingStateStore.ts";
-import SqliteProjectArchiveStore from "../src/main/agent/storage/global/SqliteProjectArchiveStore.ts";
-import SqliteNovelStore from "../src/main/agent/storage/book/SqliteNovelStore.ts";
-import SqliteThreadStore from "../src/main/agent/storage/project/SqliteThreadStore.ts";
-import SqliteRunStore from "../src/main/agent/storage/project/SqliteRunStore.ts";
-import SqliteConversationEventStore from "../src/main/agent/storage/project/SqliteConversationEventStore.ts";
-import { rebuildMessageViews } from "../src/main/agent/storage/project/conversationProjection.ts";
-import BookRuntimeManager from "../src/main/agent/runtime/BookRuntimeManager.ts";
-import BookProvisioningService from "../src/main/agent/application/BookProvisioningService.ts";
-import BookLifecycleService from "../src/main/agent/application/BookLifecycleService.ts";
-import NovelApplication from "../src/main/agent/application/NovelApplication.ts";
+import ApplicationDatabase from "../src/main/story/storage/global/ApplicationDatabase.ts";
+import BookDatabase from "../src/main/story/storage/book/BookDatabase.ts";
+import ProjectDatabase from "../src/main/story/storage/project/ProjectDatabase.ts";
+import SqliteProjectStore from "../src/main/story/storage/global/SqliteProjectStore.ts";
+import SqliteBookStore from "../src/main/story/storage/global/SqliteBookStore.ts";
+import BookCatalogProjection from "../src/main/story/storage/global/BookCatalogProjection.ts";
+import SqliteBookReadingStateStore from "../src/main/story/storage/global/SqliteBookReadingStateStore.ts";
+import SqliteProjectArchiveStore from "../src/main/story/storage/global/SqliteProjectArchiveStore.ts";
+import SqliteNovelStore from "../src/main/story/storage/book/SqliteNovelStore.ts";
+import SqliteThreadStore from "../src/main/story/storage/project/SqliteThreadStore.ts";
+import SqliteRunStore from "../src/main/story/storage/project/SqliteRunStore.ts";
+import SqliteConversationEventStore from "../src/main/story/storage/project/SqliteConversationEventStore.ts";
+import { rebuildMessageViews } from "../src/main/story/storage/project/conversationProjection.ts";
+import BookRuntimeManager from "../src/main/story/runtime/BookRuntimeManager.ts";
+import BookProvisioningService from "../src/main/story/application/books/BookProvisioningService.ts";
+import BookLifecycleService from "../src/main/story/application/books/BookLifecycleService.ts";
+import NovelApplication from "../src/main/story/application/books/NovelApplication.ts";
 import {
   markOperationDirectory,
   removeOperationDirectory,
-} from "../src/main/agent/storage/common/operationOwnership.ts";
+} from "../src/main/story/storage/common/operationOwnership.ts";
 import { DEFAULT_READER_PREFERENCES } from "../src/shared/book/reader.ts";
 import {
   serializeTiptapDocument,

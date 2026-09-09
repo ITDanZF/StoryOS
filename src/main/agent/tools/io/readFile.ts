@@ -37,12 +37,7 @@ export function createReadFileTool(context: WorkspaceToolContext) {
         "Read a text file inside the agent workspace. Use offset and limit for large files. The result includes line numbers.",
       schema: z.object({
         path: z.string().describe("File path, relative to the workspace or absolute inside it."),
-        offset: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe("1-based first line to read."),
+        offset: z.number().int().positive().optional().describe("1-based first line to read."),
         limit: z
           .number()
           .int()

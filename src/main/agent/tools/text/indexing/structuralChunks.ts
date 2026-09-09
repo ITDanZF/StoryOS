@@ -26,11 +26,7 @@ function createLines(content: string): LineRecord[] {
   return lines;
 }
 
-function findChunkEnd(
-  content: string,
-  start: number,
-  maximumEnd: number,
-): number {
+function findChunkEnd(content: string, start: number, maximumEnd: number): number {
   if (maximumEnd >= content.length) return content.length;
   const candidate = content.slice(start, maximumEnd);
   const boundary = Math.max(
@@ -42,9 +38,7 @@ function findChunkEnd(
     candidate.lastIndexOf("! "),
     candidate.lastIndexOf("? "),
   );
-  return boundary > MAX_CHUNK_CHARACTERS / 2
-    ? start + boundary + 1
-    : maximumEnd;
+  return boundary > MAX_CHUNK_CHARACTERS / 2 ? start + boundary + 1 : maximumEnd;
 }
 
 function appendBoundedChunks(
@@ -83,9 +77,7 @@ function appendBoundedChunks(
   }
 }
 
-export function createStructuralChunks(
-  content: string,
-): readonly StructuralChunk[] {
+export function createStructuralChunks(content: string): readonly StructuralChunk[] {
   const chunks: StructuralChunk[] = [];
   const headings: string[] = [];
   const lines = createLines(content);

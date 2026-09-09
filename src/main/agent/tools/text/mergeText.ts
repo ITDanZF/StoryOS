@@ -1,5 +1,5 @@
-import path from "node:path";
 import { tool } from "langchain";
+import path from "node:path";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { type LineEnding } from "../common/text.ts";
@@ -33,9 +33,7 @@ export function createMergeTextTool(context: WorkspaceToolContext) {
         if (!add_source_headers) return content;
         const label =
           input.label ??
-          (source.kind === "file"
-            ? path.basename(source.relativePath)
-            : `Source ${index + 1}`);
+          (source.kind === "file" ? path.basename(source.relativePath) : `Source ${index + 1}`);
         return `# ${label}\n\n${content}`;
       });
       const mergedContent = sections.join(separator);
@@ -71,9 +69,7 @@ export function createMergeTextTool(context: WorkspaceToolContext) {
         return stringifyTextToolResult({
           source: "merged",
           preview: true,
-          changed:
-            mergedContent !== target.content ||
-            lineEnding !== target.lineEnding,
+          changed: mergedContent !== target.content || lineEnding !== target.lineEnding,
           output: {
             path: target.relativePath,
             exists: target.exists,

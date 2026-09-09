@@ -65,12 +65,10 @@ function resolveOperation(
   };
 }
 
-function applyOperations(
-  content: string,
-  operations: readonly BatchOperation[],
-): string {
+function applyOperations(content: string, operations: readonly BatchOperation[]): string {
   const resolved = operations.map((operation, index) =>
-    resolveOperation(content, operation, index));
+    resolveOperation(content, operation, index),
+  );
 
   for (let first = 0; first < resolved.length; first += 1) {
     for (let second = first + 1; second < resolved.length; second += 1) {
@@ -83,8 +81,9 @@ function applyOperations(
   }
 
   let updated = content;
-  for (const operation of [...resolved].sort((left, right) =>
-    right.range.start - left.range.start || right.index - left.index)) {
+  for (const operation of [...resolved].sort(
+    (left, right) => right.range.start - left.range.start || right.index - left.index,
+  )) {
     updated = [
       updated.slice(0, operation.range.start),
       operation.replacement,
@@ -96,12 +95,7 @@ function applyOperations(
 
 export function createBatchEditTextTool(context: WorkspaceToolContext) {
   return tool(
-    async ({
-      operations,
-      expected_revision,
-      preview_only = false,
-      ...sourceInput
-    }) => {
+    async ({ operations, expected_revision, preview_only = false, ...sourceInput }) => {
       const source = await loadTextSource(context, sourceInput);
       const updatedContent = applyOperations(source.content, operations);
       const changed = updatedContent !== source.content;
@@ -119,12 +113,7 @@ export function createBatchEditTextTool(context: WorkspaceToolContext) {
         });
       }
 
-      const written = await writeTextSource(
-        context,
-        source,
-        updatedContent,
-        expected_revision,
-      );
+      const written = await writeTextSource(context, source, updatedContent, expected_revision);
       return stringifyTextToolResult({
         source: "file",
         path: written.path,

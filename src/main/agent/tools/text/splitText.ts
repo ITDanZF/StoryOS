@@ -1,13 +1,9 @@
 import { tool } from "langchain";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
-import { offsetToPosition } from "./ranges.ts";
 import { createStructuralChunks } from "./indexing/structuralChunks.ts";
-import {
-  loadTextSource,
-  stringifyTextToolResult,
-  textSourceFields,
-} from "./source.ts";
+import { offsetToPosition } from "./ranges.ts";
+import { loadTextSource, stringifyTextToolResult, textSourceFields } from "./source.ts";
 
 type SplitUnit = {
   readonly start: number;
@@ -38,26 +34,16 @@ function lineUnits(content: string): SplitUnit[] {
   return units;
 }
 
-function characterUnits(
-  content: string,
-  estimatedTokens: boolean,
-): SplitUnit[] {
+function characterUnits(content: string, estimatedTokens: boolean): SplitUnit[] {
   const units: SplitUnit[] = [];
   let offset = 0;
   for (const character of content) {
     const start = offset;
     offset += character.length;
-    const isCjk =
-      /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(
-        character,
-      );
-    const size = estimatedTokens
-      ? isCjk
-        ? 1
-        : /\s/u.test(character)
-          ? 0
-          : 0.25
-      : 1;
+    const isCjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(
+      character,
+    );
+    const size = estimatedTokens ? (isCjk ? 1 : /\s/u.test(character) ? 0 : 0.25) : 1;
     units.push({ start, end: offset, size });
   }
   return units;
@@ -65,13 +51,7 @@ function characterUnits(
 
 function getUnits(
   content: string,
-  strategy:
-    | "lines"
-    | "paragraphs"
-    | "sentences"
-    | "characters"
-    | "estimated_tokens"
-    | "structure",
+  strategy: "lines" | "paragraphs" | "sentences" | "characters" | "estimated_tokens" | "structure",
 ): SplitUnit[] {
   switch (strategy) {
     case "lines":
@@ -177,9 +157,7 @@ export function createSplitTextTool(context: WorkspaceToolContext) {
         revision: source.revision,
         strategy,
         result,
-        warnings: result.limited
-          ? [`Split results were truncated at ${max_chunks} chunks.`]
-          : [],
+        warnings: result.limited ? [`Split results were truncated at ${max_chunks} chunks.`] : [],
       });
     },
     {

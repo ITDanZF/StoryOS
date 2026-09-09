@@ -1,8 +1,7 @@
 import { realpathSync } from "node:fs";
-import path from "node:path";
 import { lstat, realpath } from "node:fs/promises";
-import { STORYOS_DIRECTORY } from "../../workspace/ProjectLayout.ts";
-import AgentFailure from "../../errors/AgentFailure.ts";
+import path from "node:path";
+import AgentFailure from "../../runtime/AgentFailure.ts";
 
 function isFileNotFound(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
@@ -13,16 +12,30 @@ function isOutside(root: string, candidate: string): boolean {
   return relativePath.startsWith("..") || path.isAbsolute(relativePath);
 }
 
-function assertNotInternalState(workspaceRoot: string, candidate: string): void {
+function assertNotInternalState(
+  workspaceRoot: string,
+  candidate: string,
+  deniedDirectories: readonly string[],
+): void {
   const relative = path.relative(workspaceRoot, candidate);
   const firstSegment = relative.split(path.sep)[0];
-  if (firstSegment === STORYOS_DIRECTORY) {
-    throw new Error("The .storyos internal state directory is managed by StoryOS and cannot be accessed by file tools.");
+  if (deniedDirectories.some((name) => name.toLowerCase() === firstSegment.toLowerCase())) {
+    throw new Error(
+      "The internal state directory is protected and cannot be accessed by file tools.",
+    );
   }
 }
 
-function assertInsideWorkspace(workspaceRoot: string, candidate: string): void {
-  if (isOutside(workspaceRoot, candidate) || candidate.startsWith("\\\\") || candidate.startsWith("//")) {
+function assertInsideWorkspace(
+  workspaceRoot: string,
+  candidate: string,
+  deniedDirectories: readonly string[],
+): void {
+  if (
+    isOutside(workspaceRoot, candidate) ||
+    candidate.startsWith("\\\\") ||
+    candidate.startsWith("//")
+  ) {
     throw new AgentFailure(
       "tool.path_outside_workspace",
       "execution",
@@ -30,7 +43,7 @@ function assertInsideWorkspace(workspaceRoot: string, candidate: string): void {
       false,
     );
   }
-  assertNotInternalState(workspaceRoot, candidate);
+  assertNotInternalState(workspaceRoot, candidate, deniedDirectories);
 }
 
 async function findExistingAncestor(requestedPath: string, absolutePath: string): Promise<string> {
@@ -38,12 +51,16 @@ async function findExistingAncestor(requestedPath: string, absolutePath: string)
   for (;;) {
     try {
       const entry = await lstat(existingAncestor);
-      if (entry.isSymbolicLink()) throw new Error(`Symbolic links and junctions are not valid write targets: ${existingAncestor}`);
+      if (entry.isSymbolicLink())
+        throw new Error(
+          `Symbolic links and junctions are not valid write targets: ${existingAncestor}`,
+        );
       return existingAncestor;
     } catch (error) {
       if (!isFileNotFound(error)) throw error;
       const parent = path.dirname(existingAncestor);
-      if (parent === existingAncestor) throw new Error(`No existing parent directory for path: ${absolutePath}`);
+      if (parent === existingAncestor)
+        throw new Error(`No existing parent directory for path: ${absolutePath}`);
       existingAncestor = parent;
     }
   }
@@ -61,7 +78,10 @@ export default class WorkspacePathResolver {
   readonly workspaceRoot: string;
   private readonly canonicalWorkspaceRoot: string;
 
-  constructor(workspaceRoot: string) {
+  constructor(
+    workspaceRoot: string,
+    readonly deniedDirectories: readonly string[] = [".agent"],
+  ) {
     this.workspaceRoot = path.resolve(workspaceRoot);
     this.canonicalWorkspaceRoot = getCanonicalRoot(this.workspaceRoot);
   }
@@ -71,7 +91,11 @@ export default class WorkspacePathResolver {
     const absolutePath = path.isAbsolute(requestedPath)
       ? path.resolve(requestedPath)
       : path.resolve(this.workspaceRoot, requestedPath);
-    if (isOutside(this.workspaceRoot, absolutePath) || absolutePath.startsWith("\\\\") || absolutePath.startsWith("//")) {
+    if (
+      isOutside(this.workspaceRoot, absolutePath) ||
+      absolutePath.startsWith("\\\\") ||
+      absolutePath.startsWith("//")
+    ) {
       throw new AgentFailure(
         "tool.path_outside_workspace",
         "execution",
@@ -79,14 +103,14 @@ export default class WorkspacePathResolver {
         false,
       );
     }
-    assertNotInternalState(this.workspaceRoot, absolutePath);
+    assertNotInternalState(this.workspaceRoot, absolutePath, this.deniedDirectories);
     return absolutePath;
   }
 
   async resolveExisting(inputPath?: string): Promise<string> {
     const requestedPath = this.resolve(inputPath);
     const resolvedPath = await realpath(requestedPath);
-    assertInsideWorkspace(this.canonicalWorkspaceRoot, resolvedPath);
+    assertInsideWorkspace(this.canonicalWorkspaceRoot, resolvedPath, this.deniedDirectories);
     return resolvedPath;
   }
 
@@ -109,13 +133,18 @@ export default class WorkspacePathResolver {
     assertInsideWorkspace(
       this.canonicalWorkspaceRoot,
       await realpath(existingAncestor),
+      this.deniedDirectories,
     );
     try {
       const targetEntry = await lstat(requestedPath);
-      if (targetEntry.isSymbolicLink()) throw new Error(`Symbolic links and junctions are not valid write targets: ${requestedPath}`);
+      if (targetEntry.isSymbolicLink())
+        throw new Error(
+          `Symbolic links and junctions are not valid write targets: ${requestedPath}`,
+        );
       assertInsideWorkspace(
         this.canonicalWorkspaceRoot,
         await realpath(requestedPath),
+        this.deniedDirectories,
       );
     } catch (error) {
       if (!isFileNotFound(error)) throw error;

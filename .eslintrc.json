@@ -67,6 +67,75 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "src/shared/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/main/**",
+                  "**/renderer/**",
+                  "electron",
+                  "better-sqlite3",
+                  "langchain",
+                  "@langchain/**",
+                  "node:*"
+                ],
+                "message": "Shared contracts must remain independent of backend and UI implementations."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/main/story/application/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "electron",
+                "message": "Inject desktop ports from the bootstrap layer."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/main/agent/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/story/**",
+                  "**/desktop/**",
+                  "**/bootstrap/**",
+                  "**/shared/contracts/**",
+                  "electron",
+                  "electron/*"
+                ],
+                "message": "The generic engine depends only on its own modules and shared/engine contracts."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

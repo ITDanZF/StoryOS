@@ -1,5 +1,5 @@
-import path from "node:path";
 import { tool } from "langchain";
+import path from "node:path";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from "../common/limits.ts";
@@ -13,6 +13,7 @@ export function createListFilesTool(context: WorkspaceToolContext) {
       const cappedLimit = Math.min(limit, MAX_LIST_LIMIT);
       const matcher = pattern ? wildcardToRegExp(pattern) : null;
       const files = await walkFiles(absolutePath, {
+        excludedDirectories: context.paths.deniedDirectories,
         recursive,
         limit: cappedLimit + 1,
       });
@@ -48,13 +49,24 @@ export function createListFilesTool(context: WorkspaceToolContext) {
         path: z
           .string()
           .optional()
-          .describe("Workspace-relative directory or file path. Omit it or use . for the workspace root."),
+          .describe(
+            "Workspace-relative directory or file path. Omit it or use . for the workspace root.",
+          ),
         pattern: z
           .string()
           .optional()
           .describe("Optional wildcard pattern matched against relative paths or basenames."),
-        recursive: z.boolean().optional().describe("Whether to recurse into subdirectories. Defaults to true."),
-        limit: z.number().int().positive().max(MAX_LIST_LIMIT).optional().describe("Maximum files to return."),
+        recursive: z
+          .boolean()
+          .optional()
+          .describe("Whether to recurse into subdirectories. Defaults to true."),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(MAX_LIST_LIMIT)
+          .optional()
+          .describe("Maximum files to return."),
       }),
     },
   );

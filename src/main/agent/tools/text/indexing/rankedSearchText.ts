@@ -1,7 +1,7 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import type TextIndexService from "./TextIndexService.ts";
 import { stringifyTextToolResult } from "../source.ts";
+import type TextIndexService from "./TextIndexService.ts";
 
 export function createRankedSearchTextTool(index: TextIndexService) {
   return tool(
@@ -20,10 +20,7 @@ export function createRankedSearchTextTool(index: TextIndexService) {
             ...hit.chunk,
           });
         }
-        for (const neighbor of await index.getNeighbors(
-          hit.chunk,
-          include_neighbors,
-        )) {
+        for (const neighbor of await index.getNeighbors(hit.chunk, include_neighbors)) {
           if (included.has(neighbor.id)) continue;
           included.add(neighbor.id);
           results.push({

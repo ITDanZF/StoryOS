@@ -1,27 +1,15 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import type { AgentEventHandler } from "../../Agent/AgentEvent.ts";
-import type {
-  AgentRunResult,
-  RunAgentInput,
-} from "../../Agent/AgentRuntime.ts";
-import AgentRegistry from "../../Agent/AgentRegistry.ts";
-import type RunBudget from "../../Agent/RunLimits.ts";
-import type { ToolApprovalHandler } from "../../security/ToolPolicy.ts";
+import type { AgentEventHandler } from "../../runtime/AgentEvent.ts";
+import AgentRegistry from "../../runtime/AgentRegistry.ts";
+import type { AgentRunResult, RunAgentInput } from "../../runtime/AgentRuntime.ts";
+import type RunBudget from "../../runtime/RunLimits.ts";
+import type { ToolApprovalHandler } from "../security/ToolPolicy.ts";
 
 const delegateTaskSchema = z.object({
-  subagent_type: z
-    .string()
-    .min(1)
-    .describe("The id of the text-processing agent to run."),
-  description: z
-    .string()
-    .min(1)
-    .describe("A short description of the delegated task."),
-  prompt: z
-    .string()
-    .min(1)
-    .describe("The complete task prompt sent to the text-processing agent."),
+  subagent_type: z.string().min(1).describe("The id of the text-processing agent to run."),
+  description: z.string().min(1).describe("A short description of the delegated task."),
+  prompt: z.string().min(1).describe("The complete task prompt sent to the text-processing agent."),
 });
 
 export type DelegateAgentRuntime = {
@@ -38,10 +26,7 @@ export type DelegateTaskContext = {
   readonly approval?: ToolApprovalHandler;
 };
 
-export function formatDelegateTaskResult(
-  description: string,
-  result: AgentRunResult,
-): string {
+export function formatDelegateTaskResult(description: string, result: AgentRunResult): string {
   const header = [
     `Subagent ${result.status}.`,
     `task: ${description}`,
@@ -54,12 +39,7 @@ export function formatDelegateTaskResult(
       return [...header, "", "Result:", result.content].join("\n");
 
     case "aborted":
-      return [
-        ...header,
-        "",
-        "Partial result:",
-        result.partialContent,
-      ].join("\n");
+      return [...header, "", "Partial result:", result.partialContent].join("\n");
 
     case "failed":
       return [
@@ -84,9 +64,7 @@ export function createDelegateTaskTool(
 
   return tool(
     async ({ subagent_type, description, prompt }) => {
-      if (
-        context.parentDepth >= context.budget.limits.maxDelegationDepth
-      ) {
+      if (context.parentDepth >= context.budget.limits.maxDelegationDepth) {
         return [
           "Subagent delegation rejected.",
           `Maximum delegation depth is ${context.budget.limits.maxDelegationDepth}.`,
@@ -112,8 +90,7 @@ export function createDelegateTaskTool(
 
         return formatDelegateTaskResult(description, result);
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
 
         return [
           "Subagent failed.",

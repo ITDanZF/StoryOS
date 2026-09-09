@@ -6,6 +6,7 @@ export async function walkFiles(
   absolutePath: string,
   options: {
     recursive?: boolean;
+    excludedDirectories?: readonly string[];
     limit?: number;
   } = {},
 ) {
@@ -35,7 +36,13 @@ export async function walkFiles(
 
       const entryPath = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (!DEFAULT_EXCLUDED_DIRS.has(entry.name) && recursive) {
+        if (
+          !DEFAULT_EXCLUDED_DIRS.has(entry.name) &&
+          !options.excludedDirectories?.some(
+            (name) => name.toLowerCase() === entry.name.toLowerCase(),
+          ) &&
+          recursive
+        ) {
           await visit(entryPath);
         }
         continue;

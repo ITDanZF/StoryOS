@@ -1,15 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import {
-  access,
-  cp,
-  mkdir,
-  readFile,
-  readdir,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { KNOWN_M0_TOOL_NAMES, REQUIRED_BUNDLED_SKILL_IDS } from "./DefaultSkillIndex.ts";
 import { checksumSkillDirectory } from "./SkillChecksum.ts";
@@ -52,12 +43,17 @@ type SkillIndex = {
   readonly version: 1;
   readonly systemSkillIds: readonly string[];
   readonly disabledSkillIds: readonly string[];
-  readonly installed: Readonly<Record<string, {
-    readonly kind: "system";
-    readonly version: number;
-    readonly enabled: boolean;
-    readonly managed: boolean;
-  }>>;
+  readonly installed: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: "system";
+        readonly version: number;
+        readonly enabled: boolean;
+        readonly managed: boolean;
+      }
+    >
+  >;
 };
 
 type MutableBootstrapResult = {
@@ -78,7 +74,7 @@ async function exists(filePath: string): Promise<boolean> {
 }
 
 async function ensureDirectory(directoryPath: string, result: MutableBootstrapResult) {
-  if (!await exists(directoryPath)) {
+  if (!(await exists(directoryPath))) {
     await mkdir(directoryPath, { recursive: true });
     result.createdDirectories.push(directoryPath);
     return;
@@ -94,7 +90,7 @@ function assertSafeSkillId(skillId: string): void {
 }
 
 async function readInstallMetadata(installPath: string): Promise<InstallMetadata | null> {
-  if (!await exists(installPath)) {
+  if (!(await exists(installPath))) {
     return null;
   }
 
@@ -190,12 +186,14 @@ export default class SkillBootstrap {
     return this.freezeResult(result);
   }
 
-  private async readBundledSkills(): Promise<readonly {
-    readonly manifest: SkillManifest;
-    readonly sourceRoot: string;
-    readonly checksum: string;
-  }[]> {
-    if (!await exists(this.bundledSkillRoot)) {
+  private async readBundledSkills(): Promise<
+    readonly {
+      readonly manifest: SkillManifest;
+      readonly sourceRoot: string;
+      readonly checksum: string;
+    }[]
+  > {
+    if (!(await exists(this.bundledSkillRoot))) {
       throw new Error(`Bundled skill root does not exist: ${this.bundledSkillRoot}`);
     }
 
@@ -214,7 +212,7 @@ export default class SkillBootstrap {
 
       const sourceRoot = path.join(this.bundledSkillRoot, entry.name);
       const skillFilePath = path.join(sourceRoot, "SKILL.md");
-      if (!await exists(skillFilePath)) {
+      if (!(await exists(skillFilePath))) {
         throw new Error(`Bundled skill is missing SKILL.md: ${sourceRoot}`);
       }
 
@@ -234,16 +232,18 @@ export default class SkillBootstrap {
       }
 
       ids.add(manifest.id);
-      skills.push(Object.freeze({
-        manifest,
-        sourceRoot,
-        checksum: await checksumSkillDirectory(sourceRoot),
-      }));
+      skills.push(
+        Object.freeze({
+          manifest,
+          sourceRoot,
+          checksum: await checksumSkillDirectory(sourceRoot),
+        }),
+      );
     }
 
-    return Object.freeze(skills.sort((left, right) =>
-      left.manifest.id.localeCompare(right.manifest.id),
-    ));
+    return Object.freeze(
+      skills.sort((left, right) => left.manifest.id.localeCompare(right.manifest.id)),
+    );
   }
 
   private async syncSkill(
@@ -258,7 +258,7 @@ export default class SkillBootstrap {
     const installPath = path.join(targetRoot, "install.json");
     const timestamp = new Date().toISOString();
 
-    if (!await exists(targetRoot)) {
+    if (!(await exists(targetRoot))) {
       await copySkillDirectory(skill.sourceRoot, targetRoot);
       await this.writeInstallMetadata({
         skill,
@@ -285,16 +285,11 @@ export default class SkillBootstrap {
       await rm(newRoot, { recursive: true, force: true });
       await cp(skill.sourceRoot, newRoot, { recursive: true });
       result.skippedSkills.push(skill.manifest.id);
-      result.warnings.push(
-        `System skill was modified locally; wrote bundled update to ${newRoot}`,
-      );
+      result.warnings.push(`System skill was modified locally; wrote bundled update to ${newRoot}`);
       return;
     }
 
-    if (
-      install.bundledChecksum === skill.checksum &&
-      install.version === skill.manifest.version
-    ) {
+    if (install.bundledChecksum === skill.checksum && install.version === skill.manifest.version) {
       return;
     }
 
@@ -337,9 +332,7 @@ export default class SkillBootstrap {
     await writeJsonFile(input.installPath, metadata);
   }
 
-  private async writeSkillIndex(
-    manifests: readonly SkillManifest[],
-  ): Promise<void> {
+  private async writeSkillIndex(manifests: readonly SkillManifest[]): Promise<void> {
     const installed = Object.fromEntries(
       manifests.map((manifest) => [
         manifest.id,

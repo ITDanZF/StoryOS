@@ -1,5 +1,5 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { ChatOpenAI } from "@langchain/openai";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { ModelConnectionConfiguration } from "./ModelConfiguration.ts";
 
 type ConnectionSnapshot = {
@@ -59,9 +59,7 @@ export default class LiveModelConnection {
     };
   }
 
-  private createSnapshot(
-    configuration: ModelConnectionConfiguration,
-  ): ConnectionSnapshot {
+  private createSnapshot(configuration: ModelConnectionConfiguration): ConnectionSnapshot {
     return Object.freeze({
       configuration: Object.freeze({ ...configuration }),
       client: new ChatOpenAI({

@@ -7,9 +7,7 @@ export type InstallUserSkillRequest = {
 };
 
 export type SkillInstaller = {
-  readonly installUserSkill: (
-    request: InstallUserSkillRequest,
-  ) => Promise<CreatedUserSkill>;
+  readonly installUserSkill: (request: InstallUserSkillRequest) => Promise<CreatedUserSkill>;
   readonly onAfterInstall?: (handler: SkillInstallEventHandler) => () => void;
 };
 
@@ -17,18 +15,14 @@ export type SkillInstallEvent = {
   readonly skill: CreatedUserSkill;
 };
 
-export type SkillInstallEventHandler = (
-  event: SkillInstallEvent,
-) => void | Promise<void>;
+export type SkillInstallEventHandler = (event: SkillInstallEvent) => void | Promise<void>;
 
 export default class SkillInstallService implements SkillInstaller {
   private readonly afterInstallHandlers = new Set<SkillInstallEventHandler>();
 
   constructor(private readonly skills: SkillApplication) {}
 
-  async installUserSkill(
-    request: InstallUserSkillRequest,
-  ): Promise<CreatedUserSkill> {
+  async installUserSkill(request: InstallUserSkillRequest): Promise<CreatedUserSkill> {
     const skill = await this.skills.createUserSkillFromContent(request);
     await this.emitAfterInstall(skill);
     return skill;
@@ -40,8 +34,6 @@ export default class SkillInstallService implements SkillInstaller {
   }
 
   private async emitAfterInstall(skill: CreatedUserSkill): Promise<void> {
-    await Promise.all(
-      [...this.afterInstallHandlers].map((handler) => handler({ skill })),
-    );
+    await Promise.all([...this.afterInstallHandlers].map((handler) => handler({ skill })));
   }
 }

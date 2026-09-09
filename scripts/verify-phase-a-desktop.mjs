@@ -21,22 +21,6 @@ fs.writeFileSync(
   }),
 );
 const packaged = path.resolve("out/storyos-win32-x64/resources/app.asar");
-const bootstrap = path.join(root, "bootstrap.cjs");
-fs.writeFileSync(
-  bootstrap,
-  `const {app,BrowserWindow}=require(${JSON.stringify(require.resolve("electron"))});
-BrowserWindow.prototype.show=function(){};
-app.on("web-contents-created",(_event,contents)=>{contents.openDevTools=function(){};contents.setBackgroundThrottling(false);});
-app.setAppPath(${JSON.stringify(packaged)});
-require(${JSON.stringify(path.join(packaged, ".vite/build/main.js"))});`,
-);
-// The bootstrap requires the built-in Electron module, not the npm path resolver.
-fs.writeFileSync(
-  bootstrap,
-  fs
-    .readFileSync(bootstrap, "utf8")
-    .replace(JSON.stringify(require.resolve("electron")), "'electron'"),
-);
 const env = { ...process.env, MINI_AGENT_HOME: home };
 delete env.ELECTRON_RUN_AS_NODE;
 async function waitForApi(
@@ -56,11 +40,12 @@ let application;
 try {
   application = await _electron.launch({
     executablePath: require("electron"),
-    args: [bootstrap, "--disable-gpu"],
+    args: [packaged, "--disable-gpu"],
     env,
     timeout: 30_000,
   });
   await application.firstWindow();
+  await new Promise(resolve => setTimeout(resolve, 1500));
   const page = application
     .windows()
     .find((page) => !page.url().startsWith("devtools:"));
@@ -139,7 +124,9 @@ try {
       revisionId: saved.revision.id,
     };
   });
-  const chapter = page.getByText("第一章", { exact: true });
+  // Fixtures are created through IPC; reload to hydrate the renderer project store.
+  await page.reload();
+  const chapter = page.getByRole("navigation", {name: "章节目录"}).getByText("第一章", {exact: true});
   await chapter.first().click();
   const editor = page.locator(
     '[contenteditable="true"][aria-label="章节正文"]',
@@ -199,11 +186,14 @@ try {
   await crashed.close().catch(() => undefined);
   application = await _electron.launch({
     executablePath: require("electron"),
-    args: [bootstrap, "--disable-gpu"],
+    args: [packaged, "--disable-gpu"],
     env,
     timeout: 30_000,
   });
-  const reopened = await application.firstWindow();
+  await application.firstWindow();
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  const reopened = application.windows().find(page => !page.url().startsWith("devtools:"));
+  if (!reopened) throw new Error("Reopened main window missing");
   await reopened.waitForFunction(
     () => Boolean(window.storyOSAgent),
     undefined,
@@ -221,7 +211,7 @@ try {
   await reopened.evaluate((ids) => {
     location.hash = `#/projects/${ids.projectId}/book`;
   }, ids);
-  await reopened.getByText("第一章", { exact: true }).first().click();
+  await reopened.getByRole("navigation", {name: "章节目录"}).getByText("第一章", {exact: true}).click();
   const recoveredEditor = reopened.locator(
     '[contenteditable="true"][aria-label="章节正文"]',
   );

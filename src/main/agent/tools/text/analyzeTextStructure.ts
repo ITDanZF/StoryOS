@@ -2,11 +2,7 @@ import { tool } from "langchain";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { offsetToPosition } from "./ranges.ts";
-import {
-  loadTextSource,
-  stringifyTextToolResult,
-  textSourceFields,
-} from "./source.ts";
+import { loadTextSource, stringifyTextToolResult, textSourceFields } from "./source.ts";
 
 type StructureNodeType =
   | "heading"
@@ -107,35 +103,19 @@ export function createAnalyzeTextStructureTool(context: WorkspaceToolContext) {
           const marker = fence[1][0];
           const markerLength = fence[1].length;
           let endIndex = index;
-          for (
-            let candidate = index + 1;
-            candidate < lines.length;
-            candidate += 1
-          ) {
+          for (let candidate = index + 1; candidate < lines.length; candidate += 1) {
             endIndex = candidate;
-            if (
-              new RegExp(`^\\s*${marker}{${markerLength},}\\s*$`).test(
-                lines[candidate].text,
-              )
-            ) {
+            if (new RegExp(`^\\s*${marker}{${markerLength},}\\s*$`).test(lines[candidate].text)) {
               break;
             }
           }
           const end = lines[endIndex].end;
-          addNode(
-            "code_block",
-            line.start,
-            end,
-            content.slice(line.start, end),
-            {
-              language: fence[2].trim() || null,
-              closed:
-                endIndex > index &&
-                new RegExp(`^\\s*${marker}{${markerLength},}\\s*$`).test(
-                  lines[endIndex].text,
-                ),
-            },
-          );
+          addNode("code_block", line.start, end, content.slice(line.start, end), {
+            language: fence[2].trim() || null,
+            closed:
+              endIndex > index &&
+              new RegExp(`^\\s*${marker}{${markerLength},}\\s*$`).test(lines[endIndex].text),
+          });
           index = endIndex;
           continue;
         }
@@ -144,10 +124,7 @@ export function createAnalyzeTextStructureTool(context: WorkspaceToolContext) {
         if (heading) {
           flushParagraph();
           const level = heading[1].length;
-          while (
-            headingStack.length > 0 &&
-            (headingStack.at(-1)?.level ?? 0) >= level
-          ) {
+          while (headingStack.length > 0 && (headingStack.at(-1)?.level ?? 0) >= level) {
             headingStack.pop();
           }
           const parentHeading = headingStack.at(-1)?.id;
@@ -219,15 +196,11 @@ export function createAnalyzeTextStructureTool(context: WorkspaceToolContext) {
           counts,
           heading_depth: Math.max(
             0,
-            ...nodes
-              .filter((node) => node.type === "heading")
-              .map((node) => Number(node.level)),
+            ...nodes.filter((node) => node.type === "heading").map((node) => Number(node.level)),
           ),
         },
         warnings:
-          totalNodes > nodes.length
-            ? [`Structure nodes were truncated at ${max_nodes}.`]
-            : [],
+          totalNodes > nodes.length ? [`Structure nodes were truncated at ${max_nodes}.`] : [],
       });
     },
     {

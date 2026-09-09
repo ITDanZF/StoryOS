@@ -53,10 +53,7 @@ function requireNode(value: unknown, path: string): TiptapNode {
   return value as TiptapNode;
 }
 
-export function requireTiptapDocument(
-  value: unknown,
-  path = "document",
-): TiptapDocument {
+export function requireTiptapDocument(value: unknown, path = "document"): TiptapDocument {
   const document = requireNode(value, path);
   if (document.type !== "doc") {
     throw new Error('Tiptap document root must have type "doc".');
@@ -96,11 +93,7 @@ export function parseTiptapDocument(serialized: string): TiptapDocument {
   }
   if (isRecord(value) && "schemaVersion" in value) {
     const version = value.schemaVersion;
-    if (
-      typeof version !== "number" ||
-      !Number.isInteger(version) ||
-      version < 1
-    ) {
+    if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
       throw new Error("Invalid chapter content schema version.");
     }
     if (version > CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION) {
@@ -121,9 +114,7 @@ export function plainTextToTiptapDocument(value: string): TiptapDocument {
       if (index > 0) content.push({ type: "hardBreak" });
       if (line) content.push({ type: "text", text: line });
     });
-    return content.length > 0
-      ? { type: "paragraph", content }
-      : { type: "paragraph" };
+    return content.length > 0 ? { type: "paragraph", content } : { type: "paragraph" };
   });
   return {
     type: "doc",
@@ -146,9 +137,7 @@ export function extractTiptapText(document: TiptapDocument): string {
     if (node.type === "text") return node.text ?? "";
     if (node.type === "hardBreak") return "\n";
     const children = node.content?.map(readNode).join("") ?? "";
-    return node.type === "paragraph" || node.type === "blockquote"
-      ? `${children}\n`
-      : children;
+    return node.type === "paragraph" || node.type === "blockquote" ? `${children}\n` : children;
   };
   return readNode(document).trimEnd();
 }

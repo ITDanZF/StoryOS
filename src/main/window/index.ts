@@ -1,128 +1,130 @@
-import { BrowserWindow } from 'electron';
-import type { BrowserWindowConstructorOptions } from 'electron';
-import path from 'node:path';
-import { notifyWindowState } from '../ipc/window';
+import type { BrowserWindowConstructorOptions } from "electron";
+import { BrowserWindow } from "electron";
+import path from "node:path";
+import { notifyWindowState } from "../ipc/window";
 
 interface WindowManagerOptions extends BrowserWindowConstructorOptions {
-    id?: string;
-    route?: string; // 如 #/settings，用于 SPA 路由
-    isOpenDev?: boolean;
+  id?: string;
+  route?: string; // 如 #/settings，用于 SPA 路由
+  isOpenDev?: boolean;
 }
 
 export default class AppWindowManager {
-    private MainId = 'mainApp';
-    private windowsMap = new Map<string, BrowserWindow>();
-    private defaultOptions: WindowManagerOptions = { id: this.MainId };
+  private MainId = "mainApp";
+  private windowsMap = new Map<string, BrowserWindow>();
+  private defaultOptions: WindowManagerOptions = { id: this.MainId };
 
-    constructor(options?: WindowManagerOptions) {
-        this.defaultOptions = {
-            width: 1440,
-            height: 900,
-            minWidth: 480,
-            minHeight: 560,
-            icon: path.join(__dirname, '../../assets/icons/storyos.png'),
-            show: false, // ready-to-show 再显示，防白屏
-            autoHideMenuBar: true, // Windows/Linux 隐藏菜单栏
-            frame: false,
-            hasShadow: true,
-            backgroundColor: '#f7f7f5',
-            webPreferences: {
-                preload: path.join(__dirname, 'preload.js'),
-                contextIsolation: true,
-                nodeIntegration: false,
-                spellcheck: true,
-            },
-            ...options,
-        };
+  constructor(options?: WindowManagerOptions) {
+    this.defaultOptions = {
+      width: 1440,
+      height: 900,
+      minWidth: 480,
+      minHeight: 560,
+      show: false, // ready-to-show 再显示，防白屏
+      autoHideMenuBar: true, // Windows/Linux 隐藏菜单栏
+      frame: false,
+      hasShadow: true,
+      backgroundColor: "#f7f7f5",
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        spellcheck: true,
+      },
+      ...options,
+    };
+  }
+
+  /**
+   * 创建窗口程序
+   */
+  public createMainWindow() {
+    const win = this.createWindow({ id: this.MainId });
+    return win;
+  }
+
+  get MainWindow() {
+    const exist = this.windowsMap.get(this.MainId);
+    if (exist) {
+      if (exist.isMinimized()) exist.restore();
+      exist.focus();
+      return exist;
+    }
+    return null;
+  }
+
+  get MainWinId() {
+    return this.MainId;
+  }
+
+  ownsWebContents(id: number): boolean {
+    return [...this.windowsMap.values()].some(
+      (win) => !win.isDestroyed() && win.webContents.id === id,
+    );
+  }
+
+  public createWindow(opts: WindowManagerOptions): BrowserWindow | null {
+    const { id, route, ...customOptions } = opts;
+
+    if (!id) {
+      console.error("窗口id缺失");
+      return null;
     }
 
-    /**
-     * 创建窗口程序
-     */
-    public createMainWindow() {
-        const win = this.createWindow({ id: this.MainId });
-        return win;
+    const exist = this.windowsMap.get(id);
+    if (exist) {
+      return exist;
     }
 
-    get MainWindow() {
-        const exist = this.windowsMap.get(this.MainId);
-        if (exist) {
-            if (exist.isMinimized()) exist.restore();
-            exist.focus();
-            return exist;
-        }
-        return null;
+    const win = new BrowserWindow({
+      ...this.defaultOptions,
+      ...customOptions,
+      webPreferences: {
+        ...this.defaultOptions.webPreferences,
+        ...customOptions.webPreferences,
+      },
+    });
+
+    win.once("ready-to-show", () => {
+      win.show();
+    });
+
+    const notifyState = () => notifyWindowState(win);
+    win.on("maximize", notifyState);
+    win.on("unmaximize", notifyState);
+    win.on("enter-full-screen", notifyState);
+    win.on("leave-full-screen", notifyState);
+
+    this.loadContent(win, route);
+
+    // 关闭时保存状态并从 Map 移除
+    win.on("closed", () => {
+      this.windowsMap.delete(id);
+    });
+
+    this.windowsMap.set(id, win);
+
+    // 开启调试工具
+    if (this.defaultOptions.isOpenDev) {
+      win.webContents.openDevTools();
+    }
+    return win;
+  }
+
+  private loadContent(win: BrowserWindow, route?: string) {
+    const hash = route ? (route.startsWith("#") ? route : `#${route}`) : "";
+
+    // 开发时：Vite dev server 存在，走这里（有热更新）
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+      const url = hash
+        ? `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/index.html${hash}`
+        : MAIN_WINDOW_VITE_DEV_SERVER_URL;
+      win.loadURL(url);
+      return;
     }
 
-    get MainWinId() {
-        return this.MainId;
-    }
-
-    public createWindow(opts: WindowManagerOptions): BrowserWindow | null {
-        const { id, route, ...customOptions } = opts;
-
-        if (!id) {
-            console.error('窗口id缺失');
-            return null;
-        }
-
-        const exist = this.windowsMap.get(id);
-        if (exist) {
-            return exist;
-        }
-
-        const win = new BrowserWindow({
-            ...this.defaultOptions,
-            ...customOptions,
-            webPreferences: {
-                ...this.defaultOptions.webPreferences,
-                ...customOptions.webPreferences,
-            },
-        });
-
-        win.once('ready-to-show', () => {
-            win.show();
-        });
-
-        const notifyState = () => notifyWindowState(win);
-        win.on('maximize', notifyState);
-        win.on('unmaximize', notifyState);
-        win.on('enter-full-screen', notifyState);
-        win.on('leave-full-screen', notifyState);
-
-        this.loadContent(win, route);
-
-        // 关闭时保存状态并从 Map 移除
-        win.on('closed', () => {
-            this.windowsMap.delete(id);
-        });
-
-        this.windowsMap.set(id, win);
-
-        // 开启调试工具
-        if (this.defaultOptions.isOpenDev) {
-            win.webContents.openDevTools();
-        }
-        return win;
-    }
-
-    private loadContent(win: BrowserWindow, route?: string) {
-        const hash = route ? (route.startsWith('#') ? route : `#${route}`) : '';
-
-        // 开发时：Vite dev server 存在，走这里（有热更新）
-        if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-            const url = hash
-                ? `${MAIN_WINDOW_VITE_DEV_SERVER_URL}/index.html${hash}`
-                : MAIN_WINDOW_VITE_DEV_SERVER_URL;
-            win.loadURL(url);
-            return;
-        }
-
-        // 生产时：加载本地打包后的 HTML
-        const file = path.join(
-            __dirname,
-            `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`
-        );
-        hash ? win.loadURL(`file://${file}${hash}`) : win.loadFile(file);
-    }
+    // 生产时：加载本地打包后的 HTML
+    const file = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+    hash ? win.loadURL(`file://${file}${hash}`) : win.loadFile(file);
+  }
 }

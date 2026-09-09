@@ -13,8 +13,14 @@ import {
 } from "../common/text.ts";
 
 export const textSourceFields = {
-  text: z.string().optional().describe("Inline text to process. Provide either text or path, never both."),
-  path: z.string().optional().describe("Text file inside the workspace. Provide either path or text, never both."),
+  text: z
+    .string()
+    .optional()
+    .describe("Inline text to process. Provide either text or path, never both."),
+  path: z
+    .string()
+    .optional()
+    .describe("Text file inside the workspace. Provide either path or text, never both."),
 };
 
 export type TextSourceInput = {

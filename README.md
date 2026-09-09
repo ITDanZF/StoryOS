@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/storyos-logo.svg" width="96" height="96" alt="StoryOS Logo" />
+  <img src="assets/branding/storyos-logo.svg" width="96" height="96" alt="StoryOS Logo" />
 
   # StoryOS
 
@@ -131,6 +131,10 @@ StoryOS 目前处于持续开发阶段：
 - [ ] 探索独立书架、内容导入与多格式导出
 
 路线图会根据实际使用反馈逐步调整。欢迎通过 [Issues](https://github.com/ITDanZF/StoryOS/issues) 分享问题、需求和使用场景。
+
+## 后端架构
+
+通用 Agent 引擎位于 `src/main/agent`，StoryOS 业务位于 `src/main/story`，通过接口接入。后续扩展遵循 [Agent 模块说明](src/main/agent/README.md)。模块入口、资源归属、兼容边界和验证结果见 [后端重构实施记录](docs/architecture/backend-refactoring-implementation-log.md)。日常后端检查使用 `npm run check:backend`，桌面运行前执行 `npm run native:electron`。
 
 ## 参与开发
 

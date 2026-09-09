@@ -3,11 +3,7 @@ import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { escapeRegExp } from "../common/text.ts";
 import { offsetToPosition } from "./ranges.ts";
-import {
-  loadTextSource,
-  stringifyTextToolResult,
-  textSourceFields,
-} from "./source.ts";
+import { loadTextSource, stringifyTextToolResult, textSourceFields } from "./source.ts";
 
 export function createExtractTextTool(context: WorkspaceToolContext) {
   return tool(
@@ -37,13 +33,9 @@ export function createExtractTextTool(context: WorkspaceToolContext) {
       const seen = new Set<string>();
 
       for (const match of source.content.matchAll(matcher)) {
-        const value = capture_group === undefined
-          ? match[0]
-          : match[capture_group];
+        const value = capture_group === undefined ? match[0] : match[capture_group];
         if (value === undefined) {
-          throw new Error(
-            `Capture group ${capture_group} does not exist for a match.`,
-          );
+          throw new Error(`Capture group ${capture_group} does not exist for a match.`);
         }
         if (deduplicate && seen.has(value)) continue;
         seen.add(value);
@@ -72,9 +64,8 @@ export function createExtractTextTool(context: WorkspaceToolContext) {
           match_count: matches.length,
           limited: matches.length >= limit,
         },
-        warnings: matches.length >= limit
-          ? [`Extraction results reached the limit of ${limit}.`]
-          : [],
+        warnings:
+          matches.length >= limit ? [`Extraction results reached the limit of ${limit}.`] : [],
       });
     },
     {

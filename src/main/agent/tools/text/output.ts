@@ -2,11 +2,7 @@ import { stat } from "node:fs/promises";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { atomicWriteTextFile } from "../common/atomicWrite.ts";
 import { calculateTextRevision } from "../common/revision.ts";
-import {
-  readTextFile,
-  restoreLineEndings,
-  type LineEnding,
-} from "../common/text.ts";
+import { readTextFile, restoreLineEndings, type LineEnding } from "../common/text.ts";
 
 export type TextOutputTarget = {
   readonly absolutePath: string;
@@ -71,10 +67,7 @@ export async function writeTextOutput(
         `Text revision conflict for ${target.relativePath}. Preview the merge again before writing it.`,
       );
     }
-    await context.files.assertFreshForWrite(
-      target.absolutePath,
-      target.content,
-    );
+    await context.files.assertFreshForWrite(target.absolutePath, target.content);
   }
 
   await atomicWriteTextFile(
@@ -83,11 +76,7 @@ export async function writeTextOutput(
     context.paths,
   );
   const fileStat = await stat(target.absolutePath);
-  context.files.update(
-    target.absolutePath,
-    normalizedContent,
-    fileStat.mtimeMs,
-  );
+  context.files.update(target.absolutePath, normalizedContent, fileStat.mtimeMs);
   return Object.freeze({
     operation: target.exists ? "updated" : "created",
     path: target.relativePath,

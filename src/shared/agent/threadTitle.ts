@@ -27,15 +27,11 @@ export function deriveThreadTitle(prompt: string): string {
     .split(/[。！？!?；;\n]/u)
     .map((item) => item.trim())
     .filter(Boolean);
-  const candidate = clauses.find((item) => Array.from(item).length >= 4)
-    ?? clauses[0]
-    ?? "新对话";
+  const candidate = clauses.find((item) => Array.from(item).length >= 4) ?? clauses[0] ?? "新对话";
   const cleaned = candidate.replace(/[，,：:\s]+$/u, "").trim();
   if (!cleaned) return "新对话";
 
   const characters = Array.from(cleaned);
   const maximum = /[\u3400-\u9fff]/u.test(cleaned) ? 24 : 44;
-  return characters.length > maximum
-    ? `${characters.slice(0, maximum).join("")}…`
-    : cleaned;
+  return characters.length > maximum ? `${characters.slice(0, maximum).join("")}…` : cleaned;
 }

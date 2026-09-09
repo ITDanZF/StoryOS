@@ -4,25 +4,17 @@ import type WorkspaceToolContext from "../../WorkspaceToolContext.ts";
 import { calculateTextRevision } from "../../common/revision.ts";
 import { readTextFile } from "../../common/text.ts";
 import { walkFiles } from "../../common/walk.ts";
-import { createStructuralChunks } from "./structuralChunks.ts";
 import MemoryTextIndexStore from "./MemoryTextIndexStore.ts";
-import { normalizeSearchText, tokenizeSearchText } from "./tokenizer.ts";
-import type {
-  IndexedTextChunk,
-  IndexedTextFile,
-  RankedTextHit,
-} from "./types.ts";
 import type {
   TextIndexFileState,
   TextIndexSearchOptions,
   TextIndexStore,
 } from "./TextIndexStore.ts";
+import { createStructuralChunks } from "./structuralChunks.ts";
+import { normalizeSearchText, tokenizeSearchText } from "./tokenizer.ts";
+import type { IndexedTextChunk, IndexedTextFile, RankedTextHit } from "./types.ts";
 
-function createChunkId(
-  relativePath: string,
-  revision: string,
-  index: number,
-): string {
+function createChunkId(relativePath: string, revision: string, index: number): string {
   return createHash("sha256")
     .update(`${relativePath}\0${revision}\0${index}`, "utf8")
     .digest("hex")
@@ -34,8 +26,7 @@ export default class TextIndexService {
 
   constructor(
     private readonly context: WorkspaceToolContext,
-    private readonly store: TextIndexStore =
-      context.textIndexStore ?? new MemoryTextIndexStore(),
+    private readonly store: TextIndexStore = context.textIndexStore ?? new MemoryTextIndexStore(),
   ) {}
 
   async ensureFresh(): Promise<void> {
@@ -57,10 +48,7 @@ export default class TextIndexService {
     return this.store.search(query, options);
   }
 
-  async getChunks(
-    paths?: readonly string[],
-    glob?: string,
-  ): Promise<readonly IndexedTextChunk[]> {
+  async getChunks(paths?: readonly string[], glob?: string): Promise<readonly IndexedTextChunk[]> {
     await this.ensureFresh();
     return this.store.getChunks(paths, glob);
   }
@@ -75,11 +63,10 @@ export default class TextIndexService {
   }
 
   private async refresh(): Promise<void> {
-    const previous = new Map(
-      this.store.listFileStates().map((file) => [file.path, file]),
-    );
+    const previous = new Map(this.store.listFileStates().map((file) => [file.path, file]));
     const retainedPaths = new Set<string>();
     const absoluteFiles = await walkFiles(this.context.paths.workspaceRoot, {
+      excludedDirectories: this.context.paths.deniedDirectories,
       recursive: true,
       limit: Number.POSITIVE_INFINITY,
     });
@@ -110,10 +97,7 @@ export default class TextIndexService {
         continue;
       }
       retainedPaths.add(relativePath);
-      const revision = calculateTextRevision(
-        textFile.content,
-        textFile.lineEnding,
-      );
+      const revision = calculateTextRevision(textFile.content, textFile.lineEnding);
       const state: TextIndexFileState = Object.freeze({
         path: relativePath,
         revision,
@@ -137,9 +121,7 @@ export default class TextIndexService {
             start: chunk.start,
             end: chunk.end,
             headingPath: chunk.headingPath,
-            tokens: tokenizeSearchText(
-              `${chunk.headingPath.join(" ")} ${chunk.content}`,
-            ),
+            tokens: tokenizeSearchText(`${chunk.headingPath.join(" ")} ${chunk.content}`),
           }),
       );
       const indexedFile: IndexedTextFile = Object.freeze({

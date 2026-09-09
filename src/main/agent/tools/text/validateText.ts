@@ -3,11 +3,7 @@ import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { escapeRegExp } from "../common/text.ts";
 import { offsetToPosition } from "./ranges.ts";
-import {
-  loadTextSource,
-  stringifyTextToolResult,
-  textSourceFields,
-} from "./source.ts";
+import { loadTextSource, stringifyTextToolResult, textSourceFields } from "./source.ts";
 import { calculateTextStats } from "./textStats.ts";
 
 const regexRuleSchema = z.object({
@@ -116,8 +112,7 @@ export function createValidateTextTool(context: WorkspaceToolContext) {
           if (match[0].length <= max_paragraph_characters) continue;
           addIssue({
             rule: "max_paragraph_characters",
-            message:
-              `Paragraph has ${match[0].length} characters; maximum is ${max_paragraph_characters}.`,
+            message: `Paragraph has ${match[0].length} characters; maximum is ${max_paragraph_characters}.`,
             start: offsetToPosition(content, match.index),
             end: offsetToPosition(content, match.index + match[0].length),
           });
@@ -125,10 +120,7 @@ export function createValidateTextTool(context: WorkspaceToolContext) {
       }
 
       for (const rule of regex_rules) {
-        const matcher = new RegExp(
-          rule.pattern,
-          rule.case_sensitive ? "g" : "gi",
-        );
+        const matcher = new RegExp(rule.pattern, rule.case_sensitive ? "g" : "gi");
         const matches = [...content.matchAll(matcher)];
         const mustMatch = rule.must_match ?? true;
         if (mustMatch && matches.length === 0) {
@@ -153,8 +145,7 @@ export function createValidateTextTool(context: WorkspaceToolContext) {
           if (previousLevel > 0 && level > previousLevel + 1) {
             addIssue({
               rule: "markdown_heading_hierarchy",
-              message:
-                `Markdown heading jumps from level ${previousLevel} to level ${level}.`,
+              message: `Markdown heading jumps from level ${previousLevel} to level ${level}.`,
               start: offsetToPosition(content, match.index),
               end: offsetToPosition(content, match.index + match[0].length),
             });
@@ -174,9 +165,10 @@ export function createValidateTextTool(context: WorkspaceToolContext) {
           issues_truncated: issues.length >= MAX_VALIDATION_ISSUES,
           stats,
         },
-        warnings: issues.length >= MAX_VALIDATION_ISSUES
-          ? [`Validation issues were truncated at ${MAX_VALIDATION_ISSUES}.`]
-          : [],
+        warnings:
+          issues.length >= MAX_VALIDATION_ISSUES
+            ? [`Validation issues were truncated at ${MAX_VALIDATION_ISSUES}.`]
+            : [],
       });
     },
     {

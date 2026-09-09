@@ -1,7 +1,7 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import { estimateTokenCount } from "../textStats.ts";
 import { stringifyTextToolResult } from "../source.ts";
+import { estimateTokenCount } from "../textStats.ts";
 import type TextIndexService from "./TextIndexService.ts";
 import type { IndexedTextChunk } from "./types.ts";
 
@@ -39,10 +39,7 @@ export function createSelectTextContextTool(index: TextIndexService) {
             relationship: "match",
           });
         }
-        for (const neighbor of await index.getNeighbors(
-          hit.chunk,
-          include_neighbors,
-        )) {
+        for (const neighbor of await index.getNeighbors(hit.chunk, include_neighbors)) {
           if (seen.has(neighbor.id)) continue;
           seen.add(neighbor.id);
           candidates.push({
@@ -99,9 +96,7 @@ export function createSelectTextContextTool(index: TextIndexService) {
         },
         warnings:
           hits.length > 0 && selected.length === 0
-            ? [
-                "Relevant chunks were found, but none fit within the token budget.",
-              ]
+            ? ["Relevant chunks were found, but none fit within the token budget."]
             : [],
       });
     },

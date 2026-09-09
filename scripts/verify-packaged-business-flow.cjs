@@ -64,7 +64,7 @@ async function main() {
     let window = launched.window;
 
     await window.getByLabel('项目操作').click();
-    await window.getByText('新建空白项目', { exact: true }).click();
+    await window.getByText('新建项目', { exact: true }).click();
     await window.getByPlaceholder('例如：我的故事').fill('V1闭环测试工程');
     await window.getByRole('button', { name: '创建项目', exact: true }).click();
     await window.getByText('V1闭环测试工程', { exact: true }).waitFor();
@@ -80,8 +80,8 @@ async function main() {
     await window.getByLabel('新建分卷').click();
     await window.getByText('第一卷', { exact: true }).waitFor();
     await window.getByLabel('在“第一卷”下新建章节').click();
-    await window.getByText('第一章', { exact: true }).waitFor();
-    await window.getByText('第一章', { exact: true }).click();
+    await window.getByRole('navigation', {name: '章节目录'}).getByText('第一章', {exact: true}).waitFor();
+    await window.getByRole('navigation', {name: '章节目录'}).getByText('第一章', {exact: true}).click();
     const editor = window.getByLabel('章节正文');
     await editor.waitFor({ state: 'visible', timeout: 15_000 });
     await editor.fill('雨落在旧城。\n这是 StoryOS V1 的业务闭环测试正文。');
@@ -96,7 +96,7 @@ async function main() {
     await window.getByText('V1闭环测试工程', { exact: true }).waitFor();
     await window.getByText('书籍工作区', { exact: true }).click();
     await window.getByText('《V1测试小说》', { exact: true }).waitFor();
-    await window.getByText('第一章', { exact: true }).click();
+    await window.getByRole('navigation', {name: '章节目录'}).getByText('第一章', {exact: true}).click();
     const restoredEditor = window.getByLabel('章节正文');
     await restoredEditor.waitFor({ state: 'visible', timeout: 15_000 });
     const restoredText = await restoredEditor.innerText();

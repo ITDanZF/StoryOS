@@ -1,15 +1,13 @@
-import { defineAgent } from "../Agent/AgentDefinition.ts";
-import type { AgentDefinition } from "../Agent/types.ts";
-import type { SkillDefinition } from "./SkillTypes.ts";
+import { defineAgent } from "../runtime/AgentDefinition.ts";
+import type { AgentContextKind, CapabilityId, EffectId } from "../runtime/capabilities.ts";
+import type { AgentDefinition } from "../runtime/types.ts";
 import { describeToolSecurity } from "../tools/ToolManifest.ts";
-import type {
-  AgentContextKind,
-  CapabilityId,
-  EffectId,
-} from "../Agent/capabilities.ts";
+import type { SkillDefinition } from "./SkillTypes.ts";
 
 export type SkillAgentCompilerOptions = {
   readonly knownToolNames?: readonly string[];
+  readonly describeTool?: typeof describeToolSecurity;
+  readonly defaultContexts?: readonly AgentContextKind[];
   readonly maxBodyChars?: number;
 };
 
@@ -46,7 +44,7 @@ function createSkillAgentSystemPrompt(skill: SkillDefinition, maxBodyChars: numb
     : "- No explicit triggers.";
 
   return [
-    `You are the ${skill.manifest.name} specialist agent for mini-agent-langchain.`,
+    `You are the ${skill.manifest.name} specialist agent.`,
     "",
     "Responsibilities:",
     skill.manifest.description,
@@ -73,23 +71,20 @@ export function compileSkillAgent(
     return null;
   }
 
-  const tools = Object.freeze([
-    ...(skill.manifest.agent.tools ?? skill.manifest.tools ?? []),
-  ]);
+  const tools = Object.freeze([...(skill.manifest.agent.tools ?? skill.manifest.tools ?? [])]);
   validateTools(skill, tools, options.knownToolNames);
 
-  const toolProfiles = tools.map(describeToolSecurity);
+  const toolProfiles = tools.map(options.describeTool ?? describeToolSecurity);
   const effects = [...new Set(toolProfiles.flatMap((profile) => profile.effects))] as EffectId[];
-  const provided = [...new Set(toolProfiles.flatMap((profile) => profile.provides))] as CapabilityId[];
-  const capabilities: CapabilityId[] = provided.length > 0
-    ? provided
-    : ["text.inspect"];
-  const requiredContexts = [...new Set(
-    toolProfiles.flatMap((profile) => profile.requiredContexts),
-  )] as AgentContextKind[];
-  const acceptedContexts: AgentContextKind[] = requiredContexts.length > 0
-    ? requiredContexts
-    : ["global", "book-editor"];
+  const provided = [
+    ...new Set(toolProfiles.flatMap((profile) => profile.provides)),
+  ] as CapabilityId[];
+  const capabilities: CapabilityId[] = provided.length > 0 ? provided : ["text.inspect"];
+  const requiredContexts = [
+    ...new Set(toolProfiles.flatMap((profile) => profile.requiredContexts)),
+  ] as AgentContextKind[];
+  const acceptedContexts: AgentContextKind[] =
+    requiredContexts.length > 0 ? requiredContexts : [...(options.defaultContexts ?? ["global"])];
   const agentId = skill.manifest.agent.id ?? skill.manifest.id;
   const agentName = skill.manifest.agent.name ?? skill.manifest.name;
   const category = skill.manifest.metadata?.category;

@@ -4,7 +4,7 @@ import type {
   EditorTargetedStyleOperation,
   EditorTextQuery,
   EditorTextRange,
-} from "../../../../main/agent/tools/editor/contracts.ts";
+} from "../../../../shared/contracts/editor/contracts.ts";
 import type { EditorTextInspection } from "./ai/richTextTargeting.ts";
 
 export type ChapterEditorLiveContext = {

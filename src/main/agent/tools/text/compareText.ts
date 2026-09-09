@@ -29,22 +29,13 @@ function compareLines(left: string[], right: string[]) {
     );
   }
 
-  const table = Array.from(
-    { length: left.length + 1 },
-    () => new Uint32Array(right.length + 1),
-  );
+  const table = Array.from({ length: left.length + 1 }, () => new Uint32Array(right.length + 1));
   for (let leftIndex = left.length - 1; leftIndex >= 0; leftIndex -= 1) {
-    for (
-      let rightIndex = right.length - 1;
-      rightIndex >= 0;
-      rightIndex -= 1
-    ) {
-      table[leftIndex][rightIndex] = left[leftIndex] === right[rightIndex]
-        ? table[leftIndex + 1][rightIndex + 1] + 1
-        : Math.max(
-          table[leftIndex + 1][rightIndex],
-          table[leftIndex][rightIndex + 1],
-        );
+    for (let rightIndex = right.length - 1; rightIndex >= 0; rightIndex -= 1) {
+      table[leftIndex][rightIndex] =
+        left[leftIndex] === right[rightIndex]
+          ? table[leftIndex + 1][rightIndex + 1] + 1
+          : Math.max(table[leftIndex + 1][rightIndex], table[leftIndex][rightIndex + 1]);
     }
   }
 
@@ -66,10 +57,8 @@ function compareLines(left: string[], right: string[]) {
 
     if (
       leftIndex < left.length &&
-      (
-        rightIndex >= right.length ||
-        table[leftIndex + 1][rightIndex] >= table[leftIndex][rightIndex + 1]
-      )
+      (rightIndex >= right.length ||
+        table[leftIndex + 1][rightIndex] >= table[leftIndex][rightIndex + 1])
     ) {
       removals += 1;
       if (changes.length < MAX_DIFF_CHANGES) {
@@ -103,9 +92,7 @@ function compareLines(left: string[], right: string[]) {
     common_lines: commonLines,
     additions,
     removals,
-    line_similarity: totalLines === 0
-      ? 1
-      : Number(((2 * commonLines) / totalLines).toFixed(4)),
+    line_similarity: totalLines === 0 ? 1 : Number(((2 * commonLines) / totalLines).toFixed(4)),
     changes,
     changes_truncated: additions + removals > changes.length,
   });
@@ -118,10 +105,7 @@ export function createCompareTextTool(context: WorkspaceToolContext) {
         loadTextSource(context, { text: left_text, path: left_path }),
         loadTextSource(context, { text: right_text, path: right_path }),
       ]);
-      const result = compareLines(
-        splitLines(left.content),
-        splitLines(right.content),
-      );
+      const result = compareLines(splitLines(left.content), splitLines(right.content));
       return stringifyTextToolResult({
         left: {
           source: left.kind,

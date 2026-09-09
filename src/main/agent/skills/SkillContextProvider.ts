@@ -1,7 +1,7 @@
+import type { ThreadSkillState } from "../../../shared/engine/skills/threadPorts.ts";
 import SkillApplication from "./SkillApplication.ts";
 import { renderSkillPrompt } from "./SkillPrompt.ts";
 import SkillResolver, { type SkillSelection } from "./SkillResolver.ts";
-import type { ThreadSkillState } from "../application/threadPorts.ts";
 
 export type SkillContext = {
   readonly selections: readonly SkillSelection[];
@@ -36,19 +36,22 @@ export default class SkillContextProviderService implements SkillContextProvider
     private readonly skills: SkillApplication,
     private readonly options: SkillContextProviderServiceOptions = {},
   ) {
-    this.resolver = options.resolver ?? new SkillResolver({
-      maxSkills: options.maxSkills,
-      minScore: options.minScore,
-    });
+    this.resolver =
+      options.resolver ??
+      new SkillResolver({
+        maxSkills: options.maxSkills,
+        minScore: options.minScore,
+      });
   }
 
   async getSkillContext(
     input: string,
     requestOptions: SkillContextRequestOptions = {},
   ): Promise<SkillContext> {
-    const threadState = requestOptions.threadId && this.options.threadSkillStateProvider
-      ? this.options.threadSkillStateProvider.getThreadSkillState(requestOptions.threadId)
-      : undefined;
+    const threadState =
+      requestOptions.threadId && this.options.threadSkillStateProvider
+        ? this.options.threadSkillStateProvider.getThreadSkillState(requestOptions.threadId)
+        : undefined;
     const selections = this.resolver.resolve({
       input,
       skills: this.skills.listSkillDefinitions(),

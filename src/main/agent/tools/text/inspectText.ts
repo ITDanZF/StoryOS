@@ -1,5 +1,5 @@
-import { readFile, stat } from "node:fs/promises";
 import { tool } from "langchain";
+import { readFile, stat } from "node:fs/promises";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { MAX_TEXT_FILE_BYTES } from "../common/limits.ts";
@@ -78,8 +78,7 @@ function languageProfile(content: string) {
   const total = entries.reduce((sum, [, count]) => sum + count, 0);
   const primary = [...entries].sort((left, right) => right[1] - left[1])[0];
   return Object.freeze({
-    primary_script:
-      total === 0 || !primary || primary[1] === 0 ? "unknown" : primary[0],
+    primary_script: total === 0 || !primary || primary[1] === 0 ? "unknown" : primary[0],
     scripts: Object.fromEntries(
       entries.map(([name, count]) => [
         name,
@@ -92,11 +91,7 @@ function languageProfile(content: string) {
   });
 }
 
-function inspectDecodedText(
-  content: string,
-  buffer?: Buffer,
-  utf16Encoded = false,
-) {
+function inspectDecodedText(content: string, buffer?: Buffer, utf16Encoded = false) {
   const crlf = countMatches(content, /\r\n/g);
   const lfOnly = countMatches(content, /(?<!\r)\n/g);
   const crOnly = countMatches(content, /\r(?!\n)/g);
@@ -152,9 +147,7 @@ export function createInspectTextTool(context: WorkspaceToolContext) {
       if (hasText) {
         const content = text ?? "";
         if (Buffer.byteLength(content, "utf8") > MAX_TEXT_FILE_BYTES) {
-          throw new Error(
-            `Inline text exceeds the ${MAX_TEXT_FILE_BYTES}-byte inspection limit.`,
-          );
+          throw new Error(`Inline text exceeds the ${MAX_TEXT_FILE_BYTES}-byte inspection limit.`);
         }
         return stringifyTextToolResult({
           source: "inline",
@@ -173,18 +166,12 @@ export function createInspectTextTool(context: WorkspaceToolContext) {
       const fileStat = await stat(absolutePath);
       if (!fileStat.isFile()) throw new Error("Path is not a file.");
       if (fileStat.size > MAX_TEXT_FILE_BYTES) {
-        throw new Error(
-          `File exceeds the ${MAX_TEXT_FILE_BYTES}-byte inspection limit.`,
-        );
+        throw new Error(`File exceeds the ${MAX_TEXT_FILE_BYTES}-byte inspection limit.`);
       }
       const buffer = await readFile(absolutePath);
       const encoding = detectBufferEncoding(buffer);
       const content = decodeBuffer(buffer, encoding.encoding);
-      const result = inspectDecodedText(
-        content,
-        buffer,
-        encoding.encoding.startsWith("utf-16"),
-      );
+      const result = inspectDecodedText(content, buffer, encoding.encoding.startsWith("utf-16"));
       return stringifyTextToolResult({
         source: "file",
         path: context.paths.toRelative(absolutePath),
@@ -197,9 +184,7 @@ export function createInspectTextTool(context: WorkspaceToolContext) {
         result,
         warnings: [
           ...(encoding.encoding === "unknown-legacy"
-            ? [
-                "Encoding is not valid UTF-8 and could not be identified reliably.",
-              ]
+            ? ["Encoding is not valid UTF-8 and could not be identified reliably."]
             : []),
           ...(result.mojibake_indicators > 0
             ? ["Text contains characters commonly associated with mojibake."]

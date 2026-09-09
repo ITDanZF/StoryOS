@@ -11,8 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import Database from "better-sqlite3";
-import ApplicationDatabase from "../src/main/agent/storage/global/ApplicationDatabase.ts";
-import ProjectDatabase from "../src/main/agent/storage/project/ProjectDatabase.ts";
+import ApplicationDatabase from "../src/main/story/storage/global/ApplicationDatabase.ts";
+import ProjectDatabase from "../src/main/story/storage/project/ProjectDatabase.ts";
 
 /** Explicit operator command. Normal app startup does not import or invoke this module. */
 const args = process.argv.slice(2);

@@ -30,22 +30,27 @@ const skillIdPattern = /^[a-z0-9][a-z0-9_-]*$/;
 const nonEmptyString = z.string().trim().min(1);
 const skillId = z.string().regex(skillIdPattern);
 
-const skillManifestSchema = z.object({
-  id: skillId,
-  name: nonEmptyString,
-  version: z.number().int().positive(),
-  description: nonEmptyString,
-  triggers: z.array(nonEmptyString).max(20).optional(),
-  tools: z.array(nonEmptyString).optional(),
-  agent: z.object({
-    enabled: z.boolean().optional(),
-    id: skillId.optional(),
-    name: nonEmptyString.optional(),
-    maxTurns: z.number().int().positive().optional(),
+const skillManifestSchema = z
+  .object({
+    id: skillId,
+    name: nonEmptyString,
+    version: z.number().int().positive(),
+    description: nonEmptyString,
+    triggers: z.array(nonEmptyString).max(20).optional(),
     tools: z.array(nonEmptyString).optional(),
-  }).strict().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-}).strict();
+    agent: z
+      .object({
+        enabled: z.boolean().optional(),
+        id: skillId.optional(),
+        name: nonEmptyString.optional(),
+        maxTurns: z.number().int().positive().optional(),
+        tools: z.array(nonEmptyString).optional(),
+      })
+      .strict()
+      .optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
 
 function parseScalar(value: string): unknown {
   const trimmedValue = value.trim();
@@ -150,9 +155,7 @@ function parseBlockScalar(
     index += 1;
   }
 
-  const value = folded
-    ? values.join(" ").replace(/\s+/g, " ").trim()
-    : values.join("\n").trim();
+  const value = folded ? values.join(" ").replace(/\s+/g, " ").trim() : values.join("\n").trim();
 
   return { value, nextIndex: index };
 }
@@ -184,12 +187,7 @@ function parseObject(lines: readonly string[], startIndex: number, indent: numbe
     const [, key, rawValue = ""] = match;
     const trimmedRawValue = rawValue.trim();
     if (trimmedRawValue === ">" || trimmedRawValue === "|") {
-      const parsed = parseBlockScalar(
-        lines,
-        index + 1,
-        lineIndent,
-        trimmedRawValue === ">",
-      );
+      const parsed = parseBlockScalar(lines, index + 1, lineIndent, trimmedRawValue === ">");
       objectValue[key] = parsed.value;
       index = parsed.nextIndex;
       continue;
@@ -243,7 +241,10 @@ export function parseSkillFile(content: string): ParsedSkillFile {
   }
 
   const frontmatterLines = lines.slice(1, endIndex);
-  const body = lines.slice(endIndex + 1).join("\n").trim();
+  const body = lines
+    .slice(endIndex + 1)
+    .join("\n")
+    .trim();
   const parsedFrontmatter = parseObject(frontmatterLines, 0, 0).value;
   const manifest = validateSkillManifest(parsedFrontmatter);
 
@@ -259,13 +260,8 @@ export function validateSkillManifest(
   options: SkillManifestValidationOptions = {},
 ): SkillManifest {
   const manifest = skillManifestSchema.parse(value);
-  const allToolNames = [
-    ...(manifest.tools ?? []),
-    ...(manifest.agent?.tools ?? []),
-  ];
-  const knownToolNames = options.knownToolNames
-    ? new Set(options.knownToolNames)
-    : null;
+  const allToolNames = [...(manifest.tools ?? []), ...(manifest.agent?.tools ?? [])];
+  const knownToolNames = options.knownToolNames ? new Set(options.knownToolNames) : null;
 
   for (const toolName of allToolNames) {
     if (knownToolNames && !knownToolNames.has(toolName)) {
@@ -277,9 +273,7 @@ export function validateSkillManifest(
     const declaredTools = new Set(manifest.tools);
     for (const toolName of manifest.agent.tools) {
       if (!declaredTools.has(toolName)) {
-        throw new Error(
-          `Agent tool ${toolName} must be declared in skill tools: ${manifest.id}`,
-        );
+        throw new Error(`Agent tool ${toolName} must be declared in skill tools: ${manifest.id}`);
       }
     }
   }
@@ -291,9 +285,7 @@ export function validateSkillManifest(
     agent: manifest.agent
       ? Object.freeze({
           ...manifest.agent,
-          tools: manifest.agent.tools
-            ? Object.freeze([...manifest.agent.tools])
-            : undefined,
+          tools: manifest.agent.tools ? Object.freeze([...manifest.agent.tools]) : undefined,
         })
       : undefined,
     metadata: manifest.metadata ? Object.freeze({ ...manifest.metadata }) : undefined,

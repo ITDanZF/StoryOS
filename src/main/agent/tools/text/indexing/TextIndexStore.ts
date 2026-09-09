@@ -1,8 +1,4 @@
-import type {
-  IndexedTextChunk,
-  IndexedTextFile,
-  RankedTextHit,
-} from "./types.ts";
+import type { IndexedTextChunk, IndexedTextFile, RankedTextHit } from "./types.ts";
 
 export type TextIndexSearchOptions = {
   readonly paths?: readonly string[];
@@ -22,16 +18,7 @@ export interface TextIndexStore {
   updateFileState(state: TextIndexFileState): void;
   replaceFile(file: IndexedTextFile, state: TextIndexFileState): void;
   deleteFilesNotIn(paths: ReadonlySet<string>): void;
-  search(
-    query: string,
-    options?: TextIndexSearchOptions,
-  ): readonly RankedTextHit[];
-  getChunks(
-    paths?: readonly string[],
-    glob?: string,
-  ): readonly IndexedTextChunk[];
-  getNeighbors(
-    chunk: IndexedTextChunk,
-    radius: number,
-  ): readonly IndexedTextChunk[];
+  search(query: string, options?: TextIndexSearchOptions): readonly RankedTextHit[];
+  getChunks(paths?: readonly string[], glob?: string): readonly IndexedTextChunk[];
+  getNeighbors(chunk: IndexedTextChunk, radius: number): readonly IndexedTextChunk[];
 }

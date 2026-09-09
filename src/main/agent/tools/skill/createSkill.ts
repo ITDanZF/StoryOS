@@ -18,7 +18,7 @@ export function createSkillTool(installer: SkillInstaller) {
       description: [
         "Create and install a user Skill from complete SKILL.md content.",
         "Use this instead of write_file when the user asks to create a Skill.",
-        "The target path is fixed to the active workspace: <project>/.storyos/skills/<id>/SKILL.md.",
+        "The host configures the skill installation root; the tool cannot select another destination.",
         "Never include an arbitrary file path; provide only the skill id and full SKILL.md content.",
       ].join(" "),
       schema: z.object({

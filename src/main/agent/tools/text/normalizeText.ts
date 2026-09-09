@@ -10,14 +10,16 @@ import {
 } from "./source.ts";
 
 function convertFullWidthAscii(content: string): string {
-  return [...content].map((character) => {
-    const code = character.codePointAt(0) ?? 0;
-    if (code === 0x3000) return " ";
-    if (code >= 0xff01 && code <= 0xff5e) {
-      return String.fromCodePoint(code - 0xfee0);
-    }
-    return character;
-  }).join("");
+  return [...content]
+    .map((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      if (code === 0x3000) return " ";
+      if (code >= 0xff01 && code <= 0xff5e) {
+        return String.fromCodePoint(code - 0xfee0);
+      }
+      return character;
+    })
+    .join("");
 }
 
 function limitBlankLines(content: string, maximum: number): string {
@@ -60,10 +62,7 @@ export function createNormalizeTextTool(context: WorkspaceToolContext) {
         updatedContent = convertFullWidthAscii(updatedContent);
       }
       if (tabs_to_spaces !== undefined) {
-        updatedContent = updatedContent.replaceAll(
-          "\t",
-          " ".repeat(tabs_to_spaces),
-        );
+        updatedContent = updatedContent.replaceAll("\t", " ".repeat(tabs_to_spaces));
       }
       if (trim_lines) {
         updatedContent = updatedContent
@@ -72,20 +71,18 @@ export function createNormalizeTextTool(context: WorkspaceToolContext) {
           .join("\n");
       }
       if (max_consecutive_blank_lines !== undefined) {
-        updatedContent = limitBlankLines(
-          updatedContent,
-          max_consecutive_blank_lines,
-        );
+        updatedContent = limitBlankLines(updatedContent, max_consecutive_blank_lines);
       }
       if (trim_text) {
         updatedContent = updatedContent.trim();
       }
 
-      const lineEnding: LineEnding = target_line_ending === "preserve"
-        ? source.lineEnding
-        : target_line_ending === "crlf"
-          ? "CRLF"
-          : "LF";
+      const lineEnding: LineEnding =
+        target_line_ending === "preserve"
+          ? source.lineEnding
+          : target_line_ending === "crlf"
+            ? "CRLF"
+            : "LF";
       const lineEndingChanged = lineEnding !== source.lineEnding;
       const changed = updatedContent !== source.content || lineEndingChanged;
       const returnedContent = restoreLineEndings(updatedContent, lineEnding);

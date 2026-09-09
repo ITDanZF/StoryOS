@@ -1,5 +1,5 @@
-import LiveModelConnection from "./LiveModelConnection.ts";
 import { AIMessageChunk, createAgent, HumanMessage } from "langchain";
+import LiveModelConnection from "./LiveModelConnection.ts";
 import type { ModelConnectionConfiguration } from "./ModelConfiguration.ts";
 import type { ModelGateway, ModelRunInput, ModelStreamPart } from "./ModelGateway.ts";
 import type { ModelSessionStore } from "./ModelSessionStore.ts";
@@ -67,11 +67,13 @@ export default class LangChainModelGateway implements ModelGateway {
     if (!lastMessage) throw new Error("Agent returned no messages.");
     if (typeof lastMessage.content === "string") return lastMessage.content;
 
-    return lastMessage.content.map((part) => {
-      if (typeof part === "string") return part;
-      if ("text" in part && typeof part.text === "string") return part.text;
-      return "";
-    }).join("");
+    return lastMessage.content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if ("text" in part && typeof part.text === "string") return part.text;
+        return "";
+      })
+      .join("");
   }
 
   async *stream(input: ModelRunInput): AsyncGenerator<ModelStreamPart, void, unknown> {
@@ -89,7 +91,9 @@ export default class LangChainModelGateway implements ModelGateway {
     }
   }
 
-  private async *streamWithSnapshot(input: ModelRunInput): AsyncGenerator<ModelStreamPart, void, unknown> {
+  private async *streamWithSnapshot(
+    input: ModelRunInput,
+  ): AsyncGenerator<ModelStreamPart, void, unknown> {
     const runtimeAgent = this.createRuntimeAgent(input);
     const internal = input.visibility === "internal";
     const stream = await runtimeAgent.stream(
@@ -124,17 +128,16 @@ export default class LangChainModelGateway implements ModelGateway {
       for (const part of message.content) {
         if (typeof part !== "object" || part === null) continue;
         const values = part as Record<string, unknown>;
-        const text = typeof values.text === "string"
-          ? values.text
-          : typeof values.reasoning === "string"
-            ? values.reasoning
-            : "";
+        const text =
+          typeof values.text === "string"
+            ? values.text
+            : typeof values.reasoning === "string"
+              ? values.reasoning
+              : "";
         if (!text) continue;
         const type = typeof values.type === "string" ? values.type : "";
         yield {
-          channel: /reason/i.test(type) || "reasoning" in values
-            ? "reasoning"
-            : "answer",
+          channel: /reason/i.test(type) || "reasoning" in values ? "reasoning" : "answer",
           delta: text,
         };
       }

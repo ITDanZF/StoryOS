@@ -23,10 +23,7 @@ function lineStarts(content: string): number[] {
   return starts;
 }
 
-export function positionToOffset(
-  content: string,
-  position: TextPosition,
-): number {
+export function positionToOffset(content: string, position: TextPosition): number {
   if (!Number.isInteger(position.line) || position.line < 1) {
     throw new Error("Line must be a positive integer.");
   }
@@ -40,9 +37,7 @@ export function positionToOffset(
     throw new Error(`Line ${position.line} is outside the text.`);
   }
   const nextStart = starts[position.line];
-  const lineEnd = nextStart === undefined
-    ? content.length
-    : nextStart - 1;
+  const lineEnd = nextStart === undefined ? content.length : nextStart - 1;
   const offset = start + position.column - 1;
   if (offset > lineEnd) {
     throw new Error(
@@ -52,10 +47,7 @@ export function positionToOffset(
   return offset;
 }
 
-export function offsetToPosition(
-  content: string,
-  offset: number,
-): TextPosition {
+export function offsetToPosition(content: string, offset: number): TextPosition {
   if (!Number.isInteger(offset) || offset < 0 || offset > content.length) {
     throw new Error("Text offset is outside the text.");
   }
@@ -66,10 +58,7 @@ export function offsetToPosition(
   return Object.freeze({ line, column });
 }
 
-export function resolveTextRange(
-  content: string,
-  range: TextRange,
-): ResolvedTextRange {
+export function resolveTextRange(content: string, range: TextRange): ResolvedTextRange {
   const start = positionToOffset(content, range.start);
   const end = positionToOffset(content, range.end);
   if (end < start) {
@@ -78,10 +67,7 @@ export function resolveTextRange(
   return Object.freeze({ start, end });
 }
 
-export function rangesOverlap(
-  first: ResolvedTextRange,
-  second: ResolvedTextRange,
-): boolean {
+export function rangesOverlap(first: ResolvedTextRange, second: ResolvedTextRange): boolean {
   if (first.start === first.end && second.start === second.end) {
     return first.start === second.start;
   }

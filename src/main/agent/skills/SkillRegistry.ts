@@ -61,8 +61,10 @@ export default class SkillRegistry {
   }
 
   list(): readonly SkillDefinition[] {
-    return Object.freeze([...this.definitions.values()].sort((left, right) =>
-      left.manifest.id.localeCompare(right.manifest.id),
-    ));
+    return Object.freeze(
+      [...this.definitions.values()].sort((left, right) =>
+        left.manifest.id.localeCompare(right.manifest.id),
+      ),
+    );
   }
 }

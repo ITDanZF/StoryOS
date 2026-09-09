@@ -1,8 +1,31 @@
 import type { ChapterDraft, ChapterDraftRequest } from "../book/drafts.ts";
 import type {
+  BookshelfBookCard,
+  BookshelfTrashEntry,
+  CreateBookshelfBookRequest,
+  CreateBookshelfBookResult,
+} from "../contracts/books/bookshelfContracts.ts";
+import type {
+  BookChapterRevisionResult,
+  BookWorkspaceChapterDto,
+  BookWorkspaceSnapshot,
+  CreateBookChapterRequest,
+  CreateBookRequest,
+  CreateBookVolumeRequest,
+  DeleteBookChapterRequest,
+  DeleteBookVolumeRequest,
+  ReadyBookWorkspaceSnapshot,
+  SaveBookChapterContentRequest,
+  UninitializedBookWorkspaceSnapshot,
+  UpdateBookChapterRequest,
+  UpdateBookRequest,
+} from "../contracts/books/bookWorkspaceContracts.ts";
+import type { ChapterGenerationMode } from "../contracts/books/chapterGenerationEvents.ts";
+import type { NovelDto, VolumeDto } from "../contracts/books/novelContracts.ts";
+import type {
   ApplicationEvent,
   RunSnapshot,
-} from "../../main/agent/application/contracts.ts";
+} from "../contracts/conversations/applicationContracts.ts";
 import type {
   ConversationApplicationEvent,
   ConversationRef,
@@ -10,79 +33,53 @@ import type {
   ConversationSnapshot,
   CreateConversationRequest,
   SendConversationMessageRequest,
-} from "../../main/agent/application/conversationContracts.ts";
+} from "../contracts/conversations/conversationContracts.ts";
+import type {
+  AssistantBlockChannel,
+  ConversationEvent,
+  ConversationEventType,
+} from "../contracts/conversations/conversationEvents.ts";
+import type { ConversationTurnContext } from "../contracts/conversations/conversationTurnContext.ts";
+import type {
+  MessageDto,
+  ThreadDto,
+  ThreadSnapshot,
+} from "../contracts/conversations/threadContracts.ts";
+import type {
+  RendererEditorToolRequest,
+  RendererEditorToolResponse,
+} from "../contracts/editor/contracts.ts";
+import type { ToolApprovalDecision } from "../engine/toolApproval.ts";
+import type {
+  ProjectArchiveSummary,
+  RestoreProjectArchiveResult,
+} from "../contracts/projects/projectArchiveContracts.ts";
 import type {
   CreateProjectRequest,
   ProjectDto,
   ProjectSnapshot,
   RenameProjectRequest,
-} from "../../main/agent/application/projectContracts.ts";
-import type { ProjectNavigationSnapshot } from "../../main/agent/application/projectNavigationContracts.ts";
-import type {
-  MessageDto,
-  ThreadDto,
-  ThreadSnapshot,
-} from "../../main/agent/application/threadContracts.ts";
-import type { ThreadSkillState } from "../../main/agent/application/threadPorts.ts";
-import type { ToolApprovalDecision } from "../../main/agent/security/ToolPolicy.ts";
-import type { ConversationTurnContext } from "../../main/agent/application/conversationTurnContext.ts";
-import type {
-  AssistantBlockChannel,
-  ConversationEvent,
-  ConversationEventType,
-} from "../../main/agent/application/conversationEvents.ts";
-import type {
-  RendererEditorToolRequest,
-  RendererEditorToolResponse,
-} from "../../main/agent/tools/editor/contracts.ts";
-import type { SkillDetail } from "../../main/agent/skills/SkillTypes.ts";
-import type { SkillSnapshot } from "../../main/agent/skills/SkillApplication.ts";
+} from "../contracts/projects/projectContracts.ts";
+import type { ProjectNavigationSnapshot } from "../contracts/projects/projectNavigationContracts.ts";
 import type {
   AgentConfigurationRequest,
   AgentServiceStatus,
-} from "../../main/agent/StoryAgentService.ts";
-import type {
-  BookChapterRevisionResult,
-  BookWorkspaceChapterDto,
-  BookWorkspaceSnapshot,
-  CreateBookRequest,
-  CreateBookChapterRequest,
-  CreateBookVolumeRequest,
-  DeleteBookChapterRequest,
-  DeleteBookVolumeRequest,
-  SaveBookChapterContentRequest,
-  ReadyBookWorkspaceSnapshot,
-  UninitializedBookWorkspaceSnapshot,
-  UpdateBookRequest,
-  UpdateBookChapterRequest,
-} from "../../main/agent/application/bookWorkspaceContracts.ts";
-import type { ChapterGenerationMode } from "../../main/agent/application/chapterGenerationEvents.ts";
-import type {
-  NovelDto,
-  VolumeDto,
-} from "../../main/agent/application/novelContracts.ts";
-import type {
-  BookshelfBookCard,
-  BookshelfTrashEntry,
-  CreateBookshelfBookRequest,
-  CreateBookshelfBookResult,
-} from "../../main/agent/application/bookshelfContracts.ts";
+} from "../contracts/settings/contracts.ts";
+import type { SkillSnapshot } from "../engine/skills/SkillApplication.ts";
+import type { SkillDetail } from "../engine/skills/SkillTypes.ts";
+import type { ThreadSkillState } from "../engine/skills/threadPorts.ts";
 import type {
   BookTransferFormatCapability,
   CommitBookExportRequest,
   CommitBookImportRequest,
-  ExportBookResult,
   ExportBookOptions,
+  ExportBookResult,
   ExportPreview,
   ImportBookResult,
   ImportPreview,
   PrepareBookExportRequest,
   PrepareBookImportRequest,
-} from "../../main/agent/application/bookTransferContracts.ts";
-import type {
-  ProjectArchiveSummary,
-  RestoreProjectArchiveResult,
-} from "../../main/agent/application/projectArchiveContracts.ts";
+} from "../contracts/transfers/bookTransferContracts.ts";
 
 export type RestoreProjectArchiveDesktopRequest = {
   readonly archiveId: string;
@@ -169,43 +166,26 @@ export type WorkspaceSnapshot = {
 export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
   getStatus(): Promise<AgentServiceStatus>;
   configure(request: AgentConfigurationRequest): Promise<AgentServiceStatus>;
-  sendMessage(request: {
-    threadId: string;
-    content: string;
-  }): Promise<{ runId: string }>;
+  sendMessage(request: { threadId: string; content: string }): Promise<{ runId: string }>;
   sendConversationMessage(request: SendConversationMessageRequest): Promise<{
     runId: string;
     threads: ThreadSnapshot;
   }>;
   cancelRun(runId: string): Promise<boolean>;
-  cancelConversationRun(
-    scope: ConversationScope,
-    runId: string,
-  ): Promise<boolean>;
+  cancelConversationRun(scope: ConversationScope, runId: string): Promise<boolean>;
   listRuns(): Promise<readonly RunSnapshot[]>;
-  listConversationRuns(
-    scope: ConversationScope,
-  ): Promise<readonly RunSnapshot[]>;
-  resolveApproval(
-    approvalId: string,
-    decision: ToolApprovalDecision,
-  ): Promise<boolean>;
+  listConversationRuns(scope: ConversationScope): Promise<readonly RunSnapshot[]>;
+  resolveApproval(approvalId: string, decision: ToolApprovalDecision): Promise<boolean>;
   resolveConversationApproval(
     scope: ConversationScope,
     approvalId: string,
     decision: ToolApprovalDecision,
   ): Promise<boolean>;
   getThreadSnapshot(): Promise<ThreadSnapshot>;
-  getConversationSnapshot(
-    scope: ConversationScope,
-  ): Promise<ConversationSnapshot>;
+  getConversationSnapshot(scope: ConversationScope): Promise<ConversationSnapshot>;
   listMessages(threadId?: string): Promise<readonly MessageDto[]>;
-  listConversationMessages(
-    request: ConversationRef,
-  ): Promise<readonly MessageDto[]>;
-  listConversationEvents(
-    request: ConversationRef,
-  ): Promise<readonly ConversationEvent[]>;
+  listConversationMessages(request: ConversationRef): Promise<readonly MessageDto[]>;
+  listConversationEvents(request: ConversationRef): Promise<readonly ConversationEvent[]>;
   createThread(title: string): Promise<ThreadDto>;
   createConversation(request: CreateConversationRequest): Promise<ThreadDto>;
   switchThread(threadId: string): Promise<ThreadSnapshot>;
@@ -218,30 +198,18 @@ export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
     after?: string;
     limit: number;
   }): Promise<readonly BookshelfBookCard[]>;
-  createBookshelfBook(
-    request: CreateBookshelfBookRequest,
-  ): Promise<CreateBookshelfBookResult>;
-  importBookshelfBook(request: {
-    readonly packagePath: string;
-  }): Promise<ImportBookResult>;
+  createBookshelfBook(request: CreateBookshelfBookRequest): Promise<CreateBookshelfBookResult>;
+  importBookshelfBook(request: { readonly packagePath: string }): Promise<ImportBookResult>;
   exportBookshelfBook(request: {
     readonly bookId: string;
     readonly outputPath: string;
   }): Promise<void>;
   getBookTransferFormats(): Promise<readonly BookTransferFormatCapability[]>;
-  prepareBookshelfBookImport(
-    request: PrepareBookImportRequest,
-  ): Promise<ImportPreview>;
-  commitBookshelfBookImport(
-    request: CommitBookImportRequest,
-  ): Promise<ImportBookResult>;
+  prepareBookshelfBookImport(request: PrepareBookImportRequest): Promise<ImportPreview>;
+  commitBookshelfBookImport(request: CommitBookImportRequest): Promise<ImportBookResult>;
   cancelBookshelfBookImport(sessionId: string): Promise<void>;
-  prepareBookshelfBookExport(
-    request: PrepareBookExportRequest,
-  ): Promise<ExportPreview>;
-  commitBookshelfBookExport(
-    request: CommitBookExportRequest,
-  ): Promise<ExportBookResult>;
+  prepareBookshelfBookExport(request: PrepareBookExportRequest): Promise<ExportPreview>;
+  commitBookshelfBookExport(request: CommitBookExportRequest): Promise<ExportBookResult>;
   cancelBookshelfBookExport(exportId: string): Promise<void>;
   getBookshelfTrash(): Promise<readonly BookshelfTrashEntry[]>;
   moveBookshelfBookToTrash(bookId: string): Promise<BookshelfTrashEntry>;
@@ -250,31 +218,19 @@ export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
     readonly bookId: string;
     readonly confirmationBookId: string;
   }): Promise<void>;
-  getBookProjectArchives(
-    bookId: string,
-  ): Promise<readonly ProjectArchiveSummary[]>;
+  getBookProjectArchives(bookId: string): Promise<readonly ProjectArchiveSummary[]>;
   restoreProjectArchive(request: RestoreProjectArchiveDesktopRequest): Promise<{
     readonly result: RestoreProjectArchiveResult;
     readonly workspace: WorkspaceSnapshot;
   }>;
   getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot>;
   createBook(request: CreateBookRequest): Promise<BookWorkspaceSnapshot>;
-  createBookChapter(
-    request: CreateBookChapterRequest,
-  ): Promise<BookWorkspaceSnapshot>;
-  createBookVolume(
-    request: CreateBookVolumeRequest,
-  ): Promise<BookWorkspaceSnapshot>;
-  deleteBookVolume(
-    request: DeleteBookVolumeRequest,
-  ): Promise<BookWorkspaceSnapshot>;
-  deleteBookChapter(
-    request: DeleteBookChapterRequest,
-  ): Promise<BookWorkspaceSnapshot>;
+  createBookChapter(request: CreateBookChapterRequest): Promise<BookWorkspaceSnapshot>;
+  createBookVolume(request: CreateBookVolumeRequest): Promise<BookWorkspaceSnapshot>;
+  deleteBookVolume(request: DeleteBookVolumeRequest): Promise<BookWorkspaceSnapshot>;
+  deleteBookChapter(request: DeleteBookChapterRequest): Promise<BookWorkspaceSnapshot>;
   updateBook(request: UpdateBookRequest): Promise<BookWorkspaceSnapshot>;
-  updateBookChapter(
-    request: UpdateBookChapterRequest,
-  ): Promise<BookWorkspaceSnapshot>;
+  updateBookChapter(request: UpdateBookChapterRequest): Promise<BookWorkspaceSnapshot>;
   getBookChapterContent(request: {
     projectId: string;
     chapterId: string;
@@ -305,18 +261,15 @@ export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
 export type {
   AgentConfigurationRequest,
   AgentServiceStatus,
-  AssistantBlockChannel,
   ApplicationEvent,
+  AssistantBlockChannel,
+  BookChapterRevisionResult,
   BookshelfBookCard,
   BookshelfTrashEntry,
-  BookChapterRevisionResult,
+  BookTransferFormatCapability,
   BookWorkspaceChapterDto,
   BookWorkspaceSnapshot,
-  BookTransferFormatCapability,
   ChapterGenerationMode,
-  CreateBookRequest,
-  CreateBookshelfBookRequest,
-  CreateBookshelfBookResult,
   ConversationApplicationEvent,
   ConversationEvent,
   ConversationEventType,
@@ -324,25 +277,28 @@ export type {
   ConversationScope,
   ConversationSnapshot,
   ConversationTurnContext,
-  CreateConversationRequest,
   CreateBookChapterRequest,
+  CreateBookRequest,
+  CreateBookshelfBookRequest,
+  CreateBookshelfBookResult,
   CreateBookVolumeRequest,
+  CreateConversationRequest,
+  CreateProjectRequest,
   DeleteBookChapterRequest,
   DeleteBookVolumeRequest,
-  MessageDto,
+  ExportBookOptions,
+  ExportBookResult,
+  ExportPreview,
   ImportBookResult,
   ImportPreview,
-  ExportPreview,
-  ExportBookResult,
-  ExportBookOptions,
-  PrepareBookImportRequest,
-  PrepareBookExportRequest,
+  MessageDto,
   NovelDto,
-  CreateProjectRequest,
-  ProjectDto,
-  ProjectSnapshot,
-  ProjectNavigationSnapshot,
+  PrepareBookExportRequest,
+  PrepareBookImportRequest,
   ProjectArchiveSummary,
+  ProjectDto,
+  ProjectNavigationSnapshot,
+  ProjectSnapshot,
   ReadyBookWorkspaceSnapshot,
   RenameProjectRequest,
   RendererEditorToolRequest,
@@ -357,8 +313,8 @@ export type {
   ThreadSkillState,
   ThreadSnapshot,
   ToolApprovalDecision,
-  UpdateBookRequest,
-  UpdateBookChapterRequest,
   UninitializedBookWorkspaceSnapshot,
+  UpdateBookChapterRequest,
+  UpdateBookRequest,
   VolumeDto,
 };

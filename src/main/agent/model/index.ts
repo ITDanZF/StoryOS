@@ -1,8 +1,6 @@
-import Memory from "../Memory/index.ts";
-import {
-  readModelConnectionConfigurationFromEnvironment,
-} from "./ModelConfiguration.ts";
+import Memory from "../checkpoints/index.ts";
 import Model from "./Model.ts";
+import { readModelConnectionConfigurationFromEnvironment } from "./ModelConfiguration.ts";
 
 export type AgentId = string;
 export type AgentStatus = "idle" | "running" | "disabled";

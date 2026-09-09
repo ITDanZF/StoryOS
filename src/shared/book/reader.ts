@@ -1,7 +1,4 @@
-import type {
-  NovelDto,
-  VolumeDto,
-} from "../../main/agent/application/novelContracts.ts";
+import type { NovelDto, VolumeDto } from "../contracts/books/novelContracts.ts";
 
 export type ReaderChapter = {
   id: string;
@@ -70,9 +67,7 @@ export type BookReaderApi = {
     snapshotId: string;
     chapterId: string;
   }): Promise<ReaderChapterContent>;
-  getBookReaderStatus(
-    snapshotId: string,
-  ): Promise<"unchanged" | "changed" | "unavailable">;
+  getBookReaderStatus(snapshotId: string): Promise<"unchanged" | "changed" | "unavailable">;
   saveBookReadingState(request: ReaderSaveRequest): Promise<void>;
   closeBookReader(snapshotId: string): Promise<void>;
 };

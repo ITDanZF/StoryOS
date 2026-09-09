@@ -1,5 +1,6 @@
+import type { ClientTool } from "@langchain/core/tools";
 import { createTools, type CreateToolsOptions } from "./index.ts";
-import type { ClientTool } from '@langchain/core/tools';
+import type { ToolManifest } from "./ToolManifest.ts";
 import ToolRegistry from "./ToolRegistry.ts";
 
 export type RegisteredTool = ClientTool;
@@ -11,12 +12,13 @@ function isToolArray(value: unknown): value is readonly RegisteredTool[] {
 export default class ToolResolver {
   readonly registry: ToolRegistry;
 
-  constructor(toolsOrOptions?: readonly RegisteredTool[] | CreateToolsOptions) {
-    const tools = isToolArray(toolsOrOptions)
-      ? toolsOrOptions
-      : createTools(toolsOrOptions);
+  constructor(
+    toolsOrOptions?: readonly RegisteredTool[] | CreateToolsOptions,
+    manifestFactory?: (tool: ClientTool) => ToolManifest,
+  ) {
+    const tools = isToolArray(toolsOrOptions) ? toolsOrOptions : createTools(toolsOrOptions);
 
-    this.registry = new ToolRegistry(tools);
+    this.registry = new ToolRegistry(tools, manifestFactory);
   }
 
   resolve(toolNames: readonly string[]): RegisteredTool[] {

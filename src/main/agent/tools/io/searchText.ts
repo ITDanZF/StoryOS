@@ -1,5 +1,5 @@
-import path from "node:path";
 import { tool } from "langchain";
+import path from "node:path";
 import { z } from "zod";
 import type WorkspaceToolContext from "../WorkspaceToolContext.ts";
 import { DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT } from "../common/limits.ts";
@@ -23,6 +23,7 @@ export function createSearchTextTool(context: WorkspaceToolContext) {
       const flags = case_sensitive ? "g" : "gi";
       const matcher = new RegExp(regex ? pattern : escapeRegExp(pattern), flags);
       const files = await walkFiles(absolutePath, {
+        excludedDirectories: context.paths.deniedDirectories,
         recursive: true,
         limit: Number.POSITIVE_INFINITY,
       });
@@ -96,11 +97,32 @@ export function createSearchTextTool(context: WorkspaceToolContext) {
           .string()
           .optional()
           .describe("File or directory to search. Defaults to the workspace root."),
-        glob: z.string().optional().describe("Optional wildcard filter such as *.ts or src/**/*.ts."),
-        regex: z.boolean().optional().describe("Treat pattern as a regular expression. Defaults to false."),
-        case_sensitive: z.boolean().optional().describe("Use case-sensitive matching. Defaults to false."),
-        context: z.number().int().min(0).max(5).optional().describe("Context lines before and after each match."),
-        limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional().describe("Maximum matching lines to return."),
+        glob: z
+          .string()
+          .optional()
+          .describe("Optional wildcard filter such as *.ts or src/**/*.ts."),
+        regex: z
+          .boolean()
+          .optional()
+          .describe("Treat pattern as a regular expression. Defaults to false."),
+        case_sensitive: z
+          .boolean()
+          .optional()
+          .describe("Use case-sensitive matching. Defaults to false."),
+        context: z
+          .number()
+          .int()
+          .min(0)
+          .max(5)
+          .optional()
+          .describe("Context lines before and after each match."),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(MAX_SEARCH_LIMIT)
+          .optional()
+          .describe("Maximum matching lines to return."),
       }),
     },
   );
