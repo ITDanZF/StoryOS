@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   FileBrowserEntry,
   FileBrowserLocation,
 } from "../../../shared/window/contracts.ts";
 
 export default function useFileBrowser(extensions: readonly string[]) {
+  const requestVersion = useRef(0);
+  useEffect(() => () => { requestVersion.current++; }, []);
   const [locations, setLocations] = useState<readonly FileBrowserLocation[]>([]);
   const [directoryPath, setDirectoryPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<readonly FileBrowserEntry[]>([]);
@@ -16,6 +18,7 @@ export default function useFileBrowser(extensions: readonly string[]) {
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   const readDirectory = useCallback(async (nextPath: string, pushHistory = true) => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError(null);
     try {
@@ -26,6 +29,7 @@ export default function useFileBrowser(extensions: readonly string[]) {
         sortBy: "name",
         sortDirection: "asc",
       });
+      if (version !== requestVersion.current) return;
       setDirectoryPath(page.directoryPath);
       setParentPath(page.parentPath);
       setEntries(page.entries);
@@ -37,9 +41,10 @@ export default function useFileBrowser(extensions: readonly string[]) {
         });
       }
     } catch (cause) {
+      if (version !== requestVersion.current) return;
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [extensions, historyIndex, query]);
 

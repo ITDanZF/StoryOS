@@ -18,7 +18,7 @@ export default function TaskNodeView({ node }: { readonly node: TaskNode }) {
       running={node.status === "running"}
       summary={node.summary}
     >
-      {node.error && <div className="rounded-lg bg-red-50 p-2 text-red-700">{node.error}</div>}
+      {node.error && <div className="rounded-lg bg-danger-surface p-2 text-danger-text">{node.error}</div>}
     </DisclosureRow>
   );
 }

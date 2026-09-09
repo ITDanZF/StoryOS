@@ -20,7 +20,7 @@ import {
   spreadIndices,
   ReaderChapterCache,
   type MeasuredChapter,
-} from "../src/renderer/pages/reader/readerModel.ts";
+} from "../src/renderer/features/reader/readerModel.ts";
 
 const root = path.resolve("test-results/reader-storage", crypto.randomUUID());
 mkdirSync(root, { recursive: true });

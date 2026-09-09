@@ -95,8 +95,7 @@ export default function WorkspaceSidebar({
       createAgentsFile: false,
       ...(bookId ? { bookId } : {}),
     });
-    setCreateProjectOpen(false);
-    onClose();
+    return onClose;
   };
 
   const openProject = async () => {
@@ -111,7 +110,7 @@ export default function WorkspaceSidebar({
     <>
       <button className={cn("fixed inset-x-0 bottom-0 top-8 z-30 border-0 bg-black/25 transition-opacity duration-200 lg:hidden", open ? "visible opacity-100" : "invisible opacity-0")} type="button" aria-label="关闭侧栏" onClick={onClose} />
       <aside className={cn(
-        "fixed bottom-0 left-0 top-8 z-40 flex w-[min(280px,84vw)] min-w-0 flex-col border-r border-border bg-[#f3f3f2] px-2.5 pb-3 pt-10 shadow-2xl transition-transform duration-200",
+        "fixed bottom-0 left-0 top-8 z-40 flex w-[min(280px,84vw)] min-w-0 flex-col border-r border-border bg-surface-app px-2.5 pb-3 pt-10 shadow-2xl transition-transform duration-200",
         "lg:relative lg:top-0 lg:z-40 lg:w-60 lg:min-w-60 lg:translate-x-0 lg:pt-8 lg:shadow-none 2xl:w-64 2xl:min-w-64",
         open ? "translate-x-0" : "-translate-x-full",
       )}>
@@ -122,29 +121,29 @@ export default function WorkspaceSidebar({
             <strong className="text-sm tracking-tight">StoryOS</strong>
             <span className="text-[9px] uppercase tracking-[0.08em] text-muted-foreground">AI Workspace</span>
           </span>
-          <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent [-webkit-app-region:no-drag] hover:bg-neutral-200 lg:hidden" type="button" aria-label="关闭侧栏" onClick={onClose}><X size={18} /></button>
+          <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent [-webkit-app-region:no-drag] hover:bg-border lg:hidden" type="button" aria-label="关闭侧栏" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <button className="my-3 flex h-9 shrink-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-neutral-200" type="button" onClick={() => void onCreateConversation({ kind: "global" })}>
-          <Plus size={17} /><span className="flex-1">新建对话</span><kbd className="rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-[10px] font-normal text-neutral-400">Ctrl K</kbd>
+        <button className="my-3 flex h-9 shrink-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-[13px] font-semibold hover:bg-border" type="button" onClick={() => void onCreateConversation({ kind: "global" })}>
+          <Plus size={17} /><span className="flex-1">新建对话</span><kbd className="rounded border border-border-strong bg-card px-1.5 py-0.5 text-[10px] font-normal text-text-subtle">Ctrl K</kbd>
         </button>
 
         <button
           className={cn(
             "mb-2 flex h-10 shrink-0 items-center gap-2.5 rounded-xl border-0 px-2.5 text-left text-[13px] font-medium transition",
             bookshelfActive
-              ? "bg-white text-neutral-950 shadow-sm"
-              : "bg-transparent text-neutral-700 hover:bg-neutral-200/70",
+              ? "bg-card text-foreground shadow-sm"
+              : "bg-transparent text-text-secondary hover:bg-border/70",
           )}
           type="button"
           aria-current={bookshelfActive ? "page" : undefined}
           onClick={onOpenBookshelf}
         >
           <span className={cn(
-            "grid size-7 place-items-center rounded-lg border bg-white shadow-sm",
+            "grid size-7 place-items-center rounded-lg border bg-card shadow-sm",
             bookshelfActive
-              ? "border-neutral-300 text-neutral-900"
-              : "border-neutral-200 text-neutral-600",
+              ? "border-border-strong text-foreground"
+              : "border-border text-text-secondary",
           )}>
             <LibraryBig size={15} />
           </span>
@@ -153,15 +152,15 @@ export default function WorkspaceSidebar({
 
         <div className="relative shrink-0" ref={projectMenuRef}>
           <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] text-muted-foreground">
-            <button className="flex items-center gap-1.5 border-0 bg-transparent p-0 text-[11px] text-muted-foreground hover:text-neutral-700" type="button" aria-expanded={projectsExpanded} onClick={() => { setProjectsExpanded((value) => !value); setProjectMenuOpen(false); }}>
+            <button className="flex items-center gap-1.5 border-0 bg-transparent p-0 text-[11px] text-muted-foreground hover:text-text-secondary" type="button" aria-expanded={projectsExpanded} onClick={() => { setProjectsExpanded((value) => !value); setProjectMenuOpen(false); }}>
               <Folder size={14} /><span>项目</span><ChevronDown className={cn("transition-transform duration-200 ease-out motion-reduce:transition-none", !projectsExpanded && "-rotate-90")} size={13} />
             </button>
-            <button className={cn("grid size-8 place-items-center rounded-xl border bg-transparent text-neutral-500 transition hover:bg-white hover:text-neutral-800", projectMenuOpen ? "border-amber-500 bg-white text-neutral-800 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]" : "border-transparent")} type="button" title="项目操作" aria-label="项目操作" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen((value) => !value)}><FolderPlus size={17} /></button>
+            <button className={cn("grid size-8 place-items-center rounded-xl border bg-transparent text-muted-foreground transition hover:bg-card hover:text-foreground", projectMenuOpen ? "border-warning-border bg-card text-foreground shadow-[0_0_0_3px_rgba(245,158,11,0.18)]" : "border-transparent")} type="button" title="项目操作" aria-label="项目操作" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen((value) => !value)}><FolderPlus size={17} /></button>
           </div>
           {projectMenuOpen && (
-            <div className="absolute left-2 right-2 top-10 z-50 w-auto rounded-xl border border-neutral-200 bg-white p-1 text-neutral-800 shadow-[0_12px_32px_rgba(0,0,0,0.13)] sm:left-auto sm:right-0 sm:w-max sm:min-w-[184px] lg:left-[calc(100%-1.5rem)] lg:right-auto">
-              <button className="group flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-left text-xs transition hover:bg-neutral-200" type="button" onClick={() => { setProjectMenuOpen(false); setCreateProjectOpen(true); }}><Plus size={16} className="text-neutral-500 group-hover:text-neutral-800" /><span className="whitespace-nowrap">新建项目</span></button>
-              <button className="group flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-left text-xs transition hover:bg-neutral-200" type="button" onClick={() => void openProject()}><FolderOpen size={16} className="text-neutral-500 group-hover:text-neutral-800" /><span className="whitespace-nowrap">使用现有文件夹</span></button>
+            <div className="absolute left-2 right-2 top-10 z-50 w-auto rounded-xl border border-border bg-card p-1 text-foreground shadow-[0_12px_32px_rgba(0,0,0,0.13)] sm:left-auto sm:right-0 sm:w-max sm:min-w-[184px] lg:left-[calc(100%-1.5rem)] lg:right-auto">
+              <button className="group flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-left text-xs transition hover:bg-border" type="button" onClick={() => { setProjectMenuOpen(false); setCreateProjectOpen(true); }}><Plus size={16} className="text-muted-foreground group-hover:text-foreground" /><span className="whitespace-nowrap">新建项目</span></button>
+              <button className="group flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 text-left text-xs transition hover:bg-border" type="button" onClick={() => void openProject()}><FolderOpen size={16} className="text-muted-foreground group-hover:text-foreground" /><span className="whitespace-nowrap">使用现有文件夹</span></button>
             </div>
           )}
         </div>

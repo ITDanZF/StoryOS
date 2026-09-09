@@ -13,5 +13,60 @@
     "plugin:import/electron",
     "plugin:import/typescript"
   ],
-  "parser": "@typescript-eslint/parser"
+  "parser": "@typescript-eslint/parser",
+  "overrides": [
+    {
+      "files": [
+        "src/renderer/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-constant-condition": [
+          "error",
+          {
+            "checkLoops": false
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/renderer/components/ui/**/*.{ts,tsx}",
+        "src/renderer/components/layout/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/pages/**",
+                  "**/features/**",
+                  "**/platform/**",
+                  "react-router-dom"
+                ],
+                "message": "UI primitives must receive data and actions from their caller."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/renderer/features/book-content/**/*.{ts,tsx}",
+        "src/renderer/features/book-presentation/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              "**/pages/**"
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

@@ -31,7 +31,9 @@
     "test:packaged:smoke": "node scripts/verify-packaged-smoke.cjs",
     "test:packaged:business": "node scripts/verify-packaged-business-flow.cjs",
     "check": "npm run typecheck && npm run test && npm run lint:agent",
-    "lint:agent": "eslint src/main/agent src/main/ipc/agent.ts src/preload/agentApi.ts src/shared/agent tests/agent --ext .ts"
+    "lint:agent": "eslint src/main/agent src/main/ipc/agent.ts src/preload/agentApi.ts src/shared/agent tests/agent --ext .ts",
+    "lint:frontend": "eslint src/renderer --ext .ts,.tsx",
+    "test:frontend:models": "node scripts/verify-frontend-models.mjs"
   },
   "keywords": [],
   "author": {

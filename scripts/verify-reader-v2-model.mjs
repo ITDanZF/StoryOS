@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-const result = await build({ entryPoints: ['src/renderer/pages/reader/bookPresentation.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
+const result = await build({ entryPoints: ['src/renderer/features/reader/bookPresentation.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
 const { createBookIndex, frontLeaves, prepareBookSpread, neighborCursor } = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
 for (const counts of [[1], [2], [3], [1, 2, 3], [2, 2, 2], [3, 1, 4]]) {
   const chapters = counts.map((count, i) => ({ id: `c${i}`, title: `第${i + 1}章`, volumeId: null, characterCount: count * 100 }));
@@ -78,7 +78,7 @@ for (const size of [{ width: 230, height: 320 }, { width: 360, height: 440 }, { 
 }
 console.log('Printed TOC layout passed: long titles, volume headings, 1000 chapters and compact/large page bounds.');
 
-const stackBuild = await build({ entryPoints: ['src/renderer/pages/reader/scene/pageStackMotion.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
+const stackBuild = await build({ entryPoints: ['src/renderer/features/reader/scene/pageStackMotion.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
 const { pageStackCount, stackLeafProgress } = await import(`data:text/javascript;base64,${Buffer.from(stackBuild.outputFiles[0].text).toString('base64')}`);
 for (const double of [false, true]) for (const distance of [1, 2, 3, 10, 100]) for (const direction of [-1, 1]) {
   const count = pageStackCount(201, 201 + direction * distance * (double ? 2 : 1), double);

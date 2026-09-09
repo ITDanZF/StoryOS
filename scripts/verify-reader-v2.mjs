@@ -51,7 +51,8 @@ try {
         { type: "orderedList", attrs: { start: 4 }, content: Array.from({ length: 8 }, (_, i) => ({ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: `清单${i + 4}：窗前的花、旧信与归途。` }] }] })) },
         { type: "pageBreak" }, { type: "paragraph", attrs: { firstLineIndent: "0em" }, content: [{ type: "text", text: "手动分页之后，新的天光。", marks: [{ type: "underline" }] }] },
       ] } };
-      await api.saveBookChapterContent({ projectId, chapterId, content: JSON.stringify(content), expectedCurrentRevisionId: null });
+      const current = await api.getBookChapterContent({ projectId, chapterId });
+      await api.saveBookChapterContent({ projectId, chapterId, content: JSON.stringify(content), expectedCurrentRevisionId: current.currentRevisionId, expectedRowVersion: current.rowVersion, expectedDraftVersion: current.draft?.draftVersion ?? 0 });
     }
     const books = await api.getBookshelfBooks();
     const bookId = books.find(b => b.title === "野外山村的小屋").bookId;

@@ -1,10 +1,13 @@
+import { ConfirmDialog } from "../../components/ui/Dialog.tsx";
 import { ArrowLeft, LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useBlocker, useLocation, useNavigate } from "react-router-dom";
 import { APP_VERSION } from "../../../shared/appInfo.ts";
 import StoryLogo from "../../components/StoryLogo.tsx";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
 import { ConfigurationPanel } from "./components/ConfigurationPanel.tsx";
+
+import AppearanceSettingsSection from "../../app/theme/AppearanceSettingsSection.tsx";
 
 export default function SettingsPage() {
   const { state, configure } = useWorkspaceOutlet();
@@ -12,16 +15,11 @@ export default function SettingsPage() {
   const location = useLocation();
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const required = !state.status?.initialized;
   const blocker = useBlocker(({ nextLocation }) => dirty || saving || (required && nextLocation.pathname !== "/developer"));
   const previousPath = location.state?.returnTo;
   const returnTo = typeof previousPath === "string" && /^\/(conversations|projects|bookshelf)(\/|\?|$)/.test(previousPath) ? previousPath : "/conversations";
 
-  useEffect(() => {
-    if (blocker.state === "blocked") dialogRef.current?.showModal();
-    else dialogRef.current?.close();
-  }, [blocker.state]);
   useEffect(() => {
     if (!dirty && !saving) return;
     const beforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -30,9 +28,9 @@ export default function SettingsPage() {
   }, [dirty, saving]);
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-50" aria-label="设置面板">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-subtle" aria-label="设置面板">
       <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-background px-4 sm:px-8">
-        <button className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-neutral-600 transition hover:bg-muted focus-visible:outline-2 disabled:opacity-40" type="button" title={required ? "完成模型配置后即可返回" : "返回工作区"} disabled={required || saving} onClick={() => navigate(returnTo)}>
+        <button className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-text-secondary transition hover:bg-muted focus-visible:outline-2 disabled:opacity-40" type="button" title={required ? "完成模型配置后即可返回" : "返回工作区"} disabled={required || saving} onClick={() => navigate(returnTo)}>
           <ArrowLeft size={17} /><span>返回工作区</span>
         </button>
         <span className="h-4 w-px bg-border" /><span className="text-sm font-medium">设置</span>
@@ -40,6 +38,7 @@ export default function SettingsPage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-8">
         <div className="mx-auto grid w-full max-w-[960px] gap-6">
           <div><h1 className="text-2xl font-semibold tracking-tight">偏好设置</h1><p className="mt-2 text-sm text-muted-foreground">管理模型连接，查看应用信息。</p></div>
+          <AppearanceSettingsSection />
           <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm" aria-label="AI 模型">
             {state.status ? <ConfigurationPanel status={state.status} onConfigure={configure} onDirtyChange={setDirty} onSavingChange={setSaving} /> : (
               <div className="flex flex-wrap items-center gap-3 p-7 text-sm text-muted-foreground" role="status">{state.loading ? <><LoaderCircle size={16} className="animate-spin" />正在读取配置…</> : <>配置读取失败。<button className="rounded-lg border border-border px-3 py-2 hover:bg-muted" onClick={() => window.location.reload()}>重新加载</button></>}</div>
@@ -55,14 +54,12 @@ export default function SettingsPage() {
           {import.meta.env.DEV && <section className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card px-5 py-5 shadow-sm sm:px-7"><div><h2 className="text-sm font-semibold">开发者工具</h2><p className="mt-2 text-xs text-muted-foreground">浏览本地 SQLite 数据库，管理数据表中的记录。</p></div><button className="shrink-0 rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted" onClick={() => navigate("/developer")}>打开数据管理</button></section>}
         </div>
       </div>
-      <dialog ref={dialogRef} className="fixed inset-0 m-auto w-[calc(100%-32px)] max-w-sm rounded-2xl border border-border bg-white p-6 text-foreground shadow-xl backdrop:bg-black/30" aria-labelledby="leave-settings-title" onCancel={(event) => { event.preventDefault(); if (blocker.state === "blocked") blocker.reset(); }}>
-        <h2 id="leave-settings-title" className="text-base font-semibold">{saving ? "正在保存设置" : required ? "请先完成模型配置" : "有尚未保存的修改"}</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{saving ? "保存完成后即可离开此页面。" : required ? "配置模型后即可返回工作区开始使用。" : "离开此页面将放弃本次修改，已保存的配置不受影响。"}</p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button autoFocus className="h-9 rounded-lg border border-border px-3 text-sm hover:bg-muted" onClick={() => { if (blocker.state === "blocked") blocker.reset(); }}>继续编辑</button>
-          {!saving && !required && <button className="h-9 rounded-lg bg-primary px-3 text-sm text-primary-foreground" onClick={() => { if (blocker.state === "blocked") blocker.proceed(); }}>放弃修改</button>}
-        </div>
-      </dialog>
+      {blocker.state === "blocked" && <ConfirmDialog
+        title={saving ? "正在保存设置" : required ? "请先完成模型配置" : "有尚未保存的修改"}
+        description={saving ? "保存完成后即可离开此页面。" : required ? "配置模型后即可返回工作区开始使用。" : "离开此页面将放弃本次修改，已保存的配置不受影响。"}
+        cancelLabel="继续编辑" confirmLabel="放弃修改" onClose={() => blocker.reset()}
+        onConfirm={!saving && !required ? () => blocker.proceed() : undefined} />}
+
     </section>
   );
 }

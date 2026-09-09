@@ -14,9 +14,13 @@ try {
   const errors = [];
   page.on("pageerror", error => errors.push(String(error)));
   await page.waitForFunction(() => Boolean(window.storyOSAgent));
+  await page.getByRole("button", { name: "项目操作", exact: true }).click();
+  await page.getByRole("button", { name: "新建项目", exact: true }).click();
+  await page.getByPlaceholder("例如：我的故事").fill("公共动效验证");
+  await page.getByRole("button", { name: "创建项目", exact: true }).click();
+  await page.getByRole("dialog").waitFor({ state: "detached" });
   await page.evaluate(async () => {
     const api = window.storyOSAgent;
-    await api.createProject({ name: "公共动效验证", parentPath: "/preview", createAgentsFile: false });
     await api.createBookshelfBook({ title: "公共动效测试作品", synopsis: "不会写入真实书库。" });
     const rename = api.renameProject;
     window.sharedMotionTest = { renamed: 0, release: null };

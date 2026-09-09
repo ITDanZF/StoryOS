@@ -26,13 +26,13 @@ export default function ChatEmptyState({
 }: ChatEmptyStateProps) {
   return (
     <div className={cn("flex min-h-full flex-col items-center justify-center px-5 text-center", compact ? "pb-8 pt-4" : "pb-36 pt-12 sm:pb-44")}>
-      <span className={cn("grid place-items-center rounded-3xl bg-gradient-to-br from-neutral-950 via-neutral-800 to-violet-700 text-white shadow-xl shadow-violet-950/15", compact ? "mb-3 size-11" : "mb-5 size-14")}>
+      <span className={cn("grid place-items-center rounded-3xl bg-gradient-to-br from-neutral-950 via-neutral-800 to-violet-700 text-inverse shadow-xl shadow-violet-950/15", compact ? "mb-3 size-11" : "mb-5 size-14")}>
         <Sparkles size={compact ? 21 : 27} />
       </span>
-      <h2 className={cn("m-0 font-semibold tracking-tight text-neutral-950", compact ? "text-base" : "text-xl sm:text-[22px]")}>
+      <h2 className={cn("m-0 font-semibold tracking-tight text-foreground", compact ? "text-base" : "text-xl sm:text-[22px]")}>
         {loading ? "正在载入工作台" : title}
       </h2>
-      <p className={cn("mt-2 max-w-xl text-neutral-500", compact ? "text-[11px] leading-5" : "text-xs leading-6 sm:text-[13px]")}>
+      <p className={cn("mt-2 max-w-xl text-muted-foreground", compact ? "text-[11px] leading-5" : "text-xs leading-6 sm:text-[13px]")}>
         {loading ? "正在准备你的对话和项目上下文。" : description}
       </p>
 
@@ -42,14 +42,14 @@ export default function ChatEmptyState({
             const Icon = index % 3 === 0 ? PenLine : index % 3 === 1 ? BookOpen : Lightbulb;
             const content = (
               <>
-                <Icon className="mb-2 text-neutral-400 group-hover:text-violet-600" size={15} />
-                <span className="text-[11px] font-medium leading-5 text-neutral-700 group-hover:text-violet-900">{suggestion}</span>
+                <Icon className="mb-2 text-text-subtle group-hover:text-accent-foreground" size={15} />
+                <span className="text-[11px] font-medium leading-5 text-text-secondary group-hover:text-accent-foreground">{suggestion}</span>
               </>
             );
 
             return onPickSuggestion ? (
               <button
-                className="group rounded-2xl border border-neutral-200 bg-white/80 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:bg-violet-50/60 hover:shadow-md"
+                className="group rounded-2xl border border-border bg-card/80 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-accent-border hover:bg-accent/60 hover:shadow-md"
                 key={suggestion}
                 type="button"
                 onClick={() => onPickSuggestion(suggestion)}
@@ -57,7 +57,7 @@ export default function ChatEmptyState({
                 {content}
               </button>
             ) : (
-              <div className="group rounded-2xl border border-neutral-200 bg-white/80 p-3 text-left shadow-sm" key={suggestion}>
+              <div className="group rounded-2xl border border-border bg-card/80 p-3 text-left shadow-sm" key={suggestion}>
                 {content}
               </div>
             );

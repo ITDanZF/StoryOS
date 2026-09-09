@@ -1,12 +1,11 @@
-import ReaderEntryLayer from "../../pages/reader/ReaderEntryLayer.tsx";
-import { X } from "lucide-react";
+import { Toast } from "../../components/ui/Notice.tsx";
+import { hasOpenDialog, isEditableTarget } from "../../lib/keyboard.ts";
+import ReaderEntryLayer from "../../features/reader/ReaderEntryLayer.tsx";
 import { useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ConversationScope } from "../../../shared/agent/contracts.ts";
 import WindowTitleBar from "../../components/WindowTitleBar.tsx";
 import { AnimatedPage } from "../../components/motion/index.ts";
-import "../../features/agent/api/previewAgentApi.ts";
-import "../../features/file-browser/previewWindowApi.ts";
 import { useAgentWorkspace } from "../../features/agent/hooks/useAgentWorkspace.ts";
 import WorkspaceSidebar from "./components/WorkspaceSidebar.tsx";
 
@@ -52,6 +51,7 @@ export default function WorkspaceLayout() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || hasOpenDialog() || isEditableTarget(event.target)) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (location.pathname === "/settings") return;
@@ -64,7 +64,7 @@ export default function WorkspaceLayout() {
   }, [openConversation, location.pathname]);
 
   return (
-    <main className="flex h-dvh w-full min-w-0 overflow-hidden bg-neutral-100 pt-8 font-sans text-neutral-900 antialiased [font-synthesis:none] [text-rendering:optimizeLegibility] [&_button:disabled]:cursor-not-allowed [&_button:not(:disabled)]:cursor-pointer">
+    <main className="flex h-dvh w-full min-w-0 overflow-hidden bg-muted pt-8 font-sans text-foreground antialiased [font-synthesis:none] [text-rendering:optimizeLegibility] [&_button:disabled]:cursor-not-allowed [&_button:not(:disabled)]:cursor-pointer">
       <WindowTitleBar /><ReaderEntryLayer />
       {location.pathname !== "/settings" && !reading && <WorkspaceSidebar
         open={sidebarOpen}
@@ -136,14 +136,8 @@ export default function WorkspaceLayout() {
         <Outlet context={{ ...workspace, openSidebar: () => setSidebarOpen(true) }} />
       </AnimatedPage>
 
-      {state.error && (
-        <div className="fixed bottom-4 right-4 z-[70] flex max-w-[min(430px,calc(100vw-32px))] items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800 shadow-xl" role="alert">
-          <span className="flex-1">{state.error}</span>
-          <button className="grid size-7 place-items-center rounded-md border-0 bg-transparent hover:bg-red-100" type="button" onClick={clearError} aria-label="关闭错误提示">
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      {state.error && <Toast tone="danger" onDismiss={clearError}>{state.error}</Toast>}
+
     </main>
   );
 }

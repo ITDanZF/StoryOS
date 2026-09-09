@@ -30,7 +30,7 @@ export default function ToolCallNodeView({ node }: { readonly node: ToolCallNode
         <div className="space-y-3">
           {node.inputPreview && <pre className="m-0 whitespace-pre-wrap font-mono text-[10px]">{node.inputPreview}</pre>}
           {node.outputPreview && <div className="whitespace-pre-wrap">{node.outputPreview}</div>}
-          {node.error && <div className="rounded-lg bg-red-50 p-2 text-red-700">{node.error}</div>}
+          {node.error && <div className="rounded-lg bg-danger-surface p-2 text-danger-text">{node.error}</div>}
         </div>
       )}
     </DisclosureRow>

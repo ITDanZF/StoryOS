@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../../../lib/error.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AgentConfigurationRequest,
@@ -34,9 +35,6 @@ function isStructuredConversationEvent(
   return "eventId" in event && "sequence" in event;
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function upsertRun(
   runs: readonly RunSnapshot[],

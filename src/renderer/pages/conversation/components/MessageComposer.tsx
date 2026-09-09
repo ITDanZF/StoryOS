@@ -60,7 +60,7 @@ export default function MessageComposer({
 
   return (
     <div className={cn(
-      "absolute inset-x-2 bottom-2 z-10 mx-auto w-auto max-w-3xl rounded-[20px] border border-neutral-200 bg-white/95 px-3 pb-2.5 pt-2.5 shadow-[0_10px_32px_rgba(15,23,42,0.09)] backdrop-blur-xl transition-[border-color,box-shadow] duration-200 focus-within:border-neutral-400 focus-within:shadow-[0_14px_38px_rgba(15,23,42,0.11),0_0_0_3px_rgba(15,23,42,0.035)] sm:inset-x-5 sm:bottom-4 sm:px-3.5 sm:pb-3 sm:pt-3 2xl:max-w-4xl",
+      "absolute inset-x-2 bottom-2 z-10 mx-auto w-auto max-w-3xl rounded-[20px] border border-border bg-card/95 px-3 pb-2.5 pt-2.5 shadow-[0_10px_32px_rgba(15,23,42,0.09)] backdrop-blur-xl transition-[border-color,box-shadow] duration-200 focus-within:border-border-strong focus-within:shadow-[0_14px_38px_rgba(15,23,42,0.11),0_0_0_3px_rgba(15,23,42,0.035)] sm:inset-x-5 sm:bottom-4 sm:px-3.5 sm:pb-3 sm:pt-3 2xl:max-w-4xl",
       hidden && "invisible pointer-events-none",
     )} aria-hidden={hidden}>
       <div className="mb-1.5 flex min-w-0 items-center">
@@ -68,8 +68,8 @@ export default function MessageComposer({
           className={cn(
             "inline-flex h-6 min-w-0 max-w-[70%] items-center gap-1.5 rounded-full px-2.5 text-[10px] font-medium",
             inProject
-              ? "bg-amber-50 text-amber-800"
-              : "bg-violet-50 text-violet-700",
+              ? "bg-warning-surface text-warning-text"
+              : "bg-accent text-accent-foreground",
           )}
           title={inProject ? `当前对话属于项目：${contextName}` : "当前为无项目对话"}
         >
@@ -91,7 +91,7 @@ export default function MessageComposer({
 
       <textarea
         ref={textareaRef}
-        className="block min-h-10 max-h-36 w-full resize-none overflow-y-auto border-0 bg-transparent px-0.5 py-1.5 text-[13px] leading-6 text-neutral-800 outline-none placeholder:text-neutral-400 sm:min-h-11 sm:text-sm"
+        className="block min-h-10 max-h-36 w-full resize-none overflow-y-auto border-0 bg-transparent px-0.5 py-1.5 text-[13px] leading-6 text-foreground outline-none placeholder:text-text-subtle sm:min-h-11 sm:text-sm"
         aria-label="发送消息"
         disabled={disabled}
         placeholder={
@@ -113,26 +113,26 @@ export default function MessageComposer({
       />
 
       <div className="mt-0.5 flex min-h-8 items-center justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-1.5 truncate text-[10px] text-neutral-400">
+        <span className="flex min-w-0 items-center gap-1.5 truncate text-[10px] text-text-subtle">
           <CornerDownLeft className="shrink-0 opacity-70" size={12} />
           <span>
-            <kbd className="font-sans text-neutral-500">Enter</kbd> 发送
+            <kbd className="font-sans text-muted-foreground">Enter</kbd> 发送
             <span className="hidden sm:inline">
               {" · "}
-              <kbd className="font-sans text-neutral-500">Shift + Enter</kbd>
+              <kbd className="font-sans text-muted-foreground">Shift + Enter</kbd>
               {" "}换行
             </span>
           </span>
         </span>
         <button
           className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-full border-0 transition-[color,background-color,transform,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2",
+            "grid size-8 shrink-0 place-items-center rounded-full border-0 transition-[color,background-color,transform,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong focus-visible:ring-offset-2",
             activeRunId &&
-              "bg-neutral-900 text-white shadow-sm hover:scale-105 hover:bg-black",
+              "bg-primary text-primary-foreground shadow-sm hover:scale-105 hover:bg-primary-hover",
             !activeRunId && canSend &&
-              "bg-neutral-900 text-white shadow-sm hover:-translate-y-0.5 hover:bg-black hover:shadow-md",
+              "bg-primary text-primary-foreground shadow-sm hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-md",
             !activeRunId && !canSend &&
-              "cursor-default bg-neutral-100 text-neutral-400",
+              "cursor-default bg-muted text-text-subtle",
           )}
           type="button"
           aria-label={activeRunId ? "停止生成" : "发送"}

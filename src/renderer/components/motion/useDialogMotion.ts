@@ -45,7 +45,7 @@ export default function useDialogMotion(stage: string | number = "default") {
       ], "content");
     }
     // Removed step controls must not leave keyboard focus behind on the page body.
-    if (previous && !panel.contains(document.activeElement) && Array.from(document.querySelectorAll('[role="dialog"]')).at(-1) === panel) panel.focus({ preventScroll: true });
+    if (previous && !panel.contains(document.activeElement) && Array.from(document.querySelectorAll('[aria-modal="true"],dialog[open]')).at(-1) === panel) panel.focus({ preventScroll: true });
   }, [stage]);
 
   useEffect(() => {

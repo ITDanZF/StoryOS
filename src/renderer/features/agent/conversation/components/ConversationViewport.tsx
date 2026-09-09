@@ -84,7 +84,7 @@ export default function ConversationViewport({
 
   return (
     <div
-      className="relative min-h-0 flex-1 overflow-y-auto bg-[#fbfbfa] [scrollbar-gutter:stable]"
+      className="relative min-h-0 flex-1 overflow-y-auto bg-surface-subtle [scrollbar-gutter:stable]"
       ref={viewportRef}
       onScroll={updateScrollState}
     >
@@ -101,7 +101,7 @@ export default function ConversationViewport({
       {!stuckToBottom && (
         <div className="pointer-events-none sticky bottom-3 z-10 flex h-0 justify-end px-3">
           <button
-            className="pointer-events-auto grid size-[34px] -translate-y-full place-items-center rounded-full border border-neutral-200 bg-white/95 text-neutral-600 shadow-[0_5px_16px_rgba(30,28,20,0.13)] backdrop-blur hover:bg-neutral-50 hover:text-neutral-900"
+            className="pointer-events-auto grid size-[34px] -translate-y-full place-items-center rounded-full border border-border bg-card/95 text-text-secondary shadow-[0_5px_16px_rgba(30,28,20,0.13)] backdrop-blur hover:bg-surface-subtle hover:text-foreground"
             type="button"
             aria-label="回到底部"
             title="回到底部"

@@ -93,14 +93,14 @@ export default function ProjectConversationTree({
     scope: ConversationScope,
     snapshot: ThreadSnapshot | null,
   ) => (
-    <div className="ml-7 grid gap-0.5 border-l border-neutral-200 pl-2">
+    <div className="ml-7 grid gap-0.5 border-l border-border pl-2">
       {!snapshot && (
-        <div className="px-2 py-2 text-[10px] text-neutral-400">
+        <div className="px-2 py-2 text-[10px] text-text-subtle">
           正在载入对话…
         </div>
       )}
       {snapshot && snapshot.threads.length === 0 && (
-        <div className="px-2 py-2 text-[10px] text-neutral-400">
+        <div className="px-2 py-2 text-[10px] text-text-subtle">
           暂无对话
         </div>
       )}
@@ -112,12 +112,12 @@ export default function ProjectConversationTree({
           <div
             className={cn(
               "group/thread flex min-h-9 items-center rounded-lg py-1 pl-2 pr-1 transition",
-              active ? "bg-neutral-200" : "hover:bg-neutral-200/70",
+              active ? "bg-border" : "hover:bg-border/70",
             )}
             key={thread.id}
           >
             <button
-              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left text-xs text-neutral-700"
+              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left text-xs text-text-secondary"
               type="button"
               aria-current={active ? "page" : undefined}
               onClick={() =>
@@ -127,7 +127,7 @@ export default function ProjectConversationTree({
             </button>
             <button
               className={cn(
-                "grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-red-700 focus-visible:opacity-100 group-hover/thread:opacity-100",
+                "grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent text-text-subtle transition hover:bg-card hover:text-danger-text focus-visible:opacity-100 group-hover/thread:opacity-100",
                 active ? "opacity-100" : "opacity-0",
               )}
               type="button"
@@ -155,7 +155,7 @@ export default function ProjectConversationTree({
       <AnimatedCollapse open={projectsExpanded}>
         <div className="grid gap-1">
           {projects.projects.length === 0 && (
-            <div className="px-2 py-3 text-center text-[11px] text-neutral-400">
+            <div className="px-2 py-3 text-center text-[11px] text-text-subtle">
               暂无项目
             </div>
           )}
@@ -166,12 +166,12 @@ export default function ProjectConversationTree({
               <section className="grid gap-0.5" key={project.id}>
                 <div
                   className={cn(
-                    "group flex h-9 min-w-0 items-center rounded-xl transition hover:bg-neutral-200/70",
-                    projects.activeProjectId === project.id && "text-neutral-900",
+                    "group flex h-9 min-w-0 items-center rounded-xl transition hover:bg-border/70",
+                    projects.activeProjectId === project.id && "text-foreground",
                   )}
                 >
                   <button
-                    className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent px-2 text-left text-xs font-medium text-neutral-700"
+                    className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent px-2 text-left text-xs font-medium text-text-secondary"
                     type="button"
                     title={project.path}
                     aria-expanded={expanded}
@@ -179,12 +179,12 @@ export default function ProjectConversationTree({
                   >
                     <ChevronRight
                       className={cn(
-                        "shrink-0 text-neutral-400 transition-transform duration-200 ease-out motion-reduce:transition-none",
+                        "shrink-0 text-text-subtle transition-transform duration-200 ease-out motion-reduce:transition-none",
                         expanded && "rotate-90",
                       )}
                       size={13}
                     />
-                    <Folder className="shrink-0 text-neutral-500" size={15} />
+                    <Folder className="shrink-0 text-muted-foreground" size={15} />
                     <span className="truncate">{project.name}</span>
                   </button>
                   <ProjectActionMenu
@@ -210,9 +210,9 @@ export default function ProjectConversationTree({
                   <div className="grid gap-0.5">
                     <button
                       className={cn(
-                        "ml-5 flex h-9 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-xs text-neutral-600 transition hover:bg-neutral-200/70 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300",
+                        "ml-5 flex h-9 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-xs text-text-secondary transition hover:bg-border/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong",
                         activeBookProjectId === project.id &&
-                          "bg-neutral-200 text-neutral-900",
+                          "bg-border text-foreground",
                       )}
                       type="button"
                       aria-current={
@@ -223,7 +223,7 @@ export default function ProjectConversationTree({
                       <BookOpen size={14} />
                       <span className="min-w-0 flex-1 truncate">书籍工作区</span>
                       {navigation && (
-                        <span className="text-[10px] text-neutral-400">
+                        <span className="text-[10px] text-text-subtle">
                           {navigation.book
                             ? `${navigation.book.chapterCount}章`
                             : "待命名"}
@@ -238,10 +238,10 @@ export default function ProjectConversationTree({
         </div>
       </AnimatedCollapse>
 
-      <section className="mt-2 grid gap-0.5 border-t border-neutral-200 pt-2">
-        <div className="group flex h-9 min-w-0 items-center rounded-lg transition hover:bg-neutral-200/70">
+      <section className="mt-2 grid gap-0.5 border-t border-border pt-2">
+        <div className="group flex h-9 min-w-0 items-center rounded-lg transition hover:bg-border/70">
           <button
-            className="flex min-w-0 flex-1 items-center gap-1.5 border-0 bg-transparent px-2 text-left text-[11px] text-muted-foreground hover:text-neutral-700"
+            className="flex min-w-0 flex-1 items-center gap-1.5 border-0 bg-transparent px-2 text-left text-[11px] text-muted-foreground hover:text-text-secondary"
             type="button"
             aria-expanded={globalExpanded}
             onClick={() => setGlobalExpanded((value) => !value)}
@@ -250,14 +250,14 @@ export default function ProjectConversationTree({
             <span>对话</span>
             <ChevronRight
               className={cn(
-                "text-neutral-400 transition-transform duration-200 ease-out motion-reduce:transition-none",
+                "text-text-subtle transition-transform duration-200 ease-out motion-reduce:transition-none",
                 globalExpanded && "rotate-90",
               )}
               size={13}
             />
           </button>
           <button
-            className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-neutral-400 transition hover:bg-white hover:text-neutral-800"
+            className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent text-text-subtle transition hover:bg-card hover:text-foreground"
             type="button"
             title="新建全局对话"
             aria-label="新建全局对话"

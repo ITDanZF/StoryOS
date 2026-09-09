@@ -11,7 +11,7 @@ export default function useDialogFocus(panelRef: RefObject<HTMLElement | null>, 
   useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    const isTop = () => Array.from(document.querySelectorAll('[role="dialog"]')).at(-1) === panel;
+    const isTop = () => Array.from(document.querySelectorAll('[aria-modal="true"],dialog[open]')).at(-1) === panel;
     const controls = () => Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector))
       .filter(element => element.getClientRects().length > 0 && !element.closest("[inert]"));
     if (panel.contains(document.activeElement)) initialFocus.current = document.activeElement as HTMLElement;

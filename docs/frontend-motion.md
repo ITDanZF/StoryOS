@@ -26,7 +26,7 @@ import { AnimatedDialog } from "../../components/motion/index.ts";
 {dialogOpen && (
   <AnimatedDialog
     aria-labelledby="example-title"
-    className="max-w-lg rounded-2xl border border-neutral-200 bg-white shadow-2xl"
+    className="max-w-lg rounded-2xl border border-border bg-card text-foreground shadow-2xl"
     busy={saving}
     stage={phase}
     onClose={() => setDialogOpen(false)}
@@ -44,7 +44,7 @@ import { AnimatedDialog } from "../../components/motion/index.ts";
 
 组件负责 portal、进入与退出、stage 尺寸过渡、Escape、遮罩关闭、Tab 焦点循环、关闭后的焦点恢复，以及退出期间禁止重复操作。`className` 和 `overlayClassName` 继续使用项目原有样式；业务保留自己的标题、表单、按钮和内容结构。表单放在组件内部，不再增加第二个 `role="dialog"`。
 
-关闭必须调用 render prop 提供的 `close`，不要直接调用父级 `onClose` 或提前卸载组件。`onClose` 在退出动画完成后触发；外部强制卸载会立即取消动画。成功提交后可在提交回调中调用传入的 `close`，参考 `RenameProjectDialog`。忙碌时的用户关闭请求会被拦截。
+关闭必须调用 render prop 提供的 `close`，不要直接调用父级 `onClose` 或提前卸载组件。`onClose` 在退出动画完成后触发；外部强制卸载会立即取消动画。成功提交后可在提交回调中调用传入的 `close`，参考 `RenameProjectDialog`。忙碌时的用户关闭请求会被拦截。连续弹窗可用 `close(afterClose)` 在退出后执行下一步，避免提前卸载和焦点交叉。
 
 `beforeClose` 仅用于释放临时资源，与退出动画同时执行；无论清理成功与否都会关闭。如果业务需要错误提示、确认或重试，应在调用 `close` 前处理，不要放进 `beforeClose`。导出弹窗是多步骤接入示例。
 
