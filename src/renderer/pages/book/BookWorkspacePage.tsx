@@ -1,10 +1,4 @@
-import {
-  BookOpen,
-  Folder,
-  Menu,
-  PanelLeft,
-  PanelRight,
-} from "lucide-react";
+import { BookOpen, Folder, Menu, PanelLeft, PanelRight } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -101,21 +95,24 @@ export default function BookWorkspacePage() {
     updateBookProfile,
     updateChapterTitle,
     saveChapterContent,
+    saveChapterDraft,
+    loadChapter,
   } = useBookWorkspace(projectId);
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationId = searchParams.get("conversation");
-  const project = state.projects?.projects.find(
-    (item) => item.id === projectId,
-  ) ?? null;
+  const project =
+    state.projects?.projects.find((item) => item.id === projectId) ?? null;
   const navigation = projectId
-    ? state.projectNavigations[projectId] ?? null
+    ? (state.projectNavigations[projectId] ?? null)
     : null;
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
   const pageRequestId = useRef(0);
-  const [activeChapterPageNumber, setActiveChapterPageNumber] =
-    useState<number | null>(null);
-  const [pageTarget, setPageTarget] =
-    useState<BookPageNavigationTarget | null>(null);
+  const [activeChapterPageNumber, setActiveChapterPageNumber] = useState<
+    number | null
+  >(null);
+  const [pageTarget, setPageTarget] = useState<BookPageNavigationTarget | null>(
+    null,
+  );
   const [livePagination, setLivePagination] =
     useState<LiveChapterPagination | null>(null);
   const [catalogVisible, setCatalogVisible] = useState(true);
@@ -130,19 +127,25 @@ export default function BookWorkspacePage() {
   const [editorContext, setEditorContext] =
     useState<ChapterEditorLiveContext | null>(null);
   const editorBridgeRef = useRef<ChapterEditorBridge | null>(null);
-  const settingsBlocker = useBlocker(({ nextLocation }) =>
-    Boolean(editorBridgeRef.current) && ["/settings", "/developer"].includes(nextLocation.pathname));
+  const settingsBlocker = useBlocker(
+    ({ nextLocation }) =>
+      Boolean(editorBridgeRef.current) &&
+      ["/settings", "/developer"].includes(nextLocation.pathname),
+  );
   useEffect(() => {
     if (settingsBlocker.state !== "blocked") return;
-    void editorBridgeRef.current.flushPending().then(() => settingsBlocker.proceed())
+    void editorBridgeRef.current
+      .flushPending()
+      .then(() => settingsBlocker.proceed())
       .catch(() => settingsBlocker.reset()); // The chapter save hook displays the persistence error.
   }, [settingsBlocker]);
   const readyWorkspace = workspace?.state === "ready" ? workspace : null;
   const chapterGroups = useMemo(
-    () => createBookChapterGroups(
-      readyWorkspace?.volumes ?? [],
-      readyWorkspace?.chapters ?? [],
-    ),
+    () =>
+      createBookChapterGroups(
+        readyWorkspace?.volumes ?? [],
+        readyWorkspace?.chapters ?? [],
+      ),
     [readyWorkspace],
   );
   const activeChapterLocation = findBookChapterLocation(
@@ -150,39 +153,64 @@ export default function BookWorkspacePage() {
     activeChapterId,
   );
   const activeChapter = activeChapterLocation?.chapter ?? null;
+  const chapterLoading = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !activeChapter ||
+      activeChapter.contentLoaded ||
+      chapterLoading.current === activeChapter.id
+    )
+      return;
+    chapterLoading.current = activeChapter.id;
+    void loadChapter(activeChapter.id)
+      .catch((): void => undefined)
+      .finally(() => {
+        chapterLoading.current = null;
+      });
+  }, [
+    activeChapter?.id,
+    activeChapter?.currentRevisionId,
+    activeChapter?.contentLoaded,
+    loadChapter,
+  ]);
   const activeVolume = activeChapterLocation?.group.volume ?? null;
   const chapterNumber = activeChapterLocation?.chapterNumber ?? null;
   const activeVolumeNumber = activeVolume
     ? chapterGroups
-      .filter((group) => group.kind === "volume")
-      .findIndex((group) => group.volume?.id === activeVolume.id) + 1
+        .filter((group) => group.kind === "volume")
+        .findIndex((group) => group.volume?.id === activeVolume.id) + 1
     : null;
-  const activeVolumeTitle = activeVolume && activeVolumeNumber !== null
-    ? activeVolume.title === `第${activeVolumeNumber}卷`
-      ? `第${activeVolumeNumber}卷`
-      : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
-    : "未分卷";
+  const activeVolumeTitle =
+    activeVolume && activeVolumeNumber !== null
+      ? activeVolume.title === `第${activeVolumeNumber}卷`
+        ? `第${activeVolumeNumber}卷`
+        : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
+      : "未分卷";
 
   const projectConversationActive =
     state.conversationScope.kind === "project" &&
     state.conversationScope.projectId === projectId;
   const projectConversationSnapshot = projectConversationActive
     ? state.threads
-    : navigation?.conversations ?? null;
+    : (navigation?.conversations ?? null);
   const runningThreadIds = new Set(
     state.runs
       .filter((run) => run.status === "running" || run.status === "cancelling")
       .map((run) => run.threadId),
   );
-  const activeConversationThreadId = projectConversationSnapshot?.activeThreadId ?? "";
+  const activeConversationThreadId =
+    projectConversationSnapshot?.activeThreadId ?? "";
   const pendingApprovals = state.pendingApprovals.filter(
     (approval) => approval.threadId === activeConversationThreadId,
   );
-  const currentChapterGeneration = useMemo(() => Object.values(
-    state.chapterGenerations,
-  ).filter((generation) => generation.projectId === projectId)
-    .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt))
-    .at(-1) ?? null, [projectId, state.chapterGenerations]);
+  const currentChapterGeneration = useMemo(
+    () =>
+      Object.values(state.chapterGenerations)
+        .filter((generation) => generation.projectId === projectId)
+        .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt))
+        .at(-1) ?? null,
+    [projectId, state.chapterGenerations],
+  );
 
   useEffect(() => {
     if (!project || !projectId) return;
@@ -208,7 +236,9 @@ export default function BookWorkspacePage() {
     if (!projectId || !projectConversationActive || !state.threads) return;
     if (conversationId) {
       if (conversationId === state.threads.activeThreadId) return;
-      if (state.threads.threads.some((thread) => thread.id === conversationId)) {
+      if (
+        state.threads.threads.some((thread) => thread.id === conversationId)
+      ) {
         void switchThread(conversationId, {
           kind: "project",
           projectId,
@@ -242,7 +272,8 @@ export default function BookWorkspacePage() {
     if (
       activeChapterId &&
       workspace.chapters.some((chapter) => chapter.id === activeChapterId)
-    ) return;
+    )
+      return;
     if (activeChapterId !== null) setActiveChapterId(null);
   }, [activeChapterId, workspace]);
 
@@ -251,19 +282,22 @@ export default function BookWorkspacePage() {
     setEditorContext(null);
   }, [activeChapterId]);
 
-  const openChapterFromTool = useCallback((chapterId: string, pageNumber: number) => {
-    pageRequestId.current += 1;
-    setActiveChapterId(chapterId);
-    setActiveChapterPageNumber(pageNumber);
-    setLivePagination(null);
-    setPageTarget({
-      kind: "navigate",
-      chapterId,
-      position: 1,
-      chapterPageNumber: pageNumber,
-      requestId: pageRequestId.current,
-    });
-  }, []);
+  const openChapterFromTool = useCallback(
+    (chapterId: string, pageNumber: number) => {
+      pageRequestId.current += 1;
+      setActiveChapterId(chapterId);
+      setActiveChapterPageNumber(pageNumber);
+      setLivePagination(null);
+      setPageTarget({
+        kind: "navigate",
+        chapterId,
+        position: 1,
+        chapterPageNumber: pageNumber,
+        requestId: pageRequestId.current,
+      });
+    },
+    [],
+  );
 
   const aiPreviewContent = useChapterGenerationPreview({
     generation: currentChapterGeneration,
@@ -286,9 +320,7 @@ export default function BookWorkspacePage() {
   });
   useBookMutationSync({
     projectId,
-    changeVersion: projectId
-      ? state.bookChangeVersions[projectId] ?? 0
-      : 0,
+    changeVersion: projectId ? (state.bookChangeVersions[projectId] ?? 0) : 0,
     reloadWorkspace: reloadBookWorkspace,
     reloadNavigation: loadProjectNavigation,
   });
@@ -297,10 +329,12 @@ export default function BookWorkspacePage() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
       const target = event.target;
-      if (target instanceof HTMLElement && (
-        target.isContentEditable ||
-        target.closest("input, textarea, select, [contenteditable='true']")
-      )) return;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest("input, textarea, select, [contenteditable='true']"))
+      )
+        return;
       if (event.key.toLowerCase() === "b") {
         event.preventDefault();
         setCatalogVisible((value) => !value);
@@ -350,14 +384,12 @@ export default function BookWorkspacePage() {
   const sendAssistantMessage = async (content: string) => {
     await ensureProjectConversation();
     await editorBridgeRef.current?.flushPending();
-    const refreshedWorkspace = activeChapter
-      ? await reloadBookWorkspace()
-      : workspace;
-    const refreshedChapter = refreshedWorkspace?.state === "ready" && activeChapter
-      ? refreshedWorkspace.chapters.find((chapter) => chapter.id === activeChapter.id)
-        ?? activeChapter
-      : activeChapter;
-    const liveEditorContext = editorBridgeRef.current?.getContext() ?? editorContext;
+    if (activeChapter) await reloadBookWorkspace();
+    const refreshedChapter = activeChapter
+      ? await loadChapter(activeChapter.id)
+      : null;
+    const liveEditorContext =
+      editorBridgeRef.current?.getContext() ?? editorContext;
     const context: ConversationTurnContext = {
       kind: "book_editor",
       projectId,
@@ -365,19 +397,23 @@ export default function BookWorkspacePage() {
       book: readyWorkspace
         ? { id: readyWorkspace.book.id, title: readyWorkspace.book.title }
         : null,
-      chapter: assistantContextEnabled && refreshedChapter && chapterNumber !== null
-        ? {
-            id: refreshedChapter.id,
-            title: refreshedChapter.title,
-            number: chapterNumber,
-            volumeTitle: activeVolumeTitle,
-            revisionNumber: refreshedChapter.revisionNumber,
-            pageNumber: activeChapterPageNumber,
-            documentText: liveEditorContext?.documentText
-              ?? extractTiptapText(decodeStoredChapterContent(refreshedChapter.content)),
-            selection: liveEditorContext?.selection ?? null,
-          }
-        : null,
+      chapter:
+        assistantContextEnabled && refreshedChapter && chapterNumber !== null
+          ? {
+              id: refreshedChapter.id,
+              title: refreshedChapter.title,
+              number: chapterNumber,
+              volumeTitle: activeVolumeTitle,
+              revisionNumber: refreshedChapter.revisionNumber,
+              pageNumber: activeChapterPageNumber,
+              documentText:
+                liveEditorContext?.documentText ??
+                extractTiptapText(
+                  decodeStoredChapterContent(refreshedChapter.content),
+                ),
+              selection: liveEditorContext?.selection ?? null,
+            }
+          : null,
     };
     await sendMessage(content, context);
   };
@@ -416,9 +452,7 @@ export default function BookWorkspacePage() {
   const deleteProjectConversation = async (threadId: string) => {
     const snapshot = await deleteThread(threadId, scope);
     setSearchParams(
-      snapshot.activeThreadId
-        ? { conversation: snapshot.activeThreadId }
-        : {},
+      snapshot.activeThreadId ? { conversation: snapshot.activeThreadId } : {},
       { replace: true },
     );
     setAssistantDraft("");
@@ -506,12 +540,13 @@ export default function BookWorkspacePage() {
 
   const addChapter = async (volumeId: string) => {
     if (!readyWorkspace) return;
-    const nextNumber = readyWorkspace.chapters
-      .filter((chapter) => chapter.volumeId === volumeId)
-      .reduce(
-        (maximum, chapter) => Math.max(maximum, chapter.sortOrder),
-        -1,
-      ) + 2;
+    const nextNumber =
+      readyWorkspace.chapters
+        .filter((chapter) => chapter.volumeId === volumeId)
+        .reduce(
+          (maximum, chapter) => Math.max(maximum, chapter.sortOrder),
+          -1,
+        ) + 2;
     const created = await createChapter(
       volumeId,
       formatChineseOrdinal(nextNumber, "章"),
@@ -562,9 +597,7 @@ export default function BookWorkspacePage() {
     );
   };
 
-  const startAssistantResize = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
+  const startAssistantResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     const handle = event.currentTarget;
     const startX = event.clientX;
@@ -572,9 +605,9 @@ export default function BookWorkspacePage() {
     setAssistantResizing(true);
     handle.setPointerCapture(event.pointerId);
     const resize = (moveEvent: PointerEvent) => {
-      setAssistantWidth(clampAssistantWidth(
-        startWidth + startX - moveEvent.clientX,
-      ));
+      setAssistantWidth(
+        clampAssistantWidth(startWidth + startX - moveEvent.clientX),
+      );
     };
     const finish = () => {
       setAssistantResizing(false);
@@ -591,7 +624,14 @@ export default function BookWorkspacePage() {
     <section className="m-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 border-border bg-white sm:m-1.5 sm:rounded-xl sm:border lg:ml-2 2xl:mr-3">
       <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-2 sm:px-4 lg:px-5">
         <div className="flex min-w-0 items-center gap-1">
-          <button className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100 lg:hidden" type="button" aria-label="打开侧栏" onClick={openSidebar}><Menu size={19} /></button>
+          <button
+            className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100 lg:hidden"
+            type="button"
+            aria-label="打开侧栏"
+            onClick={openSidebar}
+          >
+            <Menu size={19} />
+          </button>
           <div className="flex min-w-0 items-center gap-1.5 text-xs">
             <span
               className="inline-flex h-7 min-w-0 items-center gap-1.5 rounded-lg bg-neutral-100 px-2 text-neutral-500"
@@ -616,7 +656,9 @@ export default function BookWorkspacePage() {
               type="button"
               title={readyWorkspace ? "查看书籍概览" : "请先设置书名"}
               disabled={!readyWorkspace}
-              aria-current={readyWorkspace && !activeChapter ? "page" : undefined}
+              aria-current={
+                readyWorkspace && !activeChapter ? "page" : undefined
+              }
               onClick={showBookOverview}
             >
               <BookOpen className="shrink-0" size={12} />
@@ -635,21 +677,52 @@ export default function BookWorkspacePage() {
             {chapterNumber !== null && (
               <>
                 <span className="text-neutral-300">/</span>
-                <span className="truncate text-neutral-600">第{chapterNumber}章</span>
+                <span className="truncate text-neutral-600">
+                  第{chapterNumber}章
+                </span>
               </>
             )}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <span className="mr-1 hidden h-7 items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 text-[10px] text-neutral-500 sm:flex">
-            <i className={cn("size-1.5 rounded-full", state.status?.initialized ? "bg-emerald-500" : "bg-neutral-400")} />
+            <i
+              className={cn(
+                "size-1.5 rounded-full",
+                state.status?.initialized ? "bg-emerald-500" : "bg-neutral-400",
+              )}
+            />
             {state.status?.initialized ? "已连接" : "未配置"}
           </span>
-          <button className={cn("grid size-8 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100", catalogVisible && "bg-neutral-100")} type="button" title="显示或隐藏目录 (Ctrl+B)" aria-label="显示或隐藏目录" aria-pressed={catalogVisible} onClick={() => setCatalogVisible((value) => !value)}><PanelLeft size={17} /></button>
-          <button className={cn("grid size-8 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100", assistantVisible && "bg-neutral-100")} type="button" title="显示或隐藏 AI (Ctrl+J)" aria-label="显示或隐藏 AI" aria-pressed={assistantVisible} onClick={() => {
-            setAssistantVisible((value) => !value);
-            setAssistantFocused(false);
-          }}><PanelRight size={17} /></button>
+          <button
+            className={cn(
+              "grid size-8 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100",
+              catalogVisible && "bg-neutral-100",
+            )}
+            type="button"
+            title="显示或隐藏目录 (Ctrl+B)"
+            aria-label="显示或隐藏目录"
+            aria-pressed={catalogVisible}
+            onClick={() => setCatalogVisible((value) => !value)}
+          >
+            <PanelLeft size={17} />
+          </button>
+          <button
+            className={cn(
+              "grid size-8 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100",
+              assistantVisible && "bg-neutral-100",
+            )}
+            type="button"
+            title="显示或隐藏 AI (Ctrl+J)"
+            aria-label="显示或隐藏 AI"
+            aria-pressed={assistantVisible}
+            onClick={() => {
+              setAssistantVisible((value) => !value);
+              setAssistantFocused(false);
+            }}
+          >
+            <PanelRight size={17} />
+          </button>
         </div>
       </header>
 
@@ -685,46 +758,66 @@ export default function BookWorkspacePage() {
           />
         )}
 
-        {!assistantFocused && readyWorkspace &&
-          activeChapter && chapterNumber !== null && (
-          <ChapterEditorPanel
-            chapter={activeChapter}
-            aiGenerating={currentChapterGeneration?.chapterId === activeChapter.id &&
-              currentChapterGeneration.status === "streaming"}
-            aiPreviewContent={currentChapterGeneration?.chapterId === activeChapter.id
-              ? aiPreviewContent
-              : null}
-            chapterNumber={chapterNumber}
-            volumeTitle={activeVolumeTitle}
-            pageTarget={pageTarget?.chapterId === activeChapter.id
-              ? pageTarget
-              : null}
-            onPageChange={setActiveChapterPageNumber}
-            onPaginationChange={(layoutKey, pages) => {
-              setLivePagination({
-                chapterId: activeChapter.id,
-                layoutKey,
-                pages,
-              });
-            }}
-            onSaveTitle={(title) =>
-              updateChapterTitle(activeChapter.id, title)}
-            onSaveContent={(content, expectedCurrentRevisionId) =>
-              saveChapterContent(
-                activeChapter.id,
-                content,
-                expectedCurrentRevisionId,
-              )}
-            onAskAi={(prompt) => {
-              setAssistantDraft(prompt);
-              setAssistantVisible(true);
-            }}
-            onEditorContextChange={setEditorContext}
-            onEditorBridgeChange={(bridge) => {
-              editorBridgeRef.current = bridge;
-            }}
-          />
+        {!assistantFocused && activeChapter && !activeChapter.contentLoaded && (
+          <div
+            role="status"
+            className="motion-reveal grid flex-1 place-items-center text-sm text-neutral-500"
+          >
+            {bookError ?? "正在载入章节正文…"}
+          </div>
         )}
+        {!assistantFocused &&
+          readyWorkspace &&
+          activeChapter &&
+          activeChapter.contentLoaded &&
+          chapterNumber !== null && (
+            <ChapterEditorPanel
+              chapter={activeChapter}
+              aiGenerating={
+                currentChapterGeneration?.chapterId === activeChapter.id &&
+                currentChapterGeneration.status === "streaming"
+              }
+              aiPreviewContent={
+                currentChapterGeneration?.chapterId === activeChapter.id
+                  ? aiPreviewContent
+                  : null
+              }
+              chapterNumber={chapterNumber}
+              volumeTitle={activeVolumeTitle}
+              pageTarget={
+                pageTarget?.chapterId === activeChapter.id ? pageTarget : null
+              }
+              onPageChange={setActiveChapterPageNumber}
+              onPaginationChange={(layoutKey, pages) => {
+                setLivePagination({
+                  chapterId: activeChapter.id,
+                  layoutKey,
+                  pages,
+                });
+              }}
+              onSaveTitle={(title) =>
+                updateChapterTitle(activeChapter.id, title)
+              }
+              onSaveDraft={(content, base) =>
+                saveChapterDraft(activeChapter.id, content, base)
+              }
+              onSaveContent={(content, expectedCurrentRevisionId) =>
+                saveChapterContent(
+                  activeChapter.id,
+                  content,
+                  expectedCurrentRevisionId,
+                )
+              }
+              onAskAi={(prompt) => {
+                setAssistantDraft(prompt);
+                setAssistantVisible(true);
+              }}
+              onEditorContextChange={setEditorContext}
+              onEditorBridgeChange={(bridge) => {
+                editorBridgeRef.current = bridge;
+              }}
+            />
+          )}
 
         {!assistantFocused && readyWorkspace && !activeChapter && (
           <BookProfilePanel
@@ -742,17 +835,40 @@ export default function BookWorkspacePage() {
         {assistantVisible && (
           <>
             {!assistantFocused && (
-              <div className={cn("group relative z-20 hidden w-1.5 shrink-0 cursor-col-resize touch-none bg-transparent xl:block", assistantResizing && "bg-violet-50")} role="separator" tabIndex={0} aria-label="调整 AI 对话宽度" aria-orientation="vertical" aria-valuemin={MIN_ASSISTANT_WIDTH} aria-valuemax={MAX_ASSISTANT_WIDTH} aria-valuenow={Math.round(assistantWidth)} onPointerDown={startAssistantResize} onKeyDown={(event) => {
-                if (event.key === "ArrowLeft") {
-                  event.preventDefault();
-                  setAssistantWidth((width) => clampAssistantWidth(width + 16));
-                }
-                if (event.key === "ArrowRight") {
-                  event.preventDefault();
-                  setAssistantWidth((width) => clampAssistantWidth(width - 16));
-                }
-              }}>
-                <span className={cn("absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-neutral-200 transition-colors group-hover:bg-violet-400 group-focus-visible:bg-violet-500", assistantResizing && "w-0.5 bg-violet-500")} />
+              <div
+                className={cn(
+                  "group relative z-20 hidden w-1.5 shrink-0 cursor-col-resize touch-none bg-transparent xl:block",
+                  assistantResizing && "bg-violet-50",
+                )}
+                role="separator"
+                tabIndex={0}
+                aria-label="调整 AI 对话宽度"
+                aria-orientation="vertical"
+                aria-valuemin={MIN_ASSISTANT_WIDTH}
+                aria-valuemax={MAX_ASSISTANT_WIDTH}
+                aria-valuenow={Math.round(assistantWidth)}
+                onPointerDown={startAssistantResize}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowLeft") {
+                    event.preventDefault();
+                    setAssistantWidth((width) =>
+                      clampAssistantWidth(width + 16),
+                    );
+                  }
+                  if (event.key === "ArrowRight") {
+                    event.preventDefault();
+                    setAssistantWidth((width) =>
+                      clampAssistantWidth(width - 16),
+                    );
+                  }
+                }}
+              >
+                <span
+                  className={cn(
+                    "absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-neutral-200 transition-colors group-hover:bg-violet-400 group-focus-visible:bg-violet-500",
+                    assistantResizing && "w-0.5 bg-violet-500",
+                  )}
+                />
               </div>
             )}
             <BookAssistantPanel
@@ -788,7 +904,9 @@ export default function BookWorkspacePage() {
         )}
 
         {bookError && (
-          <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 shadow-lg">{bookError}</div>
+          <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 shadow-lg">
+            {bookError}
+          </div>
         )}
       </div>
     </section>

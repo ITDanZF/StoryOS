@@ -4,6 +4,7 @@ import type { BookStorageState } from "./bookRegistryPorts.ts";
 export type BookshelfStorageState = BookStorageState;
 
 export type AvailableBookshelfBookCard = {
+  readonly listCursor?: string;
   readonly availability: "ready";
   readonly bookId: string;
   readonly title: string;
@@ -20,6 +21,7 @@ export type AvailableBookshelfBookCard = {
 };
 
 export type UnavailableBookshelfBookCard = {
+  readonly listCursor?: string;
   readonly availability: "unavailable";
   readonly bookId: string;
   readonly storageState: Exclude<BookshelfStorageState, "available">;

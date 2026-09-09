@@ -1,3 +1,4 @@
+import type { ChapterDraft } from "../../../../shared/book/drafts.ts";
 import type { Content, Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { useEditor } from "@tiptap/react";
@@ -15,9 +16,7 @@ import {
   serializeTiptapDocument,
 } from "../../../../shared/book/richText.ts";
 import type { BookSaveState } from "../bookWorkspaceModel.ts";
-import {
-  ChapterPaginationController,
-} from "../pagination/ChapterPaginationExtension.ts";
+import { ChapterPaginationController } from "../pagination/ChapterPaginationExtension.ts";
 import PaginatedEditorSurface from "../pagination/PaginatedEditorSurface.tsx";
 import {
   appendChapterPage,
@@ -37,7 +36,10 @@ import "./chapterEditor.css";
 import { createChapterEditorExtensions } from "./chapterEditorExtensions.ts";
 import ChapterEditorToolbar from "./ChapterEditorToolbar.tsx";
 import { runEditorCommand } from "./commands/editorCommandRegistry.ts";
-import { inspectEditorText, resolveEditorTargetSelector } from "./ai/richTextTargeting.ts";
+import {
+  inspectEditorText,
+  resolveEditorTargetSelector,
+} from "./ai/richTextTargeting.ts";
 import { buildEditorStyleTransaction } from "./ai/richTextTransactions.ts";
 import type {
   ChapterEditorBridge,
@@ -51,6 +53,11 @@ import {
 } from "./editorUpdatePolicy.ts";
 
 type ChapterRichTextEditorProps = {
+  readonly initialDraft?: ChapterDraft | null;
+  readonly onSaveDraft?: (
+    content: string,
+    baseRevisionId: string | null,
+  ) => Promise<void>;
   readonly chapterNumber: number;
   readonly aiGenerating: boolean;
   readonly content: string;
@@ -94,6 +101,8 @@ function applyExternalContent(editor: Editor, serialized: string): boolean {
 
 export default function ChapterRichTextEditor({
   chapterNumber,
+  initialDraft,
+  onSaveDraft,
   aiGenerating,
   content,
   previewContent,
@@ -113,6 +122,9 @@ export default function ChapterRichTextEditor({
     [],
   );
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [draftConflict, setDraftConflict] = useState(
+    Boolean(initialDraft && initialDraft.baseRevisionId !== currentRevisionId),
+  );
   const [findOpen, setFindOpen] = useState(false);
   const [replaceMode, setReplaceMode] = useState(false);
   const [linkRequestId, setLinkRequestId] = useState(0);
@@ -120,7 +132,15 @@ export default function ChapterRichTextEditor({
   const processedPageRequestId = useRef<number | null>(null);
   const publishedLayoutKey = useRef<string | null>(null);
   const saveTimer = useRef<number | null>(null);
-  const pendingContent = useRef<string | null>(null);
+  const recovered = useRef(
+    initialDraft && initialDraft.baseRevisionId === currentRevisionId
+      ? initialDraft.content
+      : null,
+  );
+  const pendingContent = useRef<string | null>(recovered.current);
+  const draftTimer = useRef<number | null>(null);
+  const onSaveDraftRef = useRef(onSaveDraft);
+  onSaveDraftRef.current = onSaveDraft;
   const lastSavedContent = useRef(content);
   const lastSavedRevisionId = useRef(currentRevisionId);
   const saveSequence = useRef(Promise.resolve());
@@ -138,28 +158,36 @@ export default function ChapterRichTextEditor({
   onContextChangeRef.current = onContextChange;
   onBridgeChangeRef.current = onBridgeChange;
 
-  const getContext = useCallback((current: Editor): ChapterEditorLiveContext => {
-    const { from, to } = current.state.selection;
-    const selectionText = from === to
-      ? ""
-      : current.state.doc.textBetween(from, to, "\n", "\n").trim();
-    return {
-      version: documentVersionRef.current,
-      documentText: current.state.doc.textBetween(
-        0,
-        current.state.doc.content.size,
-        "\n\n",
-        "\n",
-      ),
-      selection: from !== to && selectionText
-        ? { from, to, text: selectionText }
-        : null,
-    };
-  }, []);
+  const getContext = useCallback(
+    (current: Editor): ChapterEditorLiveContext => {
+      const { from, to } = current.state.selection;
+      const selectionText =
+        from === to
+          ? ""
+          : current.state.doc.textBetween(from, to, "\n", "\n").trim();
+      return {
+        version: documentVersionRef.current,
+        documentText: current.state.doc.textBetween(
+          0,
+          current.state.doc.content.size,
+          "\n\n",
+          "\n",
+        ),
+        selection:
+          from !== to && selectionText
+            ? { from, to, text: selectionText }
+            : null,
+      };
+    },
+    [],
+  );
 
-  const publishContext = useCallback((current: Editor) => {
-    onContextChangeRef.current(getContext(current));
-  }, [getContext]);
+  const publishContext = useCallback(
+    (current: Editor) => {
+      onContextChangeRef.current(getContext(current));
+    },
+    [getContext],
+  );
 
   const persist = useCallback((serialized: string): Promise<void> => {
     if (serialized === lastSavedContent.current) {
@@ -170,10 +198,7 @@ export default function ChapterRichTextEditor({
     onSaveStateChangeRef.current("saving");
     saveSequence.current = saveSequence.current
       .catch((): void => undefined)
-      .then(() => onSaveRef.current(
-        serialized,
-        lastSavedRevisionId.current,
-      ))
+      .then(() => onSaveRef.current(serialized, lastSavedRevisionId.current))
       .then((result) => {
         lastSavedContent.current = serialized;
         lastSavedRevisionId.current = result.revision.id;
@@ -190,6 +215,10 @@ export default function ChapterRichTextEditor({
   }, []);
 
   const flush = useCallback((): Promise<void> => {
+    if (draftTimer.current !== null) {
+      window.clearTimeout(draftTimer.current);
+      draftTimer.current = null;
+    }
     if (saveTimer.current !== null) {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = null;
@@ -204,73 +233,86 @@ export default function ChapterRichTextEditor({
     setFindOpen(true);
   }, []);
 
-  const activatePage = useCallback((requestedIndex: number) => {
-    const pageCount = Math.max(
-      1,
-      paginationController.getSnapshot().pages.length,
-    );
-    const nextIndex = Math.max(0, Math.min(requestedIndex, pageCount - 1));
-    setActivePageIndex(nextIndex);
-    onPageChangeRef.current(nextIndex + 1);
-  }, [paginationController]);
+  const activatePage = useCallback(
+    (requestedIndex: number) => {
+      const pageCount = Math.max(
+        1,
+        paginationController.getSnapshot().pages.length,
+      );
+      const nextIndex = Math.max(0, Math.min(requestedIndex, pageCount - 1));
+      setActivePageIndex(nextIndex);
+      onPageChangeRef.current(nextIndex + 1);
+    },
+    [paginationController],
+  );
 
-  const editor = useEditor({
-    extensions: createChapterEditorExtensions({
-      paginationController,
-      shortcuts: {
-        onFind: openFind,
-        onLink: () => setLinkRequestId((current) => current + 1),
-        onSave: () => {
-          void flush().catch((): void => undefined);
+  const editor = useEditor(
+    {
+      extensions: createChapterEditorExtensions({
+        paginationController,
+        shortcuts: {
+          onFind: openFind,
+          onLink: () => setLinkRequestId((current) => current + 1),
+          onSave: () => {
+            void flush().catch((): void => undefined);
+          },
+        },
+      }),
+      content: decodeStoredChapterContent(
+        previewContent ?? recovered.current ?? content,
+      ) as unknown as Content,
+      editable: !aiGenerating && !draftConflict,
+      editorProps: {
+        attributes: {
+          class: "chapter-rich-text chapter-pagination-layout-root",
+          "aria-label": "章节正文",
+          spellcheck: "false",
         },
       },
-    }),
-    content: decodeStoredChapterContent(
-      previewContent ?? content,
-    ) as unknown as Content,
-    editable: !aiGenerating,
-    editorProps: {
-      attributes: {
-        class: "chapter-rich-text chapter-pagination-layout-root",
-        "aria-label": "章节正文",
-        spellcheck: "false",
+      onCreate: ({ editor: current }) => {
+        onCharacterCountChangeRef.current(
+          countTiptapCharacters(current.getJSON()),
+        );
+        publishContext(current);
+      },
+      onUpdate: ({ editor: current, transaction }) => {
+        if (!shouldPersistEditorTransaction(transaction)) return;
+        documentVersionRef.current += 1;
+        const document = current.getJSON();
+        const serialized = serializeTiptapDocument(document);
+        pendingContent.current = serialized;
+        onCharacterCountChangeRef.current(countTiptapCharacters(document));
+        onSaveStateChangeRef.current("saving");
+        publishContext(current);
+        if (draftTimer.current !== null)
+          window.clearTimeout(draftTimer.current);
+        draftTimer.current = window.setTimeout(() => {
+          draftTimer.current = null;
+          void onSaveDraftRef
+            .current?.(serialized, lastSavedRevisionId.current)
+            .catch(() => onSaveStateChangeRef.current("error"));
+        }, 300);
+        if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+        saveTimer.current = window.setTimeout(() => {
+          saveTimer.current = null;
+          void persist(serialized).catch((): void => undefined);
+        }, 5000);
+      },
+      onSelectionUpdate: ({ editor: current }) => {
+        documentVersionRef.current += 1;
+        publishContext(current);
+        const snapshot = paginationController.getSnapshot();
+        if (snapshot.status !== "ready") return;
+        activatePage(
+          chapterPageAtPosition(snapshot, current.state.selection.from),
+        );
+      },
+      onBlur: () => {
+        void flush().catch((): void => undefined);
       },
     },
-    onCreate: ({ editor: current }) => {
-      onCharacterCountChangeRef.current(
-        countTiptapCharacters(current.getJSON()),
-      );
-      publishContext(current);
-    },
-    onUpdate: ({ editor: current, transaction }) => {
-      if (!shouldPersistEditorTransaction(transaction)) return;
-      documentVersionRef.current += 1;
-      const document = current.getJSON();
-      const serialized = serializeTiptapDocument(document);
-      pendingContent.current = serialized;
-      onCharacterCountChangeRef.current(countTiptapCharacters(document));
-      onSaveStateChangeRef.current("saving");
-      publishContext(current);
-      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-      saveTimer.current = window.setTimeout(() => {
-        saveTimer.current = null;
-        void persist(serialized).catch((): void => undefined);
-      }, 800);
-    },
-    onSelectionUpdate: ({ editor: current }) => {
-      documentVersionRef.current += 1;
-      publishContext(current);
-      const snapshot = paginationController.getSnapshot();
-      if (snapshot.status !== "ready") return;
-      activatePage(chapterPageAtPosition(
-        snapshot,
-        current.state.selection.from,
-      ));
-    },
-    onBlur: () => {
-      void flush().catch((): void => undefined);
-    },
-  }, [flush, openFind, paginationController, publishContext]);
+    [flush, openFind, paginationController, publishContext],
+  );
 
   useLayoutEffect(() => {
     paginationController.setContentStreaming(aiGenerating);
@@ -279,8 +321,8 @@ export default function ChapterRichTextEditor({
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    synchronizeEditorEditable(editor, !aiGenerating);
-  }, [aiGenerating, editor]);
+    synchronizeEditorEditable(editor, !aiGenerating && !draftConflict);
+  }, [aiGenerating, draftConflict, editor]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
@@ -293,7 +335,8 @@ export default function ChapterRichTextEditor({
       }
       return;
     }
-    const hasUnsavedLocalChange = pendingContent.current !== null &&
+    const hasUnsavedLocalChange =
+      pendingContent.current !== null &&
       pendingContent.current !== lastSavedContent.current;
     if (hasUnsavedLocalChange) return;
 
@@ -313,9 +356,7 @@ export default function ChapterRichTextEditor({
     publishContext(editor);
   }, [content, currentRevisionId, editor, previewContent, publishContext]);
 
-  const pagination = useChapterPagination(
-    paginationController,
-  );
+  const pagination = useChapterPagination(paginationController);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
@@ -341,11 +382,15 @@ export default function ChapterRichTextEditor({
           { kind: "ranges", ranges: [range] },
         );
         editor.view.dispatch(
-          editor.state.tr.setSelection(TextSelection.create(
-            editor.state.doc,
-            resolved.from,
-            resolved.to,
-          )).scrollIntoView(),
+          editor.state.tr
+            .setSelection(
+              TextSelection.create(
+                editor.state.doc,
+                resolved.from,
+                resolved.to,
+              ),
+            )
+            .scrollIntoView(),
         );
         editor.view.focus();
         return getContext(editor);
@@ -354,7 +399,9 @@ export default function ChapterRichTextEditor({
         requireVersion(expectedVersion);
         const maximum = editor.state.doc.content.size;
         if (from < 0 || to < from || to > maximum) {
-          throw new Error(`Invalid editor range: ${from}-${to} (max ${maximum}).`);
+          throw new Error(
+            `Invalid editor range: ${from}-${to} (max ${maximum}).`,
+          );
         }
         const transaction = replacement
           ? editor.state.tr.insertText(replacement, from, to)
@@ -372,17 +419,20 @@ export default function ChapterRichTextEditor({
       setStyle: ({ expectedVersion, style }) => {
         requireVersion(expectedVersion);
         const selection = editor.state.selection;
-        if (selection.empty) throw new Error("The active editor selection is empty.");
+        if (selection.empty)
+          throw new Error("The active editor selection is empty.");
         const expectedText = editor.state.doc.textBetween(
           selection.from,
           selection.to,
           "\n",
           "\n",
         );
-        const result = buildEditorStyleTransaction(editor.state, [{
-          selector: { kind: "selection", expectedText },
-          style,
-        }]);
+        const result = buildEditorStyleTransaction(editor.state, [
+          {
+            selector: { kind: "selection", expectedText },
+            style,
+          },
+        ]);
         editor.view.dispatch(result.transaction.scrollIntoView());
         return getContext(editor);
       },
@@ -421,7 +471,9 @@ export default function ChapterRichTextEditor({
           deleteChapterPage(editor, snapshot, pageNumber);
         } else {
           if (pageNumber === undefined || targetPageNumber === undefined) {
-            throw new Error("Source and target page numbers are required for moving a page.");
+            throw new Error(
+              "Source and target page numbers are required for moving a page.",
+            );
           }
           moveChapterPage(editor, snapshot, pageNumber, targetPageNumber);
         }
@@ -452,10 +504,9 @@ export default function ChapterRichTextEditor({
     const requestedPageNumber = pendingPageNumber.current;
     if (requestedPageNumber !== null) {
       pendingPageNumber.current = null;
-      activatePage(Math.min(
-        requestedPageNumber - 1,
-        pagination.pages.length - 1,
-      ));
+      activatePage(
+        Math.min(requestedPageNumber - 1, pagination.pages.length - 1),
+      );
       return;
     }
     activatePage(Math.min(activePageIndex, pagination.pages.length - 1));
@@ -496,11 +547,7 @@ export default function ChapterRichTextEditor({
         return;
       }
       pendingPageNumber.current = pageTarget.chapterPageNumber;
-      deleteChapterPage(
-        editor,
-        snapshot,
-        pageTarget.chapterPageNumber,
-      );
+      deleteChapterPage(editor, snapshot, pageTarget.chapterPageNumber);
       return;
     }
 
@@ -521,25 +568,70 @@ export default function ChapterRichTextEditor({
     return () => window.cancelAnimationFrame(frame);
   }, [activatePage, editor, pageTarget, pagination, paginationController]);
 
-  useEffect(() => () => {
-    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    const pending = pendingContent.current;
-    if (pending !== null && pending !== lastSavedContent.current) {
-      void onSaveRef.current(pending, lastSavedRevisionId.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (draftTimer.current !== null) window.clearTimeout(draftTimer.current);
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      const pending = pendingContent.current;
+      if (pending !== null && pending !== lastSavedContent.current) {
+        void onSaveRef
+          .current(pending, lastSavedRevisionId.current)
+          .catch(() => onSaveStateChangeRef.current("error"));
+      }
+    },
+    [],
+  );
 
   const askAi = () => {
     if (!editor || editor.isDestroyed) return;
     const { from, to } = editor.state.selection;
-    const selection = from === to
-      ? null
-      : editor.state.doc.textBetween(from, to, "\n").trim() || null;
+    const selection =
+      from === to
+        ? null
+        : editor.state.doc.textBetween(from, to, "\n").trim() || null;
     onAskAiSelection(selection);
   };
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {draftConflict && initialDraft && (
+        <div
+          role="status"
+          className="motion-reveal flex flex-wrap items-center gap-3 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+        >
+          <span>有尚未提交的草稿，正文已在其他位置更新。</span>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(initialDraft.content);
+            }}
+          >
+            复制草稿
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!editor) return;
+              applyExternalContent(editor, initialDraft.content);
+              pendingContent.current = initialDraft.content;
+              setDraftConflict(false);
+              onSaveStateChangeRef.current("saving");
+            }}
+          >
+            以草稿继续编辑（保留正文历史）
+          </button>
+        </div>
+      )}
+      {recovered.current &&
+        !draftConflict &&
+        pendingContent.current !== null && (
+          <div
+            role="status"
+            className="motion-reveal bg-emerald-50 px-4 py-2 text-xs text-emerald-900"
+          >
+            已恢复未提交草稿，按 Ctrl+S 保存。
+          </div>
+        )}
       <ChapterEditorToolbar
         editor={editor}
         linkRequestId={linkRequestId}
@@ -559,11 +651,13 @@ export default function ChapterRichTextEditor({
         snapshot={pagination}
         activePageIndex={activePageIndex}
         navigationRequestId={pageTarget?.requestId ?? null}
-        navigationPageIndex={pageTarget
-          ? (pageTarget.kind === "move"
-            ? pageTarget.targetChapterPageNumber
-            : pageTarget.chapterPageNumber) - 1
-          : null}
+        navigationPageIndex={
+          pageTarget
+            ? (pageTarget.kind === "move"
+                ? pageTarget.targetChapterPageNumber
+                : pageTarget.chapterPageNumber) - 1
+            : null
+        }
         onActivePageChange={activatePage}
       />
     </div>

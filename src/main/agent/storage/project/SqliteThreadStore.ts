@@ -1,3 +1,4 @@
+import { appendConversationEvent } from "./conversationProjection.ts";
 import type { Database as BetterSqliteDatabase } from "better-sqlite3";
 import type {
   MessageRecord,
@@ -18,7 +19,7 @@ type MessageRow = {
   readonly id: string;
   readonly thread_id: string;
   readonly role: MessageRole;
-  readonly content: string;
+  readonly blocks: string;
   readonly created_at: number;
 };
 
@@ -28,7 +29,10 @@ type SkillRow = {
 };
 
 export default class SqliteThreadStore implements ThreadPersistence {
-  constructor(private readonly database: BetterSqliteDatabase) {}
+  constructor(
+    private readonly database: BetterSqliteDatabase,
+    private readonly currentBook: () => string | null = () => null,
+  ) {}
 
   createThread(
     title: string,
@@ -37,40 +41,51 @@ export default class SqliteThreadStore implements ThreadPersistence {
   ): ThreadRecord {
     const now = Date.now();
     this.database.transaction(() => {
-      this.database.prepare(`
-        INSERT INTO threads(id, title, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
-      `).run(id, title, now, now);
+      this.database
+        .prepare(
+          `
+        INSERT INTO threads(id, title, created_at, updated_at,book_id)
+        VALUES (?, ?, ?, ?,?)
+      `,
+        )
+        .run(id, title, now, now, this.currentBook());
       this.replaceSkillState(id, metadata);
     })();
     return this.requireThread(id);
   }
 
   getThread(threadId: string): ThreadRecord | null {
-    const row = this.database.prepare("SELECT * FROM threads WHERE id = ?")
+    const row = this.database
+      .prepare("SELECT * FROM threads WHERE id = ?")
       .get(threadId) as ThreadRow | undefined;
     return row ? this.toThreadRecord(row) : null;
   }
 
   listThreads(): ThreadRecord[] {
-    return (this.database.prepare(
-      "SELECT * FROM threads ORDER BY updated_at DESC, id ASC",
-    ).all() as ThreadRow[]).map((row) => this.toThreadRecord(row));
+    return (
+      this.database
+        .prepare("SELECT * FROM threads ORDER BY updated_at DESC, id ASC")
+        .all() as ThreadRow[]
+    ).map((row) => this.toThreadRecord(row));
   }
 
   touchThread(threadId: string): void {
-    const result = this.database.prepare(
-      "UPDATE threads SET updated_at = ? WHERE id = ?",
-    ).run(Date.now(), threadId);
+    const result = this.database
+      .prepare(
+        "UPDATE threads SET row_version=row_version+1, updated_at = ? WHERE id = ?",
+      )
+      .run(Date.now(), threadId);
     if (result.changes === 0) throw new Error(`Thread not found: ${threadId}`);
   }
 
   updateThreadTitle(threadId: string, title: string): ThreadRecord {
     const normalized = title.trim();
     if (!normalized) throw new Error("Thread title is required.");
-    const result = this.database.prepare(
-      "UPDATE threads SET title = ?, updated_at = ? WHERE id = ?",
-    ).run(normalized, Date.now(), threadId);
+    const result = this.database
+      .prepare(
+        "UPDATE threads SET title = ?, row_version=row_version+1, updated_at = ? WHERE id = ?",
+      )
+      .run(normalized, Date.now(), threadId);
     if (result.changes === 0) throw new Error(`Thread not found: ${threadId}`);
     return this.requireThread(threadId);
   }
@@ -82,14 +97,18 @@ export default class SqliteThreadStore implements ThreadPersistence {
     this.database.transaction(() => {
       this.requireThreadRow(threadId);
       this.replaceSkillState(threadId, metadata);
-      this.database.prepare("UPDATE threads SET updated_at = ? WHERE id = ?")
+      this.database
+        .prepare(
+          "UPDATE threads SET row_version=row_version+1, updated_at = ? WHERE id = ?",
+        )
         .run(Date.now(), threadId);
     })();
     return this.requireThread(threadId);
   }
 
   deleteThread(threadId: string): void {
-    const result = this.database.prepare("DELETE FROM threads WHERE id = ?")
+    const result = this.database
+      .prepare("DELETE FROM threads WHERE id = ?")
       .run(threadId);
     if (result.changes === 0) throw new Error(`Thread not found: ${threadId}`);
   }
@@ -104,23 +123,25 @@ export default class SqliteThreadStore implements ThreadPersistence {
     const now = Date.now();
     this.database.transaction(() => {
       this.requireThreadRow(input.threadId);
-      const row = this.database.prepare(`
-        SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence
-        FROM messages WHERE thread_id = ?
-      `).get(input.threadId) as { sequence: number };
-      this.database.prepare(`
-        INSERT INTO messages(
-          id, thread_id, sequence, role, content, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
-      `).run(
-        id,
-        input.threadId,
-        row.sequence,
-        input.role,
-        input.content,
-        now,
-      );
-      this.database.prepare("UPDATE threads SET updated_at = ? WHERE id = ?")
+      appendConversationEvent(this.database, {
+        event_id: `message:${id}`,
+        thread_id: input.threadId,
+        run_id: null,
+        run_sequence: null,
+        type: "message.created",
+        step_id: null,
+        block_id: null,
+        payload: JSON.stringify({
+          messageId: id,
+          role: input.role,
+          content: input.content,
+        }),
+        created_at: now,
+      });
+      this.database
+        .prepare(
+          "UPDATE threads SET row_version=row_version+1, updated_at = ? WHERE id = ?",
+        )
         .run(now, input.threadId);
     })();
     return {
@@ -134,34 +155,59 @@ export default class SqliteThreadStore implements ThreadPersistence {
 
   listMessages(threadId: string): MessageRecord[] {
     this.requireThreadRow(threadId);
-    return (this.database.prepare(`
-      SELECT id, thread_id, role, content, created_at
-      FROM messages
+    return (
+      this.database
+        .prepare(
+          `
+      SELECT id, thread_id, role, blocks, updated_at AS created_at
+      FROM message_views
       WHERE thread_id = ?
-      ORDER BY sequence ASC
-    `).all(threadId) as MessageRow[]).map((row) => ({
+      ORDER BY first_sequence ASC
+    `,
+        )
+        .all(threadId) as MessageRow[]
+    ).map((row) => ({
       id: row.id,
       threadId: row.thread_id,
       role: row.role,
-      content: row.content,
+      content: (
+        JSON.parse(row.blocks) as {
+          type: string;
+          channel?: string;
+          content?: string;
+        }[]
+      )
+        .filter(
+          (b) => b.type === "text" && (!b.channel || b.channel === "answer"),
+        )
+        .map((b) => b.content ?? "")
+        .join("\n"),
       createdAt: new Date(row.created_at),
     }));
   }
 
   getActiveThreadId(): string | null {
-    const row = this.database.prepare(`
+    const row = this.database
+      .prepare(
+        `
       SELECT active_thread_id FROM workspace_state WHERE singleton = 1
-    `).get() as { active_thread_id: string | null };
+    `,
+      )
+      .get() as { active_thread_id: string | null };
     return row.active_thread_id;
   }
 
   setActiveThreadId(threadId: string | null): void {
     if (threadId !== null) this.requireThreadRow(threadId);
-    this.database.prepare(`
+    this.database
+      .prepare(
+        `
       UPDATE workspace_state
       SET active_thread_id = ?, updated_at = ?
       WHERE singleton = 1
-    `).run(threadId, Date.now());
+    `,
+      )
+      .run(threadId, Date.now());
   }
 
   private requireThread(threadId: string): ThreadRecord {
@@ -169,17 +215,22 @@ export default class SqliteThreadStore implements ThreadPersistence {
   }
 
   private requireThreadRow(threadId: string): ThreadRow {
-    const row = this.database.prepare("SELECT * FROM threads WHERE id = ?")
+    const row = this.database
+      .prepare("SELECT * FROM threads WHERE id = ?")
       .get(threadId) as ThreadRow | undefined;
     if (!row) throw new Error(`Thread not found: ${threadId}`);
     return row;
   }
 
   private toThreadRecord(row: ThreadRow): ThreadRecord {
-    const skills = this.database.prepare(`
+    const skills = this.database
+      .prepare(
+        `
       SELECT skill_id, status FROM thread_skills
       WHERE thread_id = ? ORDER BY skill_id ASC
-    `).all(row.id) as SkillRow[];
+    `,
+      )
+      .all(row.id) as SkillRow[];
     return {
       id: row.id,
       title: row.title,
@@ -187,11 +238,13 @@ export default class SqliteThreadStore implements ThreadPersistence {
       updatedAt: new Date(row.updated_at),
       metadata: {
         activeSkillIds: Object.freeze(
-          skills.filter((skill) => skill.status === "active")
+          skills
+            .filter((skill) => skill.status === "active")
             .map((skill) => skill.skill_id),
         ),
         disabledSkillIds: Object.freeze(
-          skills.filter((skill) => skill.status === "disabled")
+          skills
+            .filter((skill) => skill.status === "disabled")
             .map((skill) => skill.skill_id),
         ),
       },
@@ -203,9 +256,11 @@ export default class SqliteThreadStore implements ThreadPersistence {
     metadata: ThreadMetadata | undefined,
   ): void {
     const active = this.normalizeSkillIds(metadata?.activeSkillIds);
-    const disabled = this.normalizeSkillIds(metadata?.disabledSkillIds)
-      .filter((skillId) => !active.includes(skillId));
-    this.database.prepare("DELETE FROM thread_skills WHERE thread_id = ?")
+    const disabled = this.normalizeSkillIds(metadata?.disabledSkillIds).filter(
+      (skillId) => !active.includes(skillId),
+    );
+    this.database
+      .prepare("DELETE FROM thread_skills WHERE thread_id = ?")
       .run(threadId);
     const insert = this.database.prepare(`
       INSERT INTO thread_skills(thread_id, skill_id, status)
@@ -216,9 +271,13 @@ export default class SqliteThreadStore implements ThreadPersistence {
   }
 
   private normalizeSkillIds(skillIds: readonly string[] | undefined): string[] {
-    return [...new Set((skillIds ?? [])
-      .filter((value): value is string => typeof value === "string")
-      .map((skillId) => skillId.trim())
-      .filter(Boolean))].sort();
+    return [
+      ...new Set(
+        (skillIds ?? [])
+          .filter((value): value is string => typeof value === "string")
+          .map((skillId) => skillId.trim())
+          .filter(Boolean),
+      ),
+    ].sort();
   }
 }

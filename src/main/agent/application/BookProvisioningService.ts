@@ -117,7 +117,10 @@ export default class BookProvisioningService {
       const database = new BookDatabase(temporaryDatabasePath);
       let novel: NovelRecord;
       try {
-        novel = new SqliteNovelStore(database.handle).createNovel(input);
+        novel = new SqliteNovelStore(database.handle).createNovel({
+          ...input,
+          id: bookId,
+        });
       } finally {
         database.close();
       }
@@ -125,7 +128,9 @@ export default class BookProvisioningService {
 
       mkdirSync(getBookLibraryRoot(this.agentHome), { recursive: true });
       if (existsSync(finalLayout.rootPath)) {
-        throw new Error(`Book storage path already exists: ${finalLayout.rootPath}`);
+        throw new Error(
+          `Book storage path already exists: ${finalLayout.rootPath}`,
+        );
       }
       renameSync(temporaryRoot, finalLayout.rootPath);
       movedToFinalLocation = true;
@@ -159,10 +164,10 @@ export default class BookProvisioningService {
         );
       }
       try {
-        rmSync(
-          movedToFinalLocation ? finalLayout.rootPath : temporaryRoot,
-          { recursive: true, force: true },
-        );
+        rmSync(movedToFinalLocation ? finalLayout.rootPath : temporaryRoot, {
+          recursive: true,
+          force: true,
+        });
       } catch (cleanupError) {
         throw new BookProvisioningError(
           operationId,
@@ -172,12 +177,7 @@ export default class BookProvisioningService {
           cleanupError,
         );
       }
-      throw new BookProvisioningError(
-        operationId,
-        stage,
-        "cleaned",
-        error,
-      );
+      throw new BookProvisioningError(operationId, stage, "cleaned", error);
     }
   }
 }

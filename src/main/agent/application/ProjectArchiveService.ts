@@ -1,3 +1,7 @@
+import {
+  markOperationDirectory,
+  removeOperationDirectory,
+} from "../storage/common/operationOwnership.ts";
 import path from "node:path";
 import {
   copyFileSync,
@@ -22,9 +26,7 @@ import {
   getPublishedProjectArchiveLayout,
 } from "../storage/archive/ProjectArchiveLayout.ts";
 import ProjectDatabase from "../storage/project/ProjectDatabase.ts";
-import {
-  readProjectMetadata,
-} from "../workspace/ProjectLayout.ts";
+import { readProjectMetadata } from "../workspace/ProjectLayout.ts";
 import type { BookRegistry } from "./bookRegistryPorts.ts";
 import {
   PROJECT_ARCHIVE_FORMAT_VERSION,
@@ -63,8 +65,14 @@ function requireAbsolutePath(value: string, label: string): string {
 }
 
 function isPathInside(rootPath: string, candidatePath: string): boolean {
-  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  const relative = path.relative(
+    path.resolve(rootPath),
+    path.resolve(candidatePath),
+  );
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
 }
 
 export default class ProjectArchiveService {
@@ -85,75 +93,94 @@ export default class ProjectArchiveService {
     );
   }
 
-  list(input: {
-    readonly bookId?: string;
-    readonly sourceProjectId?: string;
-  } = {}): readonly ProjectArchiveDto[] {
+  list(
+    input: {
+      readonly bookId?: string;
+      readonly sourceProjectId?: string;
+    } = {},
+  ): readonly ProjectArchiveDto[] {
     return Object.freeze(this.archives.list(input).map(toDto));
   }
 
   listSummaries(bookId: string): readonly ProjectArchiveSummary[] {
-    return Object.freeze(this.archives.list({ bookId }).map((record) => {
-      let manifest: ProjectArchiveManifest | null = null;
-      let state = record.state;
-      if (record.state !== "creating") {
-        try {
-          const layout = getPublishedProjectArchiveLayout(this.agentHome, record.id);
-          if (path.resolve(record.archivePath) !== layout.rootPath) {
-            throw new Error(`Project archive path is invalid: ${record.archivePath}`);
-          }
-          const verified = validateProjectArchive(layout);
-          if (
-            verified.manifest.archiveId !== record.id ||
-            verified.manifest.project.id !== record.sourceProjectId ||
-            (verified.manifest.book?.sourceBookId ?? null) !== record.bookId ||
-            verified.manifestHash !== record.manifestHash
-          ) {
-            throw new Error(`Project archive registration does not match: ${record.id}`);
-          }
-          manifest = verified.manifest;
-        } catch {
-          state = "corrupted";
-        }
-      }
-
-      const strategies: Array<"snapshot" | "current"> = [];
-      if (state === "available" && manifest?.book) {
-        strategies.push("snapshot");
-        const currentBook = this.books.getBookById(manifest.book.sourceBookId);
-        if (
-          currentBook?.state === "available" &&
-          this.books.listProjectIdsForBook(currentBook.id).length === 0
-        ) {
+    return Object.freeze(
+      this.archives.list({ bookId }).map((record) => {
+        let manifest: ProjectArchiveManifest | null = null;
+        let state = record.state;
+        if (record.state !== "creating") {
           try {
-            if (this.bookRuntimes.inspectStorage(currentBook.id).state === "available") {
-              strategies.push("current");
+            const layout = getPublishedProjectArchiveLayout(
+              this.agentHome,
+              record.id,
+            );
+            if (path.resolve(record.archivePath) !== layout.rootPath) {
+              throw new Error(
+                `Project archive path is invalid: ${record.archivePath}`,
+              );
             }
+            const verified = validateProjectArchive(layout);
+            if (
+              verified.manifest.archiveId !== record.id ||
+              verified.manifest.project.id !== record.sourceProjectId ||
+              (verified.manifest.book?.sourceBookId ?? null) !==
+                record.bookId ||
+              verified.manifestHash !== record.manifestHash
+            ) {
+              throw new Error(
+                `Project archive registration does not match: ${record.id}`,
+              );
+            }
+            manifest = verified.manifest;
           } catch {
-            // A failed health inspection means the current-book strategy is unavailable.
+            state = "corrupted";
           }
         }
-      }
 
-      return Object.freeze({
-        archiveId: record.id,
-        sourceProjectId: record.sourceProjectId,
-        projectName: manifest?.project.name ?? null,
-        originalProjectPath: manifest?.project.originalPath ?? null,
-        bookId: record.bookId,
-        state,
-        containsBookSnapshot: record.bookId !== null,
-        availableBookStrategies: Object.freeze(strategies),
-        createdAt: record.createdAt.toISOString(),
-        restoredAt: record.restoredAt?.toISOString() ?? null,
-      });
-    }));
+        const strategies: Array<"snapshot" | "current"> = [];
+        if (state === "available" && manifest?.book) {
+          strategies.push("snapshot");
+          const currentBook = this.books.getBookById(
+            manifest.book.sourceBookId,
+          );
+          if (
+            currentBook?.state === "available" &&
+            this.books.listProjectIdsForBook(currentBook.id).length === 0
+          ) {
+            try {
+              if (
+                this.bookRuntimes.inspectStorage(currentBook.id).state ===
+                "available"
+              ) {
+                strategies.push("current");
+              }
+            } catch {
+              // A failed health inspection means the current-book strategy is unavailable.
+            }
+          }
+        }
+
+        return Object.freeze({
+          archiveId: record.id,
+          sourceProjectId: record.sourceProjectId,
+          projectName: manifest?.project.name ?? null,
+          originalProjectPath: manifest?.project.originalPath ?? null,
+          bookId: record.bookId,
+          state,
+          containsBookSnapshot: record.bookId !== null,
+          availableBookStrategies: Object.freeze(strategies),
+          createdAt: record.createdAt.toISOString(),
+          restoredAt: record.restoredAt?.toISOString() ?? null,
+        });
+      }),
+    );
   }
 
-  async createForProjectDeletion(projectId: string): Promise<ProjectArchiveDto> {
-    const project = this.projects.getSnapshot().projects.find(
-      (candidate) => candidate.id === projectId,
-    );
+  async createForProjectDeletion(
+    projectId: string,
+  ): Promise<ProjectArchiveDto> {
+    const project = this.projects
+      .getSnapshot()
+      .projects.find((candidate) => candidate.id === projectId);
     if (!project) throw new Error(`Project not found: ${projectId}`);
     if (!existsSync(project.path) || !statSync(project.path).isDirectory()) {
       throw new Error(`Project path does not exist: ${project.path}`);
@@ -231,18 +258,24 @@ export default class ProjectArchiveService {
       const verified = validateProjectArchive(temporaryLayout);
       mkdirSync(getProjectArchivesRoot(this.agentHome), { recursive: true });
       if (existsSync(publishedLayout.rootPath)) {
-        throw new Error(`Project archive path already exists: ${publishedLayout.rootPath}`);
+        throw new Error(
+          `Project archive path already exists: ${publishedLayout.rootPath}`,
+        );
       }
       renameSync(temporaryLayout.rootPath, publishedLayout.rootPath);
       const published = validateProjectArchive(publishedLayout);
       if (published.manifestHash !== verified.manifestHash) {
-        throw new Error(`Project archive changed during publication: ${archiveId}`);
+        throw new Error(
+          `Project archive changed during publication: ${archiveId}`,
+        );
       }
-      return toDto(this.archives.updateState({
-        archiveId: record.id,
-        state: "available",
-        manifestHash: published.manifestHash,
-      }));
+      return toDto(
+        this.archives.updateState({
+          archiveId: record.id,
+          state: "available",
+          manifestHash: published.manifestHash,
+        }),
+      );
     } catch (error) {
       if (!existsSync(publishedLayout.rootPath)) {
         try {
@@ -259,7 +292,9 @@ export default class ProjectArchiveService {
 
   restore(request: RestoreProjectArchiveRequest): RestoreProjectArchiveResult {
     if (!(["snapshot", "current"] as const).includes(request.bookStrategy)) {
-      throw new Error(`Invalid project restore book strategy: ${request.bookStrategy}`);
+      throw new Error(
+        `Invalid project restore book strategy: ${request.bookStrategy}`,
+      );
     }
     const archiveId = request.archiveId.trim();
     const record = this.archives.getById(archiveId);
@@ -281,14 +316,21 @@ export default class ProjectArchiveService {
       (verified.manifest.book?.sourceBookId ?? null) !== record.bookId ||
       verified.manifestHash !== record.manifestHash
     ) {
-      throw new Error(`Project archive registration does not match: ${archiveId}`);
+      throw new Error(
+        `Project archive registration does not match: ${archiveId}`,
+      );
     }
-    const targetPath = requireAbsolutePath(request.targetPath, "Project restore path");
+    const targetPath = requireAbsolutePath(
+      request.targetPath,
+      "Project restore path",
+    );
     if (
       isPathInside(getProjectArchivesRoot(this.agentHome), targetPath) ||
       isPathInside(path.resolve(this.agentHome, "library"), targetPath)
     ) {
-      throw new Error("Project restore path cannot be inside StoryOS archive or library storage.");
+      throw new Error(
+        "Project restore path cannot be inside StoryOS archive or library storage.",
+      );
     }
     if (existsSync(targetPath)) {
       throw new Error(`Project restore path already exists: ${targetPath}`);
@@ -297,18 +339,26 @@ export default class ProjectArchiveService {
     if (!existsSync(targetParent) || !statSync(targetParent).isDirectory()) {
       throw new Error(`Project restore parent does not exist: ${targetParent}`);
     }
-    if (this.projects.getSnapshot().projects.some(
-      (project) => project.id === record.sourceProjectId,
-    )) {
+    if (
+      this.projects
+        .getSnapshot()
+        .projects.some((project) => project.id === record.sourceProjectId)
+    ) {
       throw new Error(`Project id already exists: ${record.sourceProjectId}`);
     }
     if (request.bookStrategy === "current" && verified.manifest.book) {
-      const currentBook = this.books.getBookById(verified.manifest.book.sourceBookId);
+      const currentBook = this.books.getBookById(
+        verified.manifest.book.sourceBookId,
+      );
       if (!currentBook || currentBook.state !== "available") {
-        throw new Error(`Current bookshelf book is unavailable: ${record.bookId}`);
+        throw new Error(
+          `Current bookshelf book is unavailable: ${record.bookId}`,
+        );
       }
       if (this.books.listProjectIdsForBook(currentBook.id).length > 0) {
-        throw new Error(`Current bookshelf book is already attached: ${currentBook.id}`);
+        throw new Error(
+          `Current bookshelf book is already attached: ${currentBook.id}`,
+        );
       }
       const lease = this.bookRuntimes.acquire(currentBook.id);
       lease.close();
@@ -322,10 +372,14 @@ export default class ProjectArchiveService {
         ? `book_${crypto.randomUUID()}`
         : verified.manifest.book.sourceBookId
       : null;
-    const temporaryBookRoot = path.join(getBookCreationRoot(this.agentHome), operationId);
-    const restoredBookLayout = bookId && request.bookStrategy === "snapshot"
-      ? getBookLayout(this.agentHome, bookId)
-      : null;
+    const temporaryBookRoot = path.join(
+      getBookCreationRoot(this.agentHome),
+      operationId,
+    );
+    const restoredBookLayout =
+      bookId && request.bookStrategy === "snapshot"
+        ? getBookLayout(this.agentHome, bookId)
+        : null;
     this.archives.beginRestore({
       id: operationId,
       archiveId,
@@ -340,21 +394,32 @@ export default class ProjectArchiveService {
     try {
       mkdirSync(path.dirname(temporaryProjectPath), { recursive: true });
       copyProjectDirectory(registeredLayout.projectPath, temporaryProjectPath);
+      markOperationDirectory(temporaryProjectPath, operationId);
       const metadata = readProjectMetadata(temporaryProjectPath);
       if (!metadata || metadata.projectId !== verified.manifest.project.id) {
-        throw new Error("Restored project metadata does not match its archive.");
+        throw new Error(
+          "Restored project metadata does not match its archive.",
+        );
       }
       ProjectDatabase.validateExisting(
         path.join(temporaryProjectPath, ".storyos", "project.sqlite"),
       );
       if (restoredBookLayout) {
         mkdirSync(temporaryBookRoot, { recursive: true });
-        const temporaryDatabasePath = path.join(temporaryBookRoot, "book.sqlite");
+        const temporaryDatabasePath = path.join(
+          temporaryBookRoot,
+          "book.sqlite",
+        );
         copyFileSync(registeredLayout.bookSnapshotPath, temporaryDatabasePath);
         BookDatabase.validateExisting(temporaryDatabasePath);
+        if (!bookId) throw new Error("Restored book identity is missing.");
+        BookDatabase.identifyCopy(temporaryDatabasePath, bookId);
+        markOperationDirectory(temporaryBookRoot, operationId);
         mkdirSync(getBookLibraryRoot(this.agentHome), { recursive: true });
         if (existsSync(restoredBookLayout.rootPath)) {
-          throw new Error(`Restored book path already exists: ${restoredBookLayout.rootPath}`);
+          throw new Error(
+            `Restored book path already exists: ${restoredBookLayout.rootPath}`,
+          );
         }
         renameSync(temporaryBookRoot, restoredBookLayout.rootPath);
         bookPublished = true;
@@ -428,9 +493,9 @@ export default class ProjectArchiveService {
           // Preserve the original restore failure.
         }
       }
-      if (projectPublished) rmSync(targetPath, { recursive: true, force: true });
+      if (projectPublished) removeOperationDirectory(targetPath, operationId);
       if (bookPublished && restoredBookLayout) {
-        rmSync(restoredBookLayout.rootPath, { recursive: true, force: true });
+        removeOperationDirectory(restoredBookLayout.rootPath, operationId);
       }
       try {
         this.archives.updateOperation({
@@ -443,7 +508,10 @@ export default class ProjectArchiveService {
       }
       throw error;
     } finally {
-      rmSync(path.join(restoreRoot, operationId), { recursive: true, force: true });
+      rmSync(path.join(restoreRoot, operationId), {
+        recursive: true,
+        force: true,
+      });
       rmSync(temporaryBookRoot, { recursive: true, force: true });
     }
   }
@@ -463,9 +531,12 @@ export default class ProjectArchiveService {
           verified.manifest.project.id !== archive.sourceProjectId ||
           (verified.manifest.book?.sourceBookId ?? null) !== archive.bookId
         ) {
-          throw new Error(`Project archive registration mismatch: ${archive.id}`);
+          throw new Error(
+            `Project archive registration mismatch: ${archive.id}`,
+          );
         }
-        const state = archive.state === "creating" ? "available" : archive.state;
+        const state =
+          archive.state === "creating" ? "available" : archive.state;
         const updated = this.archives.updateState({
           archiveId: archive.id,
           state,
@@ -473,32 +544,44 @@ export default class ProjectArchiveService {
         });
         if (
           updated.state === "available" &&
-          this.projects.getSnapshot().projects.some(
-            (project) => project.id === updated.sourceProjectId && !existsSync(project.path),
-          )
+          this.projects
+            .getSnapshot()
+            .projects.some(
+              (project) =>
+                project.id === updated.sourceProjectId &&
+                !existsSync(project.path),
+            )
         ) {
-          const project = this.projects.getSnapshot().projects.find(
-            (candidate) => candidate.id === updated.sourceProjectId,
-          );
+          const project = this.projects
+            .getSnapshot()
+            .projects.find(
+              (candidate) => candidate.id === updated.sourceProjectId,
+            );
           if (project) this.projects.removeProject(project.path);
         }
         results.push(toDto(updated));
       } catch {
-        results.push(toDto(this.archives.updateState({
-          archiveId: archive.id,
-          state: "corrupted",
-        })));
+        results.push(
+          toDto(
+            this.archives.updateState({
+              archiveId: archive.id,
+              state: "corrupted",
+            }),
+          ),
+        );
       }
     }
     const creationRoot = getProjectArchiveCreationRoot(this.agentHome);
     if (existsSync(creationRoot)) {
-      for (const archive of this.archives.list().filter(
-        (candidate) => candidate.state !== "creating",
-      )) {
-        rmSync(path.join(creationRoot, archive.id), { recursive: true, force: true });
+      for (const archive of this.archives
+        .list()
+        .filter((candidate) => candidate.state !== "creating")) {
+        rmSync(path.join(creationRoot, archive.id), {
+          recursive: true,
+          force: true,
+        });
       }
     }
     return Object.freeze(results);
   }
-
 }

@@ -60,7 +60,10 @@ export default class ProjectBookNovelStore implements NovelPersistence {
   }
 
   updateNovel(
-    input: Pick<NovelRecord, "id" | "title" | "synopsis" | "status">,
+    input: Pick<
+      NovelRecord,
+      "id" | "title" | "synopsis" | "status" | "rowVersion"
+    >,
   ): NovelRecord {
     return this.requireStore().updateNovel(input);
   }
@@ -80,7 +83,10 @@ export default class ProjectBookNovelStore implements NovelPersistence {
   }
 
   updateVolume(
-    input: Pick<VolumeRecord, "id" | "title" | "summary" | "sortOrder">,
+    input: Pick<
+      VolumeRecord,
+      "id" | "title" | "summary" | "sortOrder" | "rowVersion"
+    >,
   ): VolumeRecord {
     return this.requireStore().updateVolume(input);
   }
@@ -90,10 +96,7 @@ export default class ProjectBookNovelStore implements NovelPersistence {
   }
 
   createChapter(
-    input: Omit<
-      ChapterRecord,
-      "currentRevisionId" | "createdAt" | "updatedAt"
-    >,
+    input: Omit<ChapterRecord, "currentRevisionId" | "createdAt" | "updatedAt">,
   ): ChapterRecord {
     return this.requireStore().createChapter(input);
   }
@@ -106,10 +109,14 @@ export default class ProjectBookNovelStore implements NovelPersistence {
     return this.requireStore().listChapters(novelId);
   }
 
+  listChapterSummaries(novelId: string) {
+    return this.requireStore().listChapterSummaries(novelId);
+  }
+
   updateChapter(
     input: Pick<
       ChapterRecord,
-      "id" | "volumeId" | "title" | "status" | "sortOrder"
+      "id" | "volumeId" | "title" | "status" | "sortOrder" | "rowVersion"
     >,
   ): ChapterRecord {
     return this.requireStore().updateChapter(input);
@@ -120,20 +127,32 @@ export default class ProjectBookNovelStore implements NovelPersistence {
   }
 
   saveRevision(
-    input: Omit<
-      ChapterRevisionRecord,
-      "revisionNumber" | "createdAt"
-    > & { readonly expectedCurrentRevisionId: string | null },
+    input: Omit<ChapterRevisionRecord, "revisionNumber" | "createdAt"> & {
+      readonly expectedCurrentRevisionId: string | null;
+      readonly expectedRowVersion?: number;
+      readonly expectedDraftVersion?: number;
+    },
   ): ChapterRevisionRecord {
     return this.requireStore().saveRevision(input);
+  }
+
+  getRevisionMetadata(revisionId: string) {
+    return this.requireStore().getRevisionMetadata(revisionId);
   }
 
   getRevision(revisionId: string): ChapterRevisionRecord | null {
     return this.delegate?.getRevision(revisionId) ?? null;
   }
 
-  listRevisions(chapterId: string): ChapterRevisionRecord[] {
+  listRevisions(chapterId: string): Omit<ChapterRevisionRecord, "content">[] {
     return this.requireStore().listRevisions(chapterId);
+  }
+
+  getDraft(chapterId: string) {
+    return this.requireStore().getDraft(chapterId);
+  }
+  saveDraft(input: Parameters<NovelPersistence["saveDraft"]>[0]) {
+    return this.requireStore().saveDraft(input);
   }
 
   private bind(lease: BookRuntimeLease): void {

@@ -1,7 +1,6 @@
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { getCustomizeWorkSpace, getDefaultWorkSpace } from "./path.ts";
-import { resetLegacyProjectStorage } from "../storage/LegacyStorageReset.ts";
 
 export const STORYOS_DIRECTORY = ".storyos";
 export const SYSTEM_WORKSPACE_DIRECTORY = ".storyos-default";
@@ -38,7 +37,10 @@ export function getSystemWorkspaceRoot(): string {
   return path.join(getDefaultProjectsRoot(), SYSTEM_WORKSPACE_DIRECTORY);
 }
 
-export function getWorkspaceLayout(rootPath: string, systemDefault = false): WorkspaceLayout {
+export function getWorkspaceLayout(
+  rootPath: string,
+  systemDefault = false,
+): WorkspaceLayout {
   const resolvedRoot = path.resolve(rootPath);
   const stateRoot = path.join(resolvedRoot, STORYOS_DIRECTORY);
   return Object.freeze({
@@ -53,20 +55,34 @@ export function getWorkspaceLayout(rootPath: string, systemDefault = false): Wor
   });
 }
 
-function writeMetadata(layout: WorkspaceLayout, metadata: ProjectMetadata): void {
-  writeFileSync(layout.metadataPath, JSON.stringify(metadata, null, 2), "utf-8");
+function writeMetadata(
+  layout: WorkspaceLayout,
+  metadata: ProjectMetadata,
+): void {
+  writeFileSync(
+    layout.metadataPath,
+    JSON.stringify(metadata, null, 2),
+    "utf-8",
+  );
 }
 
 export function readProjectMetadata(rootPath: string): ProjectMetadata | null {
   const metadataPath = getWorkspaceLayout(rootPath).metadataPath;
   if (!existsSync(metadataPath)) return null;
-  const value = JSON.parse(readFileSync(metadataPath, "utf-8")) as Partial<ProjectMetadata>;
+  const value = JSON.parse(
+    readFileSync(metadataPath, "utf-8"),
+  ) as Partial<ProjectMetadata>;
   if (
     value.schemaVersion !== PROJECT_SCHEMA_VERSION ||
-    typeof value.projectId !== "string" || !value.projectId.trim() ||
-    typeof value.name !== "string" || !value.name.trim() ||
-    !["created", "linked", "system-default"].includes(value.locationType ?? "") ||
-    typeof value.createdAt !== "string" || typeof value.updatedAt !== "string"
+    typeof value.projectId !== "string" ||
+    !value.projectId.trim() ||
+    typeof value.name !== "string" ||
+    !value.name.trim() ||
+    !["created", "linked", "system-default"].includes(
+      value.locationType ?? "",
+    ) ||
+    typeof value.createdAt !== "string" ||
+    typeof value.updatedAt !== "string"
   ) {
     throw new Error(`Invalid StoryOS project metadata: ${metadataPath}`);
   }
@@ -79,8 +95,10 @@ export function ensureWorkspaceLayout(input: {
   readonly name: string;
   readonly locationType: ProjectLocationType | "system-default";
 }): { readonly layout: WorkspaceLayout; readonly metadata: ProjectMetadata } {
-  const layout = getWorkspaceLayout(input.rootPath, input.locationType === "system-default");
-  resetLegacyProjectStorage(layout.rootPath);
+  const layout = getWorkspaceLayout(
+    input.rootPath,
+    input.locationType === "system-default",
+  );
   mkdirSync(layout.rootPath, { recursive: true });
   mkdirSync(layout.filesRoot, { recursive: true });
   mkdirSync(path.dirname(layout.checkpointPath), { recursive: true });
@@ -90,8 +108,14 @@ export function ensureWorkspaceLayout(input: {
   const existing = readProjectMetadata(layout.rootPath);
   const now = new Date().toISOString();
   if (existing) {
-    if (existing.projectId !== input.projectId) throw new Error(`Project id conflict in ${layout.metadataPath}`);
-    const metadata: ProjectMetadata = Object.freeze({ ...existing, name: input.name, locationType: input.locationType, updatedAt: now });
+    if (existing.projectId !== input.projectId)
+      throw new Error(`Project id conflict in ${layout.metadataPath}`);
+    const metadata: ProjectMetadata = Object.freeze({
+      ...existing,
+      name: input.name,
+      locationType: input.locationType,
+      updatedAt: now,
+    });
     writeMetadata(layout, metadata);
     return Object.freeze({ layout, metadata });
   }

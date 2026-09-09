@@ -1,4 +1,10 @@
-import type { BookRecord, BookRegistry } from "../application/bookRegistryPorts.ts";
+import { statSync, existsSync } from "node:fs";
+import path from "node:path";
+import type BookCatalogProjection from "../storage/global/BookCatalogProjection.ts";
+import type {
+  BookRecord,
+  BookRegistry,
+} from "../application/bookRegistryPorts.ts";
 import type { NovelPersistence } from "../application/novelPorts.ts";
 import BookDatabase from "../storage/book/BookDatabase.ts";
 import BookStorageHealthInspector from "../storage/book/BookStorageHealthInspector.ts";
@@ -41,12 +47,18 @@ export default class BookRuntimeManager {
   private readonly runtimes = new Map<string, ManagedBookRuntime>();
   private readonly healthInspector: BookStorageHealthInspector;
   private closed = false;
+  private readonly catalogFiles = new Map<string, string>();
 
   constructor(
     agentHome: string,
     private readonly registry: BookRegistry,
+    private readonly catalog?: BookCatalogProjection,
   ) {
     this.healthInspector = new BookStorageHealthInspector(agentHome);
+  }
+
+  get deviceId(): string {
+    return this.catalog?.deviceId ?? "local";
   }
 
   acquire(bookId: string): BookRuntimeLease {
@@ -69,7 +81,9 @@ export default class BookRuntimeManager {
       const health = this.healthInspector.inspect(book);
       if (health.state !== "available") {
         throw new BookRuntimeOpenError(
-          health.state === "missing" ? "missing_database" : "corrupted_database",
+          health.state === "missing"
+            ? "missing_database"
+            : "corrupted_database",
           health.reason,
           { cause: health.cause },
         );
@@ -84,10 +98,37 @@ export default class BookRuntimeManager {
           { cause: error },
         );
       }
+      const identity = database.handle.prepare("SELECT id FROM books").get() as
+        | { id: string }
+        | undefined;
+      if (!identity || identity.id !== bookId) {
+        database.close();
+        throw new BookRuntimeOpenError(
+          "corrupted_database",
+          `Book identity mismatch: ${bookId}`,
+        );
+      }
+      const persistence = new SqliteNovelStore(database.handle, this.deviceId);
+      const projected = new Proxy(persistence, {
+        get: (target, key) => {
+          const value = Reflect.get(target, key);
+          if (typeof value !== "function") return value;
+          return (...args: unknown[]) => {
+            const result = value.apply(target, args);
+            if (
+              key !== "saveDraft" &&
+              /^(create|update|delete|save)/.test(String(key))
+            )
+              this.refreshCatalog(bookId, database);
+            return result;
+          };
+        },
+      });
+      this.refreshCatalog(bookId, database);
       runtime = {
         book,
         database,
-        persistence: new SqliteNovelStore(database.handle),
+        persistence: projected,
         referenceCount: 0,
       };
       this.runtimes.set(book.id, runtime);
@@ -119,7 +160,62 @@ export default class BookRuntimeManager {
       const runtime = this.runtimes.get(bookId);
       if (!runtime) throw new Error("Book runtime not found.");
       return runtime.persistence.readReaderManifest();
-    } finally { lease.close(); }
+    } finally {
+      lease.close();
+    }
+  }
+
+  readCatalog(bookId: string) {
+    const book = this.requireOpenableBook(bookId);
+    let fingerprint: string;
+    try {
+      fingerprint = this.fileFingerprint(book);
+    } catch (error) {
+      throw new BookRuntimeOpenError(
+        "missing_database",
+        `Book database is missing: ${bookId}`,
+        { cause: error },
+      );
+    }
+    if (this.catalogFiles.get(bookId) !== fingerprint) {
+      const health = this.inspectStorage(bookId);
+      if (health.state !== "available")
+        throw new BookRuntimeOpenError(
+          health.state === "missing"
+            ? "missing_database"
+            : "corrupted_database",
+          health.reason,
+        );
+      const lease = this.acquire(bookId);
+      try {
+        const runtime = this.runtimes.get(bookId);
+        if (runtime) this.refreshCatalog(bookId, runtime.database);
+      } finally {
+        lease.close();
+      }
+    }
+    return this.catalog?.read(bookId) ?? null;
+  }
+
+  private fileFingerprint(book: BookRecord): string {
+    const file = path.join(book.storagePath, "book.sqlite");
+    const data = statSync(file);
+    const wal = existsSync(file + "-wal") ? statSync(file + "-wal") : null;
+    return `${file}:${data.size}:${data.mtimeMs}:${wal?.size}:${wal?.mtimeMs}`;
+  }
+
+  private refreshCatalog(bookId: string, database: BookDatabase): void {
+    try {
+      this.catalog?.refresh(bookId, database.handle);
+      const book = this.registry.getBookById(bookId);
+      if (book) this.catalogFiles.set(bookId, this.fileFingerprint(book));
+    } catch (error) {
+      console.error(
+        "Book catalog refresh failed; source data remains committed",
+        bookId,
+        error,
+      );
+    }
   }
 
   inspectStorage(bookId: string): BookStorageHealth {
@@ -141,6 +237,23 @@ export default class BookRuntimeManager {
     }
     this.runtimes.delete(bookId);
     runtime.database.close();
+  }
+
+  captureBook<T>(
+    bookId: string,
+    read: () => T,
+  ): { snapshot: T; database: Buffer } {
+    const lease = this.acquire(bookId);
+    try {
+      const runtime = this.runtimes.get(bookId);
+      if (!runtime) throw new Error("Book runtime not found.");
+      return runtime.database.handle.transaction(() => ({
+        snapshot: read(),
+        database: runtime.database.handle.serialize(),
+      }))();
+    } finally {
+      lease.close();
+    }
   }
 
   async backupBook(bookId: string, targetDatabasePath: string): Promise<void> {
@@ -181,5 +294,6 @@ export default class BookRuntimeManager {
     if (current.referenceCount > 0) return;
     this.runtimes.delete(runtime.book.id);
     current.database.close();
+    this.catalogFiles.set(runtime.book.id, this.fileFingerprint(runtime.book));
   }
 }

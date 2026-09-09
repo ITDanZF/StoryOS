@@ -27,6 +27,11 @@ export default class SqliteRunStore implements RunHistoryStore {
   constructor(
     private readonly database: BetterSqliteDatabase,
     private readonly maxRuns = DEFAULT_MAX_RUNS,
+    private readonly metadata?: () => {
+      providerKey: string;
+      modelKey: string;
+      bookId: string | null;
+    },
   ) {
     if (!Number.isInteger(maxRuns) || maxRuns <= 0) {
       throw new Error("maxRuns must be a positive integer.");
@@ -36,9 +41,12 @@ export default class SqliteRunStore implements RunHistoryStore {
 
   async record(event: ApplicationEvent): Promise<void> {
     if (event.type === "run_started") {
-      this.database.prepare(`
-        INSERT INTO agent_runs(id, thread_id, status, started_at)
-        VALUES (?, ?, 'running', ?)
+      const metadata = this.metadata?.();
+      this.database
+        .prepare(
+          `
+        INSERT INTO agent_runs(id, thread_id, status, started_at, created_at, provider_key,model_key,book_id)
+        VALUES (?, ?, 'running', ?, ?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET
           thread_id = excluded.thread_id,
           status = 'running',
@@ -51,22 +59,41 @@ export default class SqliteRunStore implements RunHistoryStore {
           error_code = NULL,
           error_phase = NULL,
           error_retryable = NULL
-      `).run(event.runId, event.threadId, Date.parse(event.timestamp));
+      `,
+        )
+        .run(
+          event.runId,
+          event.threadId,
+          Date.parse(event.timestamp),
+          Date.parse(event.timestamp),
+          metadata?.providerKey ?? null,
+          metadata?.modelKey ?? null,
+          metadata?.bookId ?? null,
+        );
       return;
     }
 
     if (event.type === "run_completed") {
-      this.finishRun(event.runId, "completed", event.timestamp, event.durationMs, {
-        output: event.content,
-      });
+      this.finishRun(
+        event.runId,
+        "completed",
+        event.timestamp,
+        event.durationMs,
+        {
+          output: event.content,
+        },
+      );
       this.prune();
       return;
     }
 
     if (["run_aborted", "run_timed_out", "run_failed"].includes(event.type)) {
-      const terminal = event as Extract<ApplicationEvent, {
-        readonly type: "run_aborted" | "run_timed_out" | "run_failed";
-      }>;
+      const terminal = event as Extract<
+        ApplicationEvent,
+        {
+          readonly type: "run_aborted" | "run_timed_out" | "run_failed";
+        }
+      >;
       this.finishRun(
         terminal.runId,
         terminal.type.replace("run_", "") as RunStatus,
@@ -84,21 +111,29 @@ export default class SqliteRunStore implements RunHistoryStore {
     }
   }
 
-  async loadRunSnapshots(limit = this.maxRuns): Promise<readonly RunSnapshot[]> {
+  async loadRunSnapshots(
+    limit = this.maxRuns,
+  ): Promise<readonly RunSnapshot[]> {
     if (!Number.isInteger(limit) || limit < 0) {
       throw new Error("Run history limit must be a non-negative integer.");
     }
-    const rows = this.database.prepare(`
+    const rows = this.database
+      .prepare(
+        `
       SELECT * FROM agent_runs
       ORDER BY started_at DESC, id DESC
       LIMIT ?
-    `).all(limit) as RunRow[];
+    `,
+      )
+      .all(limit) as RunRow[];
     return Object.freeze(rows.map((row) => this.toSnapshot(row)));
   }
 
   private recoverInterruptedRuns(): void {
     const now = Date.now();
-    this.database.prepare(`
+    this.database
+      .prepare(
+        `
       UPDATE agent_runs
       SET status = 'aborted',
           completed_at = ?,
@@ -109,7 +144,9 @@ export default class SqliteRunStore implements RunHistoryStore {
           error_phase = 'execution',
           error_retryable = 0
       WHERE status IN ('queued', 'running', 'cancelling')
-    `).run(now, now);
+    `,
+      )
+      .run(now, now);
   }
 
   private finishRun(
@@ -126,37 +163,49 @@ export default class SqliteRunStore implements RunHistoryStore {
       readonly errorRetryable?: boolean;
     },
   ): void {
-    this.database.prepare(`
+    this.database
+      .prepare(
+        `
       UPDATE agent_runs
       SET status = ?, completed_at = ?, duration_ms = ?, output = ?,
           error_name = ?, error_message = ?, error_code = ?,
           error_phase = ?, error_retryable = ?
       WHERE id = ?
-    `).run(
-      status,
-      Date.parse(completedAt),
-      durationMs,
-      result.output ?? null,
-      result.errorName ?? null,
-      result.errorMessage ?? null,
-      result.errorCode ?? null,
-      result.errorPhase ?? null,
-      result.errorRetryable === undefined ? null : Number(result.errorRetryable),
-      runId,
-    );
+    `,
+      )
+      .run(
+        status,
+        Date.parse(completedAt),
+        durationMs,
+        result.output ?? null,
+        result.errorName ?? null,
+        result.errorMessage ?? null,
+        result.errorCode ?? null,
+        result.errorPhase ?? null,
+        result.errorRetryable === undefined
+          ? null
+          : Number(result.errorRetryable),
+        runId,
+      );
   }
 
   private prune(): void {
-    this.database.prepare(`
+    this.database
+      .prepare(
+        `
       DELETE FROM agent_runs
       WHERE status NOT IN ('queued', 'running', 'cancelling')
+        AND NOT EXISTS(SELECT 1 FROM conversation_events e WHERE e.run_id=agent_runs.id)
+        AND NOT EXISTS(SELECT 1 FROM agent_runs child WHERE child.parent_run_id=agent_runs.id)
         AND id NOT IN (
           SELECT id FROM agent_runs
           WHERE status NOT IN ('queued', 'running', 'cancelling')
           ORDER BY started_at DESC, id DESC
           LIMIT ?
         )
-    `).run(this.maxRuns);
+    `,
+      )
+      .run(this.maxRuns);
   }
 
   private toSnapshot(row: RunRow): RunSnapshot {
@@ -172,13 +221,15 @@ export default class SqliteRunStore implements RunHistoryStore {
       ...(row.output === null ? {} : { content: row.output }),
       ...(row.error_name === null || row.error_message === null
         ? {}
-        : { error: Object.freeze({
-            name: row.error_name,
-            message: row.error_message,
-            code: row.error_code ?? "run.failed",
-            phase: row.error_phase ?? "execution",
-            retryable: row.error_retryable === 1,
-          }) }),
+        : {
+            error: Object.freeze({
+              name: row.error_name,
+              message: row.error_message,
+              code: row.error_code ?? "run.failed",
+              phase: row.error_phase ?? "execution",
+              retryable: row.error_retryable === 1,
+            }),
+          }),
     });
   }
 }

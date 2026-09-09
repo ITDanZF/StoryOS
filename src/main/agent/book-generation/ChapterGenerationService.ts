@@ -74,9 +74,12 @@ function isRetryableGenerationError(error: unknown): boolean {
   if (
     error instanceof ChapterGenerationIdleTimeoutError ||
     error instanceof ChapterGenerationEmptyResponseError
-  ) return true;
+  )
+    return true;
   const text = message(error);
-  return /(?:timeout|timed out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|fetch failed|socket hang up|rate limit|429|5\d\d|server error)/i.test(text);
+  return /(?:timeout|timed out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|fetch failed|socket hang up|rate limit|429|5\d\d|server error)/i.test(
+    text,
+  );
 }
 
 function createAttemptScope(upstream?: AbortSignal): {
@@ -146,7 +149,9 @@ function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
     }, delayMs);
     const onAbort = () => {
       clearTimeout(timeout);
-      reject(signal ? abortError(signal) : new Error("Chapter generation aborted."));
+      reject(
+        signal ? abortError(signal) : new Error("Chapter generation aborted."),
+      );
     };
     signal?.addEventListener("abort", onAbort, { once: true });
   });
@@ -170,10 +175,14 @@ export default class ChapterGenerationService {
 
   async generate(input: GenerateChapterInput): Promise<GenerateChapterResult> {
     const generate = () => this.generateWithSnapshot(input);
-    return this.model.withSnapshot ? this.model.withSnapshot(generate) : generate();
+    return this.model.withSnapshot
+      ? this.model.withSnapshot(generate)
+      : generate();
   }
 
-  private async generateWithSnapshot(input: GenerateChapterInput): Promise<GenerateChapterResult> {
+  private async generateWithSnapshot(
+    input: GenerateChapterInput,
+  ): Promise<GenerateChapterResult> {
     const generationId = `chapter_generation_${crypto.randomUUID()}`;
     const chapter = this.novels.getChapter(input.chapterId);
     const revision = this.novels.getCurrentRevision(chapter.id);
@@ -236,15 +245,17 @@ export default class ChapterGenerationService {
         let iterator: AsyncIterator<string | ModelStreamPart> | null = null;
         let exhausted = false;
         try {
-          iterator = this.model.stream({
+          const stream = this.model.stream({
             prompt,
             threadId: `${generationId}/model/attempt-${attempt}`,
-            systemPrompt: "你是 StoryOS 的章节正文写作引擎。严格按照要求生成连贯、可直接保存的中文小说正文。",
+            systemPrompt:
+              "你是 StoryOS 的章节正文写作引擎。严格按照要求生成连贯、可直接保存的中文小说正文。",
             tools: [],
             signal: attemptScope.signal,
             maxTurns: 1,
             visibility: "internal",
-          })[Symbol.asyncIterator]();
+          });
+          iterator = stream[Symbol.asyncIterator]();
           for (;;) {
             const result = await nextWithIdleTimeout(
               iterator,
@@ -257,11 +268,12 @@ export default class ChapterGenerationService {
               break;
             }
             const chunk = result.value;
-            const text = typeof chunk === "string"
-              ? chunk
-              : chunk.channel === "answer"
-                ? chunk.delta
-                : "";
+            const text =
+              typeof chunk === "string"
+                ? chunk
+                : chunk.channel === "answer"
+                  ? chunk.delta
+                  : "";
             if (!text) {
               if (Date.now() - lastDeltaAt >= idleTimeoutMs) {
                 throw new ChapterGenerationIdleTimeoutError(idleTimeoutMs);
@@ -293,8 +305,11 @@ export default class ChapterGenerationService {
           chapterId: chapter.id,
           content,
           characterCount: countTiptapCharacters(document),
-          changeSummary: input.mode === "append" ? "AI 流式续写章节" : "AI 流式生成章节",
+          changeSummary:
+            input.mode === "append" ? "AI 流式续写章节" : "AI 流式生成章节",
           expectedCurrentRevisionId: revision?.id ?? null,
+          expectedRowVersion: chapter.rowVersion,
+          origin: "agent",
         });
         await this.onEvent({
           ...eventBase,
@@ -312,7 +327,8 @@ export default class ChapterGenerationService {
           generatedCharacterCount: Array.from(generatedText).length,
         });
       } catch (error) {
-        const canRetry = chunks.length === 0 &&
+        const canRetry =
+          chunks.length === 0 &&
           !input.signal?.aborted &&
           attempt < maxAttempts &&
           isRetryableGenerationError(error);

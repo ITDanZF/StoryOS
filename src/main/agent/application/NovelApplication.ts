@@ -1,3 +1,9 @@
+import {
+  parseTiptapDocument,
+  plainTextToTiptapDocument,
+  serializeTiptapDocument,
+  countTiptapCharacters,
+} from "../../../shared/book/richText.ts";
 import { createHash } from "node:crypto";
 import type {
   ChapterDto,
@@ -21,10 +27,16 @@ import {
 } from "./novelEvents.ts";
 
 const NOVEL_STATUSES = new Set<NovelStatus>([
-  "planning", "writing", "completed", "archived",
+  "planning",
+  "writing",
+  "completed",
+  "archived",
 ]);
 const CHAPTER_STATUSES = new Set<ChapterStatus>([
-  "outline", "draft", "revising", "completed",
+  "outline",
+  "draft",
+  "revising",
+  "completed",
 ]);
 
 export default class NovelApplication {
@@ -56,12 +68,14 @@ export default class NovelApplication {
     if (this.persistence.listNovels().length > 0) {
       throw new Error("Each book database can contain only one novel record.");
     }
-    const created = this.toNovelDto(this.persistence.createNovel({
-      id: `novel_${crypto.randomUUID()}`,
-      title: this.requireTitle(input.title),
-      synopsis: input.synopsis?.trim() ?? "",
-      status: this.requireNovelStatus(input.status ?? "planning"),
-    }));
+    const created = this.toNovelDto(
+      this.persistence.createNovel({
+        id: `novel_${crypto.randomUUID()}`,
+        title: this.requireTitle(input.title),
+        synopsis: input.synopsis?.trim() ?? "",
+        status: this.requireNovelStatus(input.status ?? "planning"),
+      }),
+    );
     this.emitMutation("novel_created", { novelId: created.id });
     return created;
   }
@@ -78,17 +92,21 @@ export default class NovelApplication {
 
   updateNovel(input: {
     readonly id: string;
+    readonly rowVersion?: number;
     readonly title: string;
     readonly synopsis: string;
     readonly status: NovelStatus;
   }): NovelDto {
-    this.requireNovel(input.id);
-    const updated = this.toNovelDto(this.persistence.updateNovel({
-      id: input.id,
-      title: this.requireTitle(input.title),
-      synopsis: input.synopsis.trim(),
-      status: this.requireNovelStatus(input.status),
-    }));
+    const current = this.requireNovel(input.id);
+    const updated = this.toNovelDto(
+      this.persistence.updateNovel({
+        id: input.id,
+        rowVersion: input.rowVersion ?? current.rowVersion,
+        title: this.requireTitle(input.title),
+        synopsis: input.synopsis.trim(),
+        status: this.requireNovelStatus(input.status),
+      }),
+    );
     this.emitMutation("novel_updated", { novelId: updated.id });
     return updated;
   }
@@ -107,23 +125,15 @@ export default class NovelApplication {
   }): VolumeDto {
     this.requireNovel(input.novelId);
     const requestedOrder = this.requireSortOrder(input.sortOrder);
-    const existing = this.persistence.listVolumes(input.novelId);
-    const appendOrder = Math.max(...existing.map((item) => item.sortOrder), -1) + 1;
-    const created = this.persistence.createVolume({
-      id: `volume_${crypto.randomUUID()}`,
-      novelId: input.novelId,
-      title: this.requireTitle(input.title),
-      summary: input.summary?.trim() ?? "",
-      sortOrder: appendOrder,
-    });
-    const result = this.toVolumeDto(requestedOrder === appendOrder
-      ? created
-      : this.persistence.updateVolume({
-          id: created.id,
-          title: created.title,
-          summary: created.summary,
-          sortOrder: requestedOrder,
-        }));
+    const result = this.toVolumeDto(
+      this.persistence.createVolume({
+        id: `volume_${crypto.randomUUID()}`,
+        novelId: input.novelId,
+        title: this.requireTitle(input.title),
+        summary: input.summary?.trim() ?? "",
+        sortOrder: requestedOrder,
+      }),
+    );
     this.emitMutation("volume_created", {
       novelId: input.novelId,
       volumeId: result.id,
@@ -134,23 +144,33 @@ export default class NovelApplication {
   listVolumes(novelId: string): readonly VolumeDto[] {
     this.requireNovel(novelId);
     return Object.freeze(
-      this.persistence.listVolumes(novelId)
+      this.persistence
+        .listVolumes(novelId)
         .map((record) => this.toVolumeDto(record)),
     );
   }
 
   updateVolume(input: {
     readonly id: string;
+    readonly rowVersion?: number;
     readonly title: string;
     readonly summary: string;
     readonly sortOrder: number;
   }): VolumeDto {
-    const updated = this.toVolumeDto(this.persistence.updateVolume({
-      id: input.id,
-      title: this.requireTitle(input.title),
-      summary: input.summary.trim(),
-      sortOrder: this.requireSortOrder(input.sortOrder),
-    }));
+    const current = this.persistence
+      .listNovels()
+      .flatMap((book) => this.persistence.listVolumes(book.id))
+      .find((volume) => volume.id === input.id);
+    if (!current) throw new Error("Volume not found.");
+    const updated = this.toVolumeDto(
+      this.persistence.updateVolume({
+        id: input.id,
+        title: this.requireTitle(input.title),
+        summary: input.summary.trim(),
+        rowVersion: input.rowVersion ?? current.rowVersion,
+        sortOrder: this.requireSortOrder(input.sortOrder),
+      }),
+    );
     this.emitMutation("volume_updated", {
       novelId: updated.novelId,
       volumeId: updated.id,
@@ -172,27 +192,16 @@ export default class NovelApplication {
   }): ChapterDto {
     this.requireNovel(input.novelId);
     const requestedOrder = this.requireSortOrder(input.sortOrder);
-    const existing = this.persistence.listChapters(input.novelId).filter(
-      (item) => item.volumeId === (input.volumeId ?? null),
+    const result = this.toChapterDto(
+      this.persistence.createChapter({
+        id: `chapter_${crypto.randomUUID()}`,
+        novelId: input.novelId,
+        volumeId: input.volumeId ?? null,
+        title: this.requireTitle(input.title),
+        status: this.requireChapterStatus(input.status ?? "outline"),
+        sortOrder: requestedOrder,
+      }),
     );
-    const appendOrder = Math.max(...existing.map((item) => item.sortOrder), -1) + 1;
-    const created = this.persistence.createChapter({
-      id: `chapter_${crypto.randomUUID()}`,
-      novelId: input.novelId,
-      volumeId: input.volumeId ?? null,
-      title: this.requireTitle(input.title),
-      status: this.requireChapterStatus(input.status ?? "outline"),
-      sortOrder: appendOrder,
-    });
-    const result = this.toChapterDto(requestedOrder === appendOrder
-      ? created
-      : this.persistence.updateChapter({
-          id: created.id,
-          volumeId: created.volumeId,
-          title: created.title,
-          status: created.status,
-          sortOrder: requestedOrder,
-        }));
     this.emitMutation("chapter_created", {
       novelId: result.novelId,
       ...(result.volumeId ? { volumeId: result.volumeId } : {}),
@@ -208,26 +217,40 @@ export default class NovelApplication {
   listChapters(novelId: string): readonly ChapterDto[] {
     this.requireNovel(novelId);
     return Object.freeze(
-      this.persistence.listChapters(novelId)
+      this.persistence
+        .listChapters(novelId)
         .map((record) => this.toChapterDto(record)),
     );
   }
 
+  listChapterSummaries(novelId: string) {
+    this.requireNovel(novelId);
+    return this.persistence.listChapterSummaries(novelId).map((record) => ({
+      ...this.toChapterDto(record),
+      characterCount: record.characterCount,
+      revisionNumber: record.revisionNumber,
+    }));
+  }
+
   updateChapter(input: {
     readonly id: string;
+    readonly rowVersion?: number;
     readonly volumeId: string | null;
     readonly title: string;
     readonly status: ChapterStatus;
     readonly sortOrder: number;
   }): ChapterDto {
-    this.requireChapter(input.id);
-    const updated = this.toChapterDto(this.persistence.updateChapter({
-      id: input.id,
-      volumeId: input.volumeId,
-      title: this.requireTitle(input.title),
-      status: this.requireChapterStatus(input.status),
-      sortOrder: this.requireSortOrder(input.sortOrder),
-    }));
+    const current = this.requireChapter(input.id);
+    const updated = this.toChapterDto(
+      this.persistence.updateChapter({
+        id: input.id,
+        rowVersion: input.rowVersion ?? current.rowVersion,
+        volumeId: input.volumeId,
+        title: this.requireTitle(input.title),
+        status: this.requireChapterStatus(input.status),
+        sortOrder: this.requireSortOrder(input.sortOrder),
+      }),
+    );
     this.emitMutation("chapter_updated", {
       novelId: updated.novelId,
       ...(updated.volumeId ? { volumeId: updated.volumeId } : {}),
@@ -244,6 +267,18 @@ export default class NovelApplication {
       ...(chapter.volumeId ? { volumeId: chapter.volumeId } : {}),
       chapterId,
     });
+  }
+
+  getCurrentRevisionMetadata(
+    chapterId: string,
+  ): Omit<ChapterRevisionDto, "content"> | null {
+    const chapter = this.requireChapter(chapterId);
+    if (!chapter.currentRevisionId) return null;
+    const revision = this.persistence.getRevisionMetadata(
+      chapter.currentRevisionId,
+    );
+    if (!revision) throw new Error("Current revision metadata is missing.");
+    return { ...revision, createdAt: revision.createdAt.toISOString() };
   }
 
   getCurrentRevision(chapterId: string): ChapterRevisionDto | null {
@@ -264,13 +299,26 @@ export default class NovelApplication {
     readonly characterCount?: number;
     readonly changeSummary?: string;
     readonly expectedCurrentRevisionId: string | null;
+    readonly expectedRowVersion?: number;
+    readonly expectedDraftVersion?: number;
+    readonly origin?: "editor" | "agent" | "import" | "restore";
+    readonly restoredFromRevisionId?: string;
+    readonly sourceRunId?: string;
   }): ChapterRevisionDto {
     const chapter = this.requireChapter(input.chapterId);
-    if (chapter.currentRevisionId !== input.expectedCurrentRevisionId) {
+    if (
+      (input.expectedRowVersion !== undefined &&
+        chapter.rowVersion !== input.expectedRowVersion) ||
+      chapter.currentRevisionId !== input.expectedCurrentRevisionId
+    ) {
       throw new Error(`Chapter revision conflict: ${input.chapterId}`);
     }
+    const document = input.content.trimStart().startsWith("{")
+      ? parseTiptapDocument(input.content)
+      : plainTextToTiptapDocument(input.content);
+    const content = serializeTiptapDocument(document);
     const contentHash = createHash("sha256")
-      .update(input.content, "utf8")
+      .update(content, "utf8")
       .digest("hex");
     if (chapter.currentRevisionId) {
       const current = this.persistence.getRevision(chapter.currentRevisionId);
@@ -279,21 +327,30 @@ export default class NovelApplication {
           `Current chapter revision not found: ${chapter.currentRevisionId}`,
         );
       }
-      if (current.contentHash === contentHash) {
+      if (
+        current.contentHash === contentHash &&
+        input.expectedDraftVersion === undefined &&
+        input.restoredFromRevisionId === undefined
+      ) {
         return this.toRevisionDto(current);
       }
     }
-    const saved = this.toRevisionDto(this.persistence.saveRevision({
-      id: `revision_${crypto.randomUUID()}`,
-      chapterId: input.chapterId,
-      content: input.content,
-      contentHash,
-      characterCount: input.characterCount === undefined
-        ? Array.from(input.content).length
-        : this.requireCharacterCount(input.characterCount),
-      changeSummary: input.changeSummary?.trim() ?? "",
-      expectedCurrentRevisionId: input.expectedCurrentRevisionId,
-    }));
+    const saved = this.toRevisionDto(
+      this.persistence.saveRevision({
+        id: `revision_${crypto.randomUUID()}`,
+        chapterId: input.chapterId,
+        content,
+        contentHash,
+        characterCount: countTiptapCharacters(document),
+        changeSummary: input.changeSummary?.trim() ?? "",
+        expectedCurrentRevisionId: input.expectedCurrentRevisionId,
+        expectedRowVersion: input.expectedRowVersion,
+        expectedDraftVersion: input.expectedDraftVersion,
+        origin: input.origin,
+        restoredFromRevisionId: input.restoredFromRevisionId,
+        sourceRunId: input.sourceRunId,
+      }),
+    );
     this.emitMutation("chapter_revision_saved", {
       novelId: chapter.novelId,
       ...(chapter.volumeId ? { volumeId: chapter.volumeId } : {}),
@@ -304,12 +361,43 @@ export default class NovelApplication {
     return saved;
   }
 
-  listRevisions(chapterId: string): readonly ChapterRevisionDto[] {
+  listRevisions(
+    chapterId: string,
+  ): readonly Omit<ChapterRevisionDto, "content">[] {
     this.requireChapter(chapterId);
     return Object.freeze(
-      this.persistence.listRevisions(chapterId)
-        .map((record) => this.toRevisionDto(record)),
+      this.persistence.listRevisions(chapterId).map((record) =>
+        Object.freeze({
+          ...record,
+          createdAt: record.createdAt.toISOString(),
+        }),
+      ),
     );
+  }
+
+  restoreRevision(input: {
+    chapterId: string;
+    revisionId: string;
+    expectedCurrentRevisionId: string | null;
+    expectedRowVersion: number;
+  }): ChapterRevisionDto {
+    const source = this.persistence.getRevision(input.revisionId);
+    if (!source || source.chapterId !== input.chapterId)
+      throw new Error("Restored revision must belong to this chapter.");
+    return this.saveRevision({
+      ...input,
+      content: source.content,
+      origin: "restore",
+      restoredFromRevisionId: source.id,
+      changeSummary: `恢复修订 ${source.revisionNumber}`,
+    });
+  }
+
+  getDraft(chapterId: string) {
+    return this.persistence.getDraft(chapterId);
+  }
+  saveDraft(input: Parameters<NovelPersistence["saveDraft"]>[0]) {
+    return this.persistence.saveDraft(input);
   }
 
   private requireNovel(novelId: string): NovelRecord {

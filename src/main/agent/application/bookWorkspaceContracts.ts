@@ -1,3 +1,4 @@
+import type { ChapterDraft } from "../../../shared/book/drafts.ts";
 import type {
   ChapterDto,
   ChapterRevisionDto,
@@ -7,7 +8,9 @@ import type {
 import type { NovelStatus } from "./novelPorts.ts";
 
 export type BookWorkspaceChapterDto = ChapterDto & {
-  readonly content: string;
+  readonly draft?: ChapterDraft | null;
+  readonly contentLoaded?: boolean;
+  readonly content?: string;
   readonly characterCount: number;
   readonly revisionNumber: number | null;
 };
@@ -57,6 +60,7 @@ export type DeleteBookChapterRequest = {
 };
 
 export type UpdateBookRequest = {
+  readonly expectedRowVersion?: number;
   readonly projectId: string;
   readonly title: string;
   readonly synopsis: string;
@@ -64,6 +68,7 @@ export type UpdateBookRequest = {
 };
 
 export type UpdateBookChapterRequest = {
+  readonly expectedRowVersion?: number;
   readonly projectId: string;
   readonly chapterId: string;
   readonly title: string;
@@ -73,6 +78,8 @@ export type SaveBookChapterContentRequest = {
   readonly projectId: string;
   readonly chapterId: string;
   readonly content: string;
+  readonly expectedRowVersion?: number;
+  readonly expectedDraftVersion?: number;
   readonly expectedCurrentRevisionId: string | null;
 };
 

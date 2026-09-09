@@ -1,10 +1,10 @@
-import path from "node:path";
 import {
-  existsSync,
-  mkdirSync,
-  renameSync,
-  rmSync,
-} from "node:fs";
+  markOperationDirectory,
+  ownsOperationDirectory,
+  removeOperationDirectory,
+} from "../storage/common/operationOwnership.ts";
+import path from "node:path";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
 import type BookRuntimeManager from "../runtime/BookRuntimeManager.ts";
 import NovelApplication from "./NovelApplication.ts";
 import {
@@ -87,7 +87,9 @@ export default class BookLifecycleService {
     }
     const book = this.requireBook(input.bookId);
     if (book.state !== "trashed") {
-      throw new Error(`Only trashed books can be permanently deleted: ${book.id}`);
+      throw new Error(
+        `Only trashed books can be permanently deleted: ${book.id}`,
+      );
     }
     this.requireUnlinked(book.id);
     this.runtimes.closeBook(book.id);
@@ -98,16 +100,19 @@ export default class BookLifecycleService {
 
     const deletionRoot = getBookDeletionRoot(this.agentHome);
     const operationId = `book_delete_${crypto.randomUUID()}`;
-    const operationPath = path.resolve(
-      deletionRoot,
-      operationId,
-    );
+    const operationPath = path.resolve(deletionRoot, operationId);
     if (path.dirname(operationPath) !== deletionRoot) {
       throw new Error(`Book deletion path escapes its root: ${operationPath}`);
     }
+    this.books.beginBookCleanup({
+      operationId,
+      bookId: book.id,
+      stagingPath: operationPath,
+    });
     let moved = false;
     if (existsSync(layout.rootPath)) {
       mkdirSync(deletionRoot, { recursive: true });
+      markOperationDirectory(layout.rootPath, operationId);
       renameSync(layout.rootPath, operationPath);
       moved = true;
     }
@@ -135,7 +140,7 @@ export default class BookLifecycleService {
       return;
     }
     try {
-      rmSync(operationPath, { recursive: true, force: true });
+      removeOperationDirectory(operationPath, operationId);
     } catch (error) {
       try {
         this.books.updateBookDeletionCleanup(operationId, "failed");
@@ -148,6 +153,60 @@ export default class BookLifecycleService {
       throw new BookDeletionCleanupError(book.id, operationPath, error);
     }
     this.books.updateBookDeletionCleanup(operationId, "completed");
+  }
+
+  recoverPendingCleanups(): void {
+    for (const operation of this.books.listPendingBookCleanups()) {
+      try {
+        const deletionRoot = getBookDeletionRoot(this.agentHome);
+        const staged = path.resolve(deletionRoot, operation.operationId);
+        if (
+          !/^book_delete_[0-9a-f-]{36}$/i.test(operation.operationId) ||
+          path.dirname(staged) !== deletionRoot ||
+          !samePath(staged, operation.stagingPath)
+        )
+          throw new Error("Cleanup path ownership mismatch.");
+        const registered = this.books.getBookById(operation.bookId);
+        if (registered) {
+          if (registered.state !== "trashed")
+            throw new Error("Cleanup book is no longer trashed.");
+          this.requireUnlinked(registered.id);
+          const original = getBookLayout(
+            this.agentHome,
+            registered.id,
+          ).rootPath;
+          if (!samePath(registered.storagePath, original))
+            throw new Error("Cleanup registration path mismatch.");
+          if (!existsSync(staged) && existsSync(original)) {
+            if (!ownsOperationDirectory(original, operation.operationId))
+              throw new Error("Cleanup source ownership mismatch.");
+            renameSync(original, staged);
+          }
+          if (
+            existsSync(staged) &&
+            !ownsOperationDirectory(staged, operation.operationId)
+          )
+            throw new Error("Cleanup staging ownership mismatch.");
+          this.books.deleteBookRegistration({
+            bookId: registered.id,
+            operationId: operation.operationId,
+            deletedAt: new Date(),
+          });
+        }
+        removeOperationDirectory(staged, operation.operationId);
+        this.books.updateBookDeletionCleanup(
+          operation.operationId,
+          "completed",
+        );
+      } catch (error) {
+        this.books.updateBookDeletionCleanup(operation.operationId, "failed");
+        console.error(
+          "Book cleanup retained for retry",
+          operation.operationId,
+          error,
+        );
+      }
+    }
   }
 
   private requireBook(bookId: string): BookRecord {

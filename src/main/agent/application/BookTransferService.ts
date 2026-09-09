@@ -56,12 +56,19 @@ import type {
   BookExportSnapshot,
   PortableBookDraft,
 } from "./book-transfer/PortableBook.ts";
+import { chapterCharacterCount } from "./book-transfer/BookTextCodec.ts";
 import {
-  chapterCharacterCount,
-} from "./book-transfer/BookTextCodec.ts";
-import { importTextBook, exportTextBook } from "./book-transfer/formats/TextBookAdapter.ts";
-import { importMarkdownBook, exportMarkdownBook } from "./book-transfer/formats/MarkdownBookAdapter.ts";
-import { importDocxBook, exportDocxBook } from "./book-transfer/formats/DocxBookAdapter.ts";
+  importTextBook,
+  exportTextBook,
+} from "./book-transfer/formats/TextBookAdapter.ts";
+import {
+  importMarkdownBook,
+  exportMarkdownBook,
+} from "./book-transfer/formats/MarkdownBookAdapter.ts";
+import {
+  importDocxBook,
+  exportDocxBook,
+} from "./book-transfer/formats/DocxBookAdapter.ts";
 import { exportEpubBook } from "./book-transfer/formats/EpubBookAdapter.ts";
 import { exportPdfBook } from "./book-transfer/formats/PdfBookAdapter.ts";
 
@@ -80,6 +87,7 @@ type ImportSession = {
 
 type ExportSession = {
   readonly exportId: string;
+  readonly native?: Buffer;
   readonly snapshot: BookExportSnapshot;
   readonly format: BookTransferFormat;
   readonly options: ExportBookOptions;
@@ -100,18 +108,27 @@ export default class BookTransferService {
     return listBookTransferFormats();
   }
 
-  async prepareImport(request: PrepareBookImportRequest): Promise<ImportPreview> {
+  async prepareImport(
+    request: PrepareBookImportRequest,
+  ): Promise<ImportPreview> {
     const filePath = this.requireImportPath(request.filePath);
     const format = detectBookTransferFormat(filePath);
     if (request.expectedFormat && request.expectedFormat !== format) {
-      throw new Error(`Selected format does not match the file: ${request.expectedFormat}`);
+      throw new Error(
+        `Selected format does not match the file: ${request.expectedFormat}`,
+      );
     }
     const stats = statSync(filePath);
     if (stats.size > MAX_STORYOS_BOOK_PACKAGE_BYTES) {
       throw new Error("Book import file exceeds the maximum size.");
     }
     const sessionId = `book_import_preview_${crypto.randomUUID()}`;
-    const rootPath = path.join(this.agentHome, "library", ".importing", sessionId);
+    const rootPath = path.join(
+      this.agentHome,
+      "library",
+      ".importing",
+      sessionId,
+    );
     const sourcePath = path.join(rootPath, path.basename(filePath));
     mkdirSync(rootPath, { recursive: true });
     try {
@@ -126,7 +143,10 @@ export default class BookTransferService {
         this.validateNativePackage(native);
         const databasePath = path.join(rootPath, "preview.sqlite");
         writeFileSync(databasePath, native.database, { flag: "wx" });
-        const snapshot = this.readSnapshotFromDatabase(databasePath, native.manifest.sourceBookId);
+        const snapshot = this.readSnapshotFromDatabase(
+          databasePath,
+          native.manifest.sourceBookId,
+        );
         preview = this.createImportPreview({
           sessionId,
           format,
@@ -142,9 +162,17 @@ export default class BookTransferService {
         });
       } else {
         if (format === "text") draft = importTextBook(content, filePath);
-        else if (format === "markdown") draft = await importMarkdownBook(content, filePath);
+        else if (format === "markdown")
+          draft = await importMarkdownBook(content, filePath);
         else draft = await importDocxBook(content, filePath);
-        preview = this.createDraftPreview(sessionId, format, filePath, stats.size, fingerprint, draft);
+        preview = this.createDraftPreview(
+          sessionId,
+          format,
+          filePath,
+          stats.size,
+          fingerprint,
+          draft,
+        );
       }
       const session = Object.freeze({
         sessionId,
@@ -164,13 +192,21 @@ export default class BookTransferService {
     }
   }
 
-  async commitImport(request: CommitBookImportRequest): Promise<ImportBookResult> {
+  async commitImport(
+    request: CommitBookImportRequest,
+  ): Promise<ImportBookResult> {
     const session = this.importSessions.get(request.sessionId);
-    if (!session) throw new Error("Book import session has expired or was cancelled.");
+    if (!session)
+      throw new Error("Book import session has expired or was cancelled.");
     try {
       if (session.native) return this.importParsedNativeBook(session.native);
-      if (!session.draft) throw new Error("Book import session contains no parsed draft.");
-      return this.importPortableDraft(session.draft, session.fingerprint, session.format);
+      if (!session.draft)
+        throw new Error("Book import session contains no parsed draft.");
+      return this.importPortableDraft(
+        session.draft,
+        session.fingerprint,
+        session.format,
+      );
     } finally {
       this.importSessions.delete(session.sessionId);
       rmSync(session.rootPath, { recursive: true, force: true });
@@ -186,13 +222,43 @@ export default class BookTransferService {
 
   prepareExport(request: PrepareBookExportRequest): ExportPreview {
     const capability = getBookTransferFormat(request.format);
-    if (!capability.canExport) throw new Error(`Format cannot be exported: ${request.format}`);
-    const snapshot = this.readBookSnapshot(request.bookId);
+    if (!capability.canExport)
+      throw new Error(`Format cannot be exported: ${request.format}`);
+    if (this.exportSessions.size >= 8)
+      throw new Error(
+        "Too many pending export previews; close an existing preview first.",
+      );
+    const captured =
+      request.format === "storyos"
+        ? this.runtimes.captureBook(request.bookId, () =>
+            this.readBookSnapshot(request.bookId),
+          )
+        : null;
+    const snapshot = captured
+      ? captured.snapshot
+      : this.readBookSnapshot(request.bookId);
+    const native = captured
+      ? createStoryOSBookPackage(
+          {
+            format: "storyos-book",
+            formatVersion: STORYOS_BOOK_FORMAT_VERSION,
+            sourceBookId: request.bookId,
+            databaseApplicationId: BOOK_DATABASE_APPLICATION_ID,
+            databaseUserVersion: BOOK_DATABASE_SCHEMA_VERSION,
+            title: snapshot.title,
+            exportedAt: new Date().toISOString(),
+            applicationVersion: APPLICATION_VERSION,
+          },
+          captured.database,
+        )
+      : undefined;
     const options = Object.freeze({ ...request.options });
-    const extension = request.format === "markdown" && options.markdownBundle
-      ? "zip"
-      : capability.extensions[0];
-    if (!extension) throw new Error(`Export format has no extension: ${request.format}`);
+    const extension =
+      request.format === "markdown" && options.markdownBundle
+        ? "zip"
+        : capability.extensions[0];
+    if (!extension)
+      throw new Error(`Export format has no extension: ${request.format}`);
     const exportId = `book_export_preview_${crypto.randomUUID()}`;
     const preview: ExportPreview = Object.freeze({
       exportId,
@@ -201,45 +267,73 @@ export default class BookTransferService {
       format: request.format,
       extension,
       suggestedFileName: `${this.safeFileName(snapshot.title)}.${extension}`,
-      chapterCount: snapshot.volumes.reduce((total, volume) => total + volume.chapters.length, 0)
-        + snapshot.ungroupedChapters.length,
+      chapterCount:
+        snapshot.volumes.reduce(
+          (total, volume) => total + volume.chapters.length,
+          0,
+        ) + snapshot.ungroupedChapters.length,
       characterCount: snapshot.characterCount,
-      warnings: Object.freeze(request.format === "storyos" ? [] : [{
-        code: "revision-history-not-exported",
-        message: "此格式只导出每章当前版本，不包含 StoryOS 修订历史和项目对话。",
-        severity: "info" as const,
-      }]),
+      warnings: Object.freeze(
+        request.format === "storyos"
+          ? []
+          : [
+              {
+                code: "revision-history-not-exported",
+                message:
+                  "此格式只导出每章当前版本，不包含 StoryOS 修订历史和项目对话。",
+                severity: "info" as const,
+              },
+            ],
+      ),
     });
-    this.exportSessions.set(exportId, Object.freeze({
+    this.exportSessions.set(
       exportId,
-      snapshot,
-      format: request.format,
-      options,
-      preview,
-    }));
+      Object.freeze({
+        exportId,
+        native,
+        snapshot,
+        format: request.format,
+        options,
+        preview,
+      }),
+    );
     return preview;
   }
 
-  async commitExport(request: CommitBookExportRequest): Promise<ExportBookResult> {
+  async commitExport(
+    request: CommitBookExportRequest,
+  ): Promise<ExportBookResult> {
     const session = this.exportSessions.get(request.exportId);
-    if (!session) throw new Error("Book export session has expired or was cancelled.");
-    const outputPath = this.requireFormatOutputPath(request.outputPath, session.preview.extension);
+    if (!session)
+      throw new Error("Book export session has expired or was cancelled.");
+    const outputPath = this.requireFormatOutputPath(
+      request.outputPath,
+      session.preview.extension,
+    );
     this.requireExportTarget(outputPath, request.overwrite === true);
     try {
-      if (session.format === "storyos") {
-        await this.exportBook({ bookId: session.snapshot.bookId, outputPath, overwrite: request.overwrite });
-      } else {
-        const content = await this.renderExport(session.snapshot, session.format, session.options);
-        const temporary = path.join(
-          path.dirname(outputPath),
-          `.${path.basename(outputPath)}.${crypto.randomUUID()}.tmp`,
+      const content =
+        session.format === "storyos"
+          ? session.native
+          : await this.renderExport(
+              session.snapshot,
+              session.format,
+              session.options,
+            );
+      if (!content) throw new Error("Export snapshot content is missing.");
+      const temporary = path.join(
+        path.dirname(outputPath),
+        `.${path.basename(outputPath)}.${crypto.randomUUID()}.tmp`,
+      );
+      try {
+        writeFileSync(temporary, content, { flag: "wx" });
+        this.publishExportFile(
+          temporary,
+          outputPath,
+          request.overwrite === true,
         );
-        try {
-          writeFileSync(temporary, content, { flag: "wx" });
-          this.publishExportFile(temporary, outputPath, request.overwrite === true);
-        } finally {
-          rmSync(temporary, { force: true });
-        }
+      } finally {
+        rmSync(temporary, { force: true });
       }
       return Object.freeze({
         operationId: `book_export_${crypto.randomUUID()}`,
@@ -290,9 +384,10 @@ export default class BookTransferService {
       let title: string;
       try {
         const novel = new NovelApplication(
-          new SqliteNovelStore(database.handle),
+          new SqliteNovelStore(database.handle, this.runtimes.deviceId),
         ).getProjectBook();
-        if (!novel) throw new Error(`Book contains no novel record: ${book.id}`);
+        if (!novel)
+          throw new Error(`Book contains no novel record: ${book.id}`);
         title = novel.title;
       } finally {
         database.close();
@@ -313,7 +408,11 @@ export default class BookTransferService {
       );
       writeFileSync(temporaryOutput, packageContent, { flag: "wx" });
       readStoryOSBookPackage(readFileSync(temporaryOutput));
-      this.publishExportFile(temporaryOutput, outputPath, request.overwrite === true);
+      this.publishExportFile(
+        temporaryOutput,
+        outputPath,
+        request.overwrite === true,
+      );
     } finally {
       rmSync(temporaryOutput, { force: true });
       rmSync(workRoot, { recursive: true, force: true });
@@ -329,11 +428,15 @@ export default class BookTransferService {
       throw new Error("StoryOS book package exceeds the maximum size.");
     }
     const parsed = readStoryOSBookPackage(readFileSync(packagePath));
-    if (parsed.manifest.databaseApplicationId !== BOOK_DATABASE_APPLICATION_ID) {
+    if (
+      parsed.manifest.databaseApplicationId !== BOOK_DATABASE_APPLICATION_ID
+    ) {
       throw new Error("Book package contains the wrong database type.");
     }
     if (parsed.manifest.databaseUserVersion > BOOK_DATABASE_SCHEMA_VERSION) {
-      throw new Error("Book package uses an unsupported future database version.");
+      throw new Error(
+        "Book package uses an unsupported future database version.",
+      );
     }
 
     const operationId = `book_import_${crypto.randomUUID()}`;
@@ -354,7 +457,7 @@ export default class BookTransferService {
       const database = new BookDatabase(importingDatabasePath);
       try {
         const novel = new NovelApplication(
-          new SqliteNovelStore(database.handle),
+          new SqliteNovelStore(database.handle, this.runtimes.deviceId),
         ).getProjectBook();
         if (!novel || novel.title !== parsed.manifest.title) {
           throw new Error("Book package title does not match its database.");
@@ -363,6 +466,7 @@ export default class BookTransferService {
         database.close();
       }
       BookDatabase.validateExisting(importingDatabasePath);
+      BookDatabase.identifyCopy(importingDatabasePath, bookId);
       this.books.registerImportedBook({
         id: bookId,
         storagePath: finalLayout.rootPath,
@@ -370,7 +474,9 @@ export default class BookTransferService {
       registered = true;
       mkdirSync(path.dirname(finalLayout.rootPath), { recursive: true });
       if (existsSync(finalLayout.rootPath)) {
-        throw new Error(`Book storage path already exists: ${finalLayout.rootPath}`);
+        throw new Error(
+          `Book storage path already exists: ${finalLayout.rootPath}`,
+        );
       }
       renameSync(importingRoot, finalLayout.rootPath);
       moved = true;
@@ -396,11 +502,17 @@ export default class BookTransferService {
       throw new Error(`导出目标不是文件，请选择其他保存位置：${outputPath}`);
     }
     if (!overwrite) {
-      throw new Error(`目标文件已存在，请确认覆盖或使用其他文件名：${outputPath}`);
+      throw new Error(
+        `目标文件已存在，请确认覆盖或使用其他文件名：${outputPath}`,
+      );
     }
   }
 
-  private publishExportFile(temporary: string, outputPath: string, overwrite: boolean): void {
+  private publishExportFile(
+    temporary: string,
+    outputPath: string,
+    overwrite: boolean,
+  ): void {
     try {
       if (overwrite) {
         // Replace only after generation succeeds; never delete the old file first.
@@ -412,10 +524,14 @@ export default class BookTransferService {
     } catch (cause) {
       const code = (cause as NodeJS.ErrnoException).code;
       if (code === "EEXIST") {
-        throw new Error(`目标文件已存在，请确认覆盖或使用其他文件名：${outputPath}`);
+        throw new Error(
+          `目标文件已存在，请确认覆盖或使用其他文件名：${outputPath}`,
+        );
       }
       if (code === "EACCES" || code === "EPERM" || code === "EBUSY") {
-        throw new Error(`无法保存文件，文件可能正被其他程序占用或没有写入权限。请关闭占用程序或选择其他位置后重试：${outputPath}`);
+        throw new Error(
+          `无法保存文件，文件可能正被其他程序占用或没有写入权限。请关闭占用程序或选择其他位置后重试：${outputPath}`,
+        );
       }
       throw cause;
     }
@@ -436,11 +552,15 @@ export default class BookTransferService {
   private validateNativePackage(
     parsed: ReturnType<typeof readStoryOSBookPackage>,
   ): void {
-    if (parsed.manifest.databaseApplicationId !== BOOK_DATABASE_APPLICATION_ID) {
+    if (
+      parsed.manifest.databaseApplicationId !== BOOK_DATABASE_APPLICATION_ID
+    ) {
       throw new Error("Book package contains the wrong database type.");
     }
     if (parsed.manifest.databaseUserVersion > BOOK_DATABASE_SCHEMA_VERSION) {
-      throw new Error("Book package uses an unsupported future database version.");
+      throw new Error(
+        "Book package uses an unsupported future database version.",
+      );
     }
   }
 
@@ -450,7 +570,12 @@ export default class BookTransferService {
     this.validateNativePackage(parsed);
     const operationId = `book_import_${crypto.randomUUID()}`;
     const bookId = `book_${crypto.randomUUID()}`;
-    const importingRoot = path.join(this.agentHome, "library", ".importing", operationId);
+    const importingRoot = path.join(
+      this.agentHome,
+      "library",
+      ".importing",
+      operationId,
+    );
     const importingDatabasePath = path.join(importingRoot, "book.sqlite");
     const finalLayout = getBookLayout(this.agentHome, bookId);
     mkdirSync(importingRoot, { recursive: true });
@@ -459,15 +584,24 @@ export default class BookTransferService {
     try {
       writeFileSync(importingDatabasePath, parsed.database, { flag: "wx" });
       BookDatabase.validateExisting(importingDatabasePath);
-      const snapshot = this.readSnapshotFromDatabase(importingDatabasePath, bookId);
+      BookDatabase.identifyCopy(importingDatabasePath, bookId);
+      const snapshot = this.readSnapshotFromDatabase(
+        importingDatabasePath,
+        bookId,
+      );
       if (snapshot.title !== parsed.manifest.title) {
         throw new Error("Book package title does not match its database.");
       }
-      this.books.registerImportedBook({ id: bookId, storagePath: finalLayout.rootPath });
+      this.books.registerImportedBook({
+        id: bookId,
+        storagePath: finalLayout.rootPath,
+      });
       registered = true;
       mkdirSync(path.dirname(finalLayout.rootPath), { recursive: true });
       if (existsSync(finalLayout.rootPath)) {
-        throw new Error(`Book storage path already exists: ${finalLayout.rootPath}`);
+        throw new Error(
+          `Book storage path already exists: ${finalLayout.rootPath}`,
+        );
       }
       renameSync(importingRoot, finalLayout.rootPath);
       moved = true;
@@ -495,7 +629,12 @@ export default class BookTransferService {
   ): ImportBookResult {
     const operationId = `book_import_${crypto.randomUUID()}`;
     const bookId = `book_${crypto.randomUUID()}`;
-    const importingRoot = path.join(this.agentHome, "library", ".importing", operationId);
+    const importingRoot = path.join(
+      this.agentHome,
+      "library",
+      ".importing",
+      operationId,
+    );
     const importingDatabasePath = path.join(importingRoot, "book.sqlite");
     const finalLayout = getBookLayout(this.agentHome, bookId);
     mkdirSync(importingRoot, { recursive: true });
@@ -504,7 +643,9 @@ export default class BookTransferService {
     try {
       const database = new BookDatabase(importingDatabasePath);
       try {
-        const novels = new NovelApplication(new SqliteNovelStore(database.handle));
+        const novels = new NovelApplication(
+          new SqliteNovelStore(database.handle, this.runtimes.deviceId),
+        );
         const novel = novels.createNovel({
           title: draft.title,
           synopsis: draft.synopsis,
@@ -525,13 +666,16 @@ export default class BookTransferService {
           const content = serializeTiptapDocument(chapter.document);
           novels.saveRevision({
             chapterId: created.id,
+            origin: "import",
             content,
             characterCount: countTiptapCharacters(chapter.document),
             changeSummary: "从外部稿件导入",
             expectedCurrentRevisionId: null,
           });
         };
-        draft.ungroupedChapters.forEach((chapter, index) => createChapter(chapter, null, index));
+        draft.ungroupedChapters.forEach((chapter, index) =>
+          createChapter(chapter, null, index),
+        );
         draft.volumes.forEach((volume, volumeIndex) => {
           const createdVolume = novels.createVolume({
             novelId: novel.id,
@@ -539,16 +683,25 @@ export default class BookTransferService {
             summary: volume.summary,
             sortOrder: volumeIndex,
           });
-          volume.chapters.forEach((chapter, index) => createChapter(chapter, createdVolume.id, index));
+          volume.chapters.forEach((chapter, index) =>
+            createChapter(chapter, createdVolume.id, index),
+          );
         });
       } finally {
         database.close();
       }
       BookDatabase.validateExisting(importingDatabasePath);
-      this.books.registerImportedBook({ id: bookId, storagePath: finalLayout.rootPath });
+      BookDatabase.identifyCopy(importingDatabasePath, bookId);
+      this.books.registerImportedBook({
+        id: bookId,
+        storagePath: finalLayout.rootPath,
+      });
       registered = true;
       mkdirSync(path.dirname(finalLayout.rootPath), { recursive: true });
-      if (existsSync(finalLayout.rootPath)) throw new Error(`Book storage path already exists: ${finalLayout.rootPath}`);
+      if (existsSync(finalLayout.rootPath))
+        throw new Error(
+          `Book storage path already exists: ${finalLayout.rootPath}`,
+        );
       renameSync(importingRoot, finalLayout.rootPath);
       moved = true;
       this.books.updateStorageState(bookId, "available");
@@ -588,14 +741,22 @@ export default class BookTransferService {
           characterCount: revision?.characterCount ?? 0,
         });
       };
-      const volumeSnapshots = volumes.map((volume) => Object.freeze({
-        id: volume.id,
-        title: volume.title,
-        summary: volume.summary,
-        sortOrder: volume.sortOrder,
-        chapters: Object.freeze(chapters.filter((chapter) => chapter.volumeId === volume.id).map(mapChapter)),
-      }));
-      const ungroupedChapters = chapters.filter((chapter) => chapter.volumeId === null).map(mapChapter);
+      const volumeSnapshots = volumes.map((volume) =>
+        Object.freeze({
+          id: volume.id,
+          title: volume.title,
+          summary: volume.summary,
+          sortOrder: volume.sortOrder,
+          chapters: Object.freeze(
+            chapters
+              .filter((chapter) => chapter.volumeId === volume.id)
+              .map(mapChapter),
+          ),
+        }),
+      );
+      const ungroupedChapters = chapters
+        .filter((chapter) => chapter.volumeId === null)
+        .map(mapChapter);
       return Object.freeze({
         bookId,
         title: novel.title,
@@ -603,19 +764,28 @@ export default class BookTransferService {
         status: novel.status,
         volumes: Object.freeze(volumeSnapshots),
         ungroupedChapters: Object.freeze(ungroupedChapters),
-        characterCount: chapters.reduce((total, chapter) =>
-          total + (novels.getCurrentRevision(chapter.id)?.characterCount ?? 0), 0),
+        characterCount: chapters.reduce(
+          (total, chapter) =>
+            total +
+            (novels.getCurrentRevision(chapter.id)?.characterCount ?? 0),
+          0,
+        ),
       });
     } finally {
       lease.close();
     }
   }
 
-  private readSnapshotFromDatabase(databasePath: string, bookId: string): BookExportSnapshot {
+  private readSnapshotFromDatabase(
+    databasePath: string,
+    bookId: string,
+  ): BookExportSnapshot {
     BookDatabase.validateExisting(databasePath);
     const database = new BookDatabase(databasePath);
     try {
-      const novels = new NovelApplication(new SqliteNovelStore(database.handle));
+      const novels = new NovelApplication(
+        new SqliteNovelStore(database.handle, this.runtimes.deviceId),
+      );
       const novel = novels.getProjectBook();
       if (!novel) throw new Error("Book database contains no novel record.");
       const volumes = novels.listVolumes(novel.id);
@@ -637,16 +807,32 @@ export default class BookTransferService {
         title: novel.title,
         synopsis: novel.synopsis,
         status: novel.status,
-        volumes: Object.freeze(volumes.map((volume) => Object.freeze({
-          id: volume.id,
-          title: volume.title,
-          summary: volume.summary,
-          sortOrder: volume.sortOrder,
-          chapters: Object.freeze(chapters.filter((chapter) => chapter.volumeId === volume.id).map(mapChapter)),
-        }))),
-        ungroupedChapters: Object.freeze(chapters.filter((chapter) => chapter.volumeId === null).map(mapChapter)),
-        characterCount: chapters.reduce((total, chapter) =>
-          total + (novels.getCurrentRevision(chapter.id)?.characterCount ?? 0), 0),
+        volumes: Object.freeze(
+          volumes.map((volume) =>
+            Object.freeze({
+              id: volume.id,
+              title: volume.title,
+              summary: volume.summary,
+              sortOrder: volume.sortOrder,
+              chapters: Object.freeze(
+                chapters
+                  .filter((chapter) => chapter.volumeId === volume.id)
+                  .map(mapChapter),
+              ),
+            }),
+          ),
+        ),
+        ungroupedChapters: Object.freeze(
+          chapters
+            .filter((chapter) => chapter.volumeId === null)
+            .map(mapChapter),
+        ),
+        characterCount: chapters.reduce(
+          (total, chapter) =>
+            total +
+            (novels.getCurrentRevision(chapter.id)?.characterCount ?? 0),
+          0,
+        ),
       });
     } finally {
       database.close();
@@ -666,16 +852,21 @@ export default class BookTransferService {
     readonly includesRevisionHistory: boolean;
     readonly warnings: ImportPreview["warnings"];
   }): ImportPreview {
-    const toChapter = (chapter: BookExportSnapshot["ungroupedChapters"][number]) => Object.freeze({
-      key: chapter.id,
-      title: chapter.title,
-      characterCount: chapter.characterCount,
-    });
-    const volumes = input.snapshot.volumes.map((volume) => Object.freeze({
-      key: volume.id,
-      title: volume.title,
-      chapters: Object.freeze(volume.chapters.map(toChapter)),
-    }));
+    const toChapter = (
+      chapter: BookExportSnapshot["ungroupedChapters"][number],
+    ) =>
+      Object.freeze({
+        key: chapter.id,
+        title: chapter.title,
+        characterCount: chapter.characterCount,
+      });
+    const volumes = input.snapshot.volumes.map((volume) =>
+      Object.freeze({
+        key: volume.id,
+        title: volume.title,
+        chapters: Object.freeze(volume.chapters.map(toChapter)),
+      }),
+    );
     const ungroupedChapters = input.snapshot.ungroupedChapters.map(toChapter);
     return Object.freeze({
       sessionId: input.sessionId,
@@ -687,7 +878,9 @@ export default class BookTransferService {
       synopsis: input.snapshot.synopsis,
       volumes: Object.freeze(volumes),
       ungroupedChapters: Object.freeze(ungroupedChapters),
-      chapterCount: volumes.reduce((total, volume) => total + volume.chapters.length, 0) + ungroupedChapters.length,
+      chapterCount:
+        volumes.reduce((total, volume) => total + volume.chapters.length, 0) +
+        ungroupedChapters.length,
       characterCount: input.snapshot.characterCount,
       includesRevisionHistory: input.includesRevisionHistory,
       sourceApplicationVersion: input.sourceApplicationVersion,
@@ -705,16 +898,21 @@ export default class BookTransferService {
     fingerprint: string,
     draft: PortableBookDraft,
   ): ImportPreview {
-    const toChapter = (chapter: PortableBookDraft["ungroupedChapters"][number]) => Object.freeze({
-      key: chapter.key,
-      title: chapter.title,
-      characterCount: chapterCharacterCount(chapter),
-    });
-    const volumes = draft.volumes.map((volume) => Object.freeze({
-      key: volume.key,
-      title: volume.title,
-      chapters: Object.freeze(volume.chapters.map(toChapter)),
-    }));
+    const toChapter = (
+      chapter: PortableBookDraft["ungroupedChapters"][number],
+    ) =>
+      Object.freeze({
+        key: chapter.key,
+        title: chapter.title,
+        characterCount: chapterCharacterCount(chapter),
+      });
+    const volumes = draft.volumes.map((volume) =>
+      Object.freeze({
+        key: volume.key,
+        title: volume.title,
+        chapters: Object.freeze(volume.chapters.map(toChapter)),
+      }),
+    );
     const ungroupedChapters = draft.ungroupedChapters.map(toChapter);
     return Object.freeze({
       sessionId,
@@ -726,9 +924,13 @@ export default class BookTransferService {
       synopsis: draft.synopsis,
       volumes: Object.freeze(volumes),
       ungroupedChapters: Object.freeze(ungroupedChapters),
-      chapterCount: volumes.reduce((total, volume) => total + volume.chapters.length, 0) + ungroupedChapters.length,
-      characterCount: [...draft.ungroupedChapters, ...draft.volumes.flatMap((volume) => volume.chapters)]
-        .reduce((total, chapter) => total + chapterCharacterCount(chapter), 0),
+      chapterCount:
+        volumes.reduce((total, volume) => total + volume.chapters.length, 0) +
+        ungroupedChapters.length,
+      characterCount: [
+        ...draft.ungroupedChapters,
+        ...draft.volumes.flatMap((volume) => volume.chapters),
+      ].reduce((total, chapter) => total + chapterCharacterCount(chapter), 0),
       includesRevisionHistory: false,
       sourceApplicationVersion: null,
       sourceFormatVersion: null,
@@ -746,15 +948,20 @@ export default class BookTransferService {
     if (format === "docx") return exportDocxBook(snapshot, options);
     if (format === "epub") return exportEpubBook(snapshot, options);
     if (format === "pdf") return exportPdfBook(snapshot, options);
-    if (format === "markdown") return (await exportMarkdownBook(snapshot, options)).content;
+    if (format === "markdown")
+      return (await exportMarkdownBook(snapshot, options)).content;
     throw new Error(`Unsupported external export format: ${format}`);
   }
 
   private requireFormatOutputPath(value: string, extension: string): string {
     const normalized = value?.trim();
-    if (!normalized || !path.isAbsolute(normalized)) throw new Error("Book export path must be absolute.");
+    if (!normalized || !path.isAbsolute(normalized))
+      throw new Error("Book export path must be absolute.");
     const resolved = path.resolve(normalized);
-    if (path.extname(resolved).toLocaleLowerCase("en-US") !== `.${extension.toLocaleLowerCase("en-US")}`) {
+    if (
+      path.extname(resolved).toLocaleLowerCase("en-US") !==
+      `.${extension.toLocaleLowerCase("en-US")}`
+    ) {
       throw new Error(`Book export path must use the .${extension} extension.`);
     }
     const parent = path.dirname(resolved);
@@ -766,9 +973,14 @@ export default class BookTransferService {
 
   private safeFileName(value: string): string {
     const printable = Array.from(value.trim())
-      .map((character) => character.charCodeAt(0) < 32 ? "-" : character)
+      .map((character) => (character.charCodeAt(0) < 32 ? "-" : character))
       .join("");
-    return printable.replace(/[<>:"/\\|?*]/g, "-").replace(/[. ]+$/g, "").slice(0, 120) || "未命名书籍";
+    return (
+      printable
+        .replace(/[<>:"/\\|?*]/g, "-")
+        .replace(/[. ]+$/g, "")
+        .slice(0, 120) || "未命名书籍"
+    );
   }
 
   private requirePackagePath(value: string): string {
@@ -778,7 +990,9 @@ export default class BookTransferService {
     }
     const resolved = path.resolve(normalized);
     if (path.extname(resolved).toLowerCase() !== ".storyos-book") {
-      throw new Error("StoryOS book packages must use the .storyos-book extension.");
+      throw new Error(
+        "StoryOS book packages must use the .storyos-book extension.",
+      );
     }
     return resolved;
   }

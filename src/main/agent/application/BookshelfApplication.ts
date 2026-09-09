@@ -23,9 +23,7 @@ import type {
   CreateBookshelfBookRequest,
   CreateBookshelfBookResult,
 } from "./bookshelfContracts.ts";
-import type {
-  RestoreProjectArchiveRequest,
-} from "./projectArchiveContracts.ts";
+import type { RestoreProjectArchiveRequest } from "./projectArchiveContracts.ts";
 
 export default class BookshelfApplication {
   constructor(
@@ -43,30 +41,56 @@ export default class BookshelfApplication {
 
   private readonly catalog: BookCatalogReader;
 
-  listBooks(): readonly BookshelfBookCard[] {
-    return Object.freeze(this.books.listBooks()
-      .filter((book) => book.state !== "trashed")
-      .map((book) => {
-      const linkedProjectIds = this.books.listProjectIdsForBook(book.id);
-      try {
-        return this.catalog.read(book, linkedProjectIds);
-      } catch (error) {
-        return Object.freeze({
-          availability: "unavailable",
-          bookId: book.id,
-          storageState: "corrupted",
-          linkedProjectId: linkedProjectIds[0] ?? null,
-          linkedProjectCount: linkedProjectIds.length,
-          lastOpenedAt: book.lastOpenedAt?.toISOString() ?? null,
-          reason: error instanceof Error ? error.message : String(error),
-        });
-      }
-      }));
+  listBooks(page?: {
+    after?: string;
+    limit: number;
+  }): readonly BookshelfBookCard[] {
+    return Object.freeze(
+      this.books
+        .listBooks(page ? { ...page, excludeTrashed: true } : undefined)
+        .filter((book) => book.state !== "trashed")
+        .map((book) => {
+          const linkedProjectIds = this.books.listProjectIdsForBook(book.id);
+          try {
+            return {
+              ...this.catalog.read(book, linkedProjectIds),
+              ...(page
+                ? {
+                    listCursor: JSON.stringify({
+                      time:
+                        book.lastOpenedAt?.getTime() ??
+                        book.updatedAt.getTime(),
+                      id: book.id,
+                    }),
+                  }
+                : {}),
+            };
+          } catch (error) {
+            return Object.freeze({
+              availability: "unavailable",
+              ...(page
+                ? {
+                    listCursor: JSON.stringify({
+                      time:
+                        book.lastOpenedAt?.getTime() ??
+                        book.updatedAt.getTime(),
+                      id: book.id,
+                    }),
+                  }
+                : {}),
+              bookId: book.id,
+              storageState: "corrupted",
+              linkedProjectId: linkedProjectIds[0] ?? null,
+              linkedProjectCount: linkedProjectIds.length,
+              lastOpenedAt: book.lastOpenedAt?.toISOString() ?? null,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }),
+    );
   }
 
-  createBook(
-    request: CreateBookshelfBookRequest,
-  ): CreateBookshelfBookResult {
+  createBook(request: CreateBookshelfBookRequest): CreateBookshelfBookResult {
     const title = request.title.trim();
     if (!title) throw new Error("Book title is required.");
     if (title.length > 200) {
@@ -84,7 +108,9 @@ export default class BookshelfApplication {
     });
     const registered = this.books.getBookById(provisioned.bookId);
     if (!registered) {
-      throw new Error(`Provisioned book was not registered: ${provisioned.bookId}`);
+      throw new Error(
+        `Provisioned book was not registered: ${provisioned.bookId}`,
+      );
     }
     const card = this.catalog.read(registered, []);
     if (card.availability !== "ready") {
@@ -97,13 +123,16 @@ export default class BookshelfApplication {
   }
 
   listTrash(): readonly BookshelfTrashEntry[] {
-    return Object.freeze(this.books.listTrash()
-      .map((book) => Object.freeze({
-        bookId: book.bookId,
-        title: book.title,
-        storageState: "trashed" as const,
-        trashedAt: book.trashedAt.toISOString(),
-      })));
+    return Object.freeze(
+      this.books.listTrash().map((book) =>
+        Object.freeze({
+          bookId: book.bookId,
+          title: book.title,
+          storageState: "trashed" as const,
+          trashedAt: book.trashedAt.toISOString(),
+        }),
+      ),
+    );
   }
 
   attachBookToProject(projectId: string, bookId: string): Promise<void> {

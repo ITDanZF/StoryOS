@@ -14,6 +14,8 @@ export type ConversationScope =
 export type ConversationRef = {
   readonly scope: ConversationScope;
   readonly threadId: string;
+  readonly afterSequence?: number;
+  readonly limit?: number;
 };
 
 export type CreateConversationRequest = {

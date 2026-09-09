@@ -59,7 +59,7 @@ export function requireTiptapDocument(
 ): TiptapDocument {
   const document = requireNode(value, path);
   if (document.type !== "doc") {
-    throw new Error("Tiptap document root must have type \"doc\".");
+    throw new Error('Tiptap document root must have type "doc".');
   }
   return document as TiptapDocument;
 }
@@ -70,7 +70,17 @@ export function serializeTiptapDocument(value: unknown): string {
     schemaVersion: CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION,
     document,
   };
-  const serialized = JSON.stringify(stored);
+  // Object key order has no document semantics. Keep arrays ordered, including marks
+  // and child nodes, while producing stable bytes for hashing and deduplication.
+  const serialized = JSON.stringify(stored, (_key, value: unknown) =>
+    isRecord(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, value[key]]),
+        )
+      : value,
+  );
   if (serialized === undefined) {
     throw new Error("Tiptap document cannot be serialized.");
   }
@@ -86,7 +96,11 @@ export function parseTiptapDocument(serialized: string): TiptapDocument {
   }
   if (isRecord(value) && "schemaVersion" in value) {
     const version = value.schemaVersion;
-    if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+    if (
+      typeof version !== "number" ||
+      !Number.isInteger(version) ||
+      version < 1
+    ) {
       throw new Error("Invalid chapter content schema version.");
     }
     if (version > CURRENT_CHAPTER_CONTENT_SCHEMA_VERSION) {
@@ -117,9 +131,7 @@ export function plainTextToTiptapDocument(value: string): TiptapDocument {
   };
 }
 
-export function decodeStoredChapterContent(
-  stored: string,
-): TiptapDocument {
+export function decodeStoredChapterContent(stored: string): TiptapDocument {
   if (!stored) return EMPTY_TIPTAP_DOCUMENT;
   try {
     return parseTiptapDocument(stored);

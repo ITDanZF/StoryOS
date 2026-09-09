@@ -8,6 +8,7 @@ export type BookStorageState =
 export type BookRecord = {
   readonly id: string;
   readonly storagePath: string;
+  readonly sourceGeneration?: string;
   readonly state: BookStorageState;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -23,6 +24,17 @@ export type BookTrashRecord = {
 };
 
 export interface BookRegistry {
+  beginBookCleanup(input: {
+    operationId: string;
+    bookId: string;
+    stagingPath: string;
+  }): void;
+  listPendingBookCleanups(): readonly {
+    operationId: string;
+    bookId: string;
+    stagingPath: string;
+  }[];
+
   registerBookForProject(input: {
     readonly id: string;
     readonly projectId: string;
@@ -39,7 +51,11 @@ export interface BookRegistry {
   getBookById(bookId: string): BookRecord | null;
   getBookForProject(projectId: string): BookRecord | null;
   listProjectIdsForBook(bookId: string): readonly string[];
-  listBooks(): readonly BookRecord[];
+  listBooks(page?: {
+    after?: string;
+    limit: number;
+    excludeTrashed?: boolean;
+  }): readonly BookRecord[];
   attachExistingBook(input: {
     readonly projectId: string;
     readonly bookId: string;

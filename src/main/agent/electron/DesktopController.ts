@@ -1,10 +1,14 @@
+import type { ChapterDraftRequest } from "../../../shared/book/drafts.ts";
 import { shell } from "electron";
 import path from "node:path";
 import type { ModelConnectionConfiguration } from "../model/ModelConfiguration.ts";
 import type ProjectApplication from "../application/ProjectApplication.ts";
 import ProjectNavigationReader from "../application/ProjectNavigationReader.ts";
 import type BookshelfApplication from "../application/BookshelfApplication.ts";
-import type { CreateProjectRequest, RenameProjectRequest } from "../application/projectContracts.ts";
+import type {
+  CreateProjectRequest,
+  RenameProjectRequest,
+} from "../application/projectContracts.ts";
 import type {
   ConversationApplicationEventHandler,
   ConversationRef,
@@ -14,9 +18,7 @@ import type {
 } from "../application/conversationContracts.ts";
 import type { ToolApprovalDecision } from "../security/ToolPolicy.ts";
 import type WorkspaceRuntimeManager from "../runtime/WorkspaceRuntimeManager.ts";
-import type {
-  ActiveWorkspaceRuntime,
-} from "../runtime/WorkspaceRuntimeManager.ts";
+import type { ActiveWorkspaceRuntime } from "../runtime/WorkspaceRuntimeManager.ts";
 import type {
   BookChapterRevisionResult,
   BookWorkspaceChapterDto,
@@ -78,19 +80,25 @@ export default class DesktopController {
     return this.dependencies.runtime.subscribe(handler);
   }
 
-  prepareModelConfiguration(configuration: ModelConnectionConfiguration): () => void {
+  prepareModelConfiguration(
+    configuration: ModelConnectionConfiguration,
+  ): () => void {
     return this.dependencies.runtime.prepareModelConfiguration(configuration);
   }
 
-  sendMessage(request: { readonly threadId: string; readonly content: string }) {
+  sendMessage(request: {
+    readonly threadId: string;
+    readonly content: string;
+  }) {
     return this.sendMessageWithRuntime(this.dependencies.runtime, request);
   }
 
   async sendConversationMessage(request: SendConversationMessageRequest) {
-    if (request.context && (
-      request.scope.kind !== "project" ||
-      request.context.projectId !== request.scope.projectId
-    )) {
+    if (
+      request.context &&
+      (request.scope.kind !== "project" ||
+        request.context.projectId !== request.scope.projectId)
+    ) {
       throw new Error("Conversation context does not match its project scope.");
     }
     const runtime = await this.dependencies.runtime.resolve(request.scope);
@@ -113,8 +121,8 @@ export default class DesktopController {
     const content = request.content.trim();
     if (!threadId) throw new Error("Thread id is required.");
     if (!content) throw new Error("Message content is required.");
-    const { threads, agent } = runtime;
-    const userMessage = threads.appendMessage({ threadId, role: "user", content });
+    const { agent } = runtime;
+    const userMessage = { id: crypto.randomUUID(), content };
     const runId = agent.startRun({
       threadId,
       message: {
@@ -122,11 +130,6 @@ export default class DesktopController {
         content: userMessage.content,
       },
       ...(request.context ? { context: request.context } : {}),
-    });
-    void agent.waitForRun(runId).then((answer) => {
-      threads.appendMessage({ threadId, role: "assistant", content: answer });
-    }).catch(() => {
-      // Run failures are emitted by AgentApplication; partial assistant replies are not persisted.
     });
     return Object.freeze({ runId });
   }
@@ -146,7 +149,11 @@ export default class DesktopController {
 
   async listConversationEvents(request: ConversationRef) {
     const runtime = await this.dependencies.runtime.resolve(request.scope);
-    return runtime.conversationEvents.listByThread(request.threadId);
+    return runtime.conversationEvents.listByThread(
+      request.threadId,
+      request.afterSequence,
+      request.limit,
+    );
   }
 
   async createConversation(request: CreateConversationRequest) {
@@ -174,8 +181,8 @@ export default class DesktopController {
     return this.projectNavigation.read(projectId);
   }
 
-  getBookshelfBooks() {
-    return this.dependencies.bookshelf.listBooks();
+  getBookshelfBooks(page?: { after?: string; limit: number }) {
+    return this.dependencies.bookshelf.listBooks(page);
   }
 
   createBookshelfBook(request: {
@@ -233,11 +240,19 @@ export default class DesktopController {
     return this.dependencies.bookshelf.listTransferFormats();
   }
 
-  prepareBookshelfBookImport(request: Parameters<DesktopControllerDependencies["bookshelf"]["prepareBookImport"]>[0]) {
+  prepareBookshelfBookImport(
+    request: Parameters<
+      DesktopControllerDependencies["bookshelf"]["prepareBookImport"]
+    >[0],
+  ) {
     return this.dependencies.bookshelf.prepareBookImport(request);
   }
 
-  commitBookshelfBookImport(request: Parameters<DesktopControllerDependencies["bookshelf"]["commitBookImport"]>[0]) {
+  commitBookshelfBookImport(
+    request: Parameters<
+      DesktopControllerDependencies["bookshelf"]["commitBookImport"]
+    >[0],
+  ) {
     return this.dependencies.bookshelf.commitBookImport(request);
   }
 
@@ -245,11 +260,19 @@ export default class DesktopController {
     this.dependencies.bookshelf.cancelBookImport(sessionId);
   }
 
-  prepareBookshelfBookExport(request: Parameters<DesktopControllerDependencies["bookshelf"]["prepareBookExport"]>[0]) {
+  prepareBookshelfBookExport(
+    request: Parameters<
+      DesktopControllerDependencies["bookshelf"]["prepareBookExport"]
+    >[0],
+  ) {
     return this.dependencies.bookshelf.prepareBookExport(request);
   }
 
-  commitBookshelfBookExport(request: Parameters<DesktopControllerDependencies["bookshelf"]["commitBookExport"]>[0]) {
+  commitBookshelfBookExport(
+    request: Parameters<
+      DesktopControllerDependencies["bookshelf"]["commitBookExport"]
+    >[0],
+  ) {
     return this.dependencies.bookshelf.commitBookExport(request);
   }
 
@@ -281,7 +304,8 @@ export default class DesktopController {
     ) {
       throw new Error("Project restore name must be a single folder name.");
     }
-    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    const previousPath =
+      this.dependencies.projects.getSnapshot().activeProjectPath;
     const result = this.dependencies.bookshelf.restoreProjectArchive({
       archiveId: request.archiveId,
       targetPath: path.join(request.targetParentPath, projectName),
@@ -308,9 +332,7 @@ export default class DesktopController {
     return this.createBookWorkspaceSnapshot(runtime, projectId);
   }
 
-  async createBook(
-    request: CreateBookRequest,
-  ): Promise<BookWorkspaceSnapshot> {
+  async createBook(request: CreateBookRequest): Promise<BookWorkspaceSnapshot> {
     const runtime = await this.dependencies.runtime.resolve({
       kind: "project",
       projectId: request.projectId,
@@ -335,18 +357,20 @@ export default class DesktopController {
     });
     const book = runtime.novels.getProjectBook();
     if (!book) throw new Error(`Project book not found: ${request.projectId}`);
-    const volume = runtime.novels.listVolumes(book.id).find(
-      (item) => item.id === request.volumeId,
-    );
+    const volume = runtime.novels
+      .listVolumes(book.id)
+      .find((item) => item.id === request.volumeId);
     if (!volume) {
       throw new Error("The chapter must belong to an existing book volume.");
     }
-    const siblings = runtime.novels.listChapters(book.id)
+    const siblings = runtime.novels
+      .listChapters(book.id)
       .filter((chapter) => chapter.volumeId === volume.id);
-    const nextSortOrder = siblings.reduce(
-      (maximum, chapter) => Math.max(maximum, chapter.sortOrder),
-      -1,
-    ) + 1;
+    const nextSortOrder =
+      siblings.reduce(
+        (maximum, chapter) => Math.max(maximum, chapter.sortOrder),
+        -1,
+      ) + 1;
     runtime.novels.createChapter({
       novelId: book.id,
       volumeId: volume.id,
@@ -366,10 +390,11 @@ export default class DesktopController {
     });
     const book = runtime.novels.getProjectBook();
     if (!book) throw new Error(`Project book not found: ${request.projectId}`);
-    const nextSortOrder = runtime.novels.listVolumes(book.id).reduce(
-      (maximum, volume) => Math.max(maximum, volume.sortOrder),
-      -1,
-    ) + 1;
+    const nextSortOrder =
+      runtime.novels
+        .listVolumes(book.id)
+        .reduce((maximum, volume) => Math.max(maximum, volume.sortOrder), -1) +
+      1;
     runtime.novels.createVolume({
       novelId: book.id,
       title: request.title,
@@ -400,9 +425,7 @@ export default class DesktopController {
     return this.createBookWorkspaceSnapshot(runtime, request.projectId);
   }
 
-  async updateBook(
-    request: UpdateBookRequest,
-  ): Promise<BookWorkspaceSnapshot> {
+  async updateBook(request: UpdateBookRequest): Promise<BookWorkspaceSnapshot> {
     const runtime = await this.dependencies.runtime.resolve({
       kind: "project",
       projectId: request.projectId,
@@ -411,6 +434,7 @@ export default class DesktopController {
     if (!book) throw new Error("Project book not found.");
     runtime.novels.updateNovel({
       id: book.id,
+      rowVersion: request.expectedRowVersion,
       title: request.title,
       synopsis: request.synopsis,
       status: request.status,
@@ -428,12 +452,38 @@ export default class DesktopController {
     const chapter = runtime.novels.getChapter(request.chapterId);
     runtime.novels.updateChapter({
       id: chapter.id,
+      rowVersion: request.expectedRowVersion,
       volumeId: chapter.volumeId,
       title: request.title,
       status: chapter.status,
       sortOrder: chapter.sortOrder,
     });
     return this.createBookWorkspaceSnapshot(runtime, request.projectId);
+  }
+
+  async getBookChapterContent(request: {
+    projectId: string;
+    chapterId: string;
+  }): Promise<BookWorkspaceChapterDto> {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    return this.toBookWorkspaceChapter(
+      runtime,
+      runtime.novels.getChapter(request.chapterId),
+      true,
+    );
+  }
+
+  async chapterDraft(request: ChapterDraftRequest) {
+    const runtime = await this.dependencies.runtime.resolve({
+      kind: "project",
+      projectId: request.projectId,
+    });
+    return request.action === "read"
+      ? runtime.novels.getDraft(request.chapterId)
+      : runtime.novels.saveDraft(request);
   }
 
   async saveBookChapterContent(
@@ -452,10 +502,12 @@ export default class DesktopController {
       characterCount: countTiptapCharacters(document),
       changeSummary: "自动保存",
       expectedCurrentRevisionId: request.expectedCurrentRevisionId,
+      expectedRowVersion: request.expectedRowVersion,
+      expectedDraftVersion: request.expectedDraftVersion,
     });
     const updated = runtime.novels.getChapter(chapter.id);
     return Object.freeze({
-      chapter: this.toBookWorkspaceChapter(runtime, updated),
+      chapter: this.toBookWorkspaceChapter(runtime, updated, true),
       revision,
     });
   }
@@ -476,8 +528,9 @@ export default class DesktopController {
       book,
       volumes: runtime.novels.listVolumes(book.id),
       chapters: Object.freeze(
-        runtime.novels.listChapters(book.id)
-          .map((chapter) => this.toBookWorkspaceChapter(runtime, chapter)),
+        runtime.novels
+          .listChapterSummaries(book.id)
+          .map((chapter) => Object.freeze({ ...chapter, contentLoaded: false })),
       ),
     });
   }
@@ -485,20 +538,35 @@ export default class DesktopController {
   private toBookWorkspaceChapter(
     runtime: ActiveWorkspaceRuntime,
     chapter: ReturnType<ActiveWorkspaceRuntime["novels"]["getChapter"]>,
+    includeContent = false,
   ): BookWorkspaceChapterDto {
-    const revision = runtime.novels.getCurrentRevision(chapter.id);
+    const metadata = runtime.novels.getCurrentRevisionMetadata(chapter.id);
     return Object.freeze({
       ...chapter,
-      content: revision?.content ?? "",
-      characterCount: revision?.characterCount ?? 0,
-      revisionNumber: revision?.revisionNumber ?? null,
+      characterCount: metadata?.characterCount ?? 0,
+      revisionNumber: metadata?.revisionNumber ?? null,
+      contentLoaded: includeContent,
+      ...(includeContent
+        ? {
+            content:
+              runtime.novels.getCurrentRevision(chapter.id)?.content ?? "",
+            draft: runtime.novels.getDraft(chapter.id),
+          }
+        : {}),
     });
   }
 
-  cancelRun(runId: string): boolean { return this.dependencies.runtime.agent.cancelRun(runId); }
-  listRuns() { return this.dependencies.runtime.agent.listRuns(); }
+  cancelRun(runId: string): boolean {
+    return this.dependencies.runtime.agent.cancelRun(runId);
+  }
+  listRuns() {
+    return this.dependencies.runtime.agent.listRuns();
+  }
   resolveApproval(approvalId: string, decision: ToolApprovalDecision) {
-    return this.dependencies.runtime.agent.resolveApproval(approvalId, decision);
+    return this.dependencies.runtime.agent.resolveApproval(
+      approvalId,
+      decision,
+    );
   }
   async cancelConversationRun(scope: ConversationScope, runId: string) {
     const runtime = await this.dependencies.runtime.resolve(scope);
@@ -516,18 +584,34 @@ export default class DesktopController {
     const runtime = await this.dependencies.runtime.resolve(scope);
     return runtime.agent.resolveApproval(approvalId, decision);
   }
-  getThreadSnapshot() { return this.dependencies.runtime.threads.getSnapshot(); }
-  listMessages(threadId?: string) { return this.dependencies.runtime.threads.listMessages(threadId); }
-  createThread(title: string) { return this.dependencies.runtime.threads.createThread({ title }); }
-  switchThread(threadId: string) { return this.dependencies.runtime.threads.switchThread(threadId); }
-  deleteThread(threadId: string) { return this.dependencies.runtime.threads.deleteThread(threadId); }
-  getProjectSnapshot() { return this.dependencies.projects.getSnapshot(); }
+  getThreadSnapshot() {
+    return this.dependencies.runtime.threads.getSnapshot();
+  }
+  listMessages(threadId?: string) {
+    return this.dependencies.runtime.threads.listMessages(threadId);
+  }
+  createThread(title: string) {
+    return this.dependencies.runtime.threads.createThread({ title });
+  }
+  switchThread(threadId: string) {
+    return this.dependencies.runtime.threads.switchThread(threadId);
+  }
+  deleteThread(threadId: string) {
+    return this.dependencies.runtime.threads.deleteThread(threadId);
+  }
+  getProjectSnapshot() {
+    return this.dependencies.projects.getSnapshot();
+  }
   getWorkspaceSnapshot() {
-    return Object.freeze({ projects: this.dependencies.projects.getSnapshot(), threads: this.dependencies.runtime.threads.getSnapshot() });
+    return Object.freeze({
+      projects: this.dependencies.projects.getSnapshot(),
+      threads: this.dependencies.runtime.threads.getSnapshot(),
+    });
   }
 
   async createProject(request: CreateProjectRequest) {
-    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    const previousPath =
+      this.dependencies.projects.getSnapshot().activeProjectPath;
     const project = this.dependencies.projects.createProject(request);
     const bookId = request.bookId?.trim() || null;
     try {
@@ -561,7 +645,8 @@ export default class DesktopController {
   }
 
   async openProject(projectPath: string) {
-    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    const previousPath =
+      this.dependencies.projects.getSnapshot().activeProjectPath;
     const project = this.dependencies.projects.openProject(projectPath);
     try {
       await this.dependencies.runtime.activate(project.path);
@@ -576,27 +661,38 @@ export default class DesktopController {
   async openProjectDirectory(projectPath: string): Promise<void> {
     const project = this.dependencies.projects.getProject(projectPath);
     const errorMessage = await shell.openPath(project.path);
-    if (errorMessage) throw new Error(`Could not open project directory: ${errorMessage}`);
+    if (errorMessage)
+      throw new Error(`Could not open project directory: ${errorMessage}`);
   }
 
   async renameProject(request: RenameProjectRequest) {
-    const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === request.projectPath;
-    if (wasActive) await this.dependencies.runtime.closeForProjectMutation(request.projectPath);
+    const wasActive =
+      this.dependencies.projects.getSnapshot().activeProjectPath ===
+      request.projectPath;
+    if (wasActive)
+      await this.dependencies.runtime.closeForProjectMutation(
+        request.projectPath,
+      );
     const result = this.dependencies.projects.renameProject(request);
     try {
-      if (wasActive) await this.dependencies.runtime.activate(result.project.path);
+      if (wasActive)
+        await this.dependencies.runtime.activate(result.project.path);
       return this.getWorkspaceSnapshot();
     } catch (error) {
       this.dependencies.projects.rollbackProjectRename(result);
-      if (wasActive) await this.dependencies.runtime.activate(result.previousProject.path);
+      if (wasActive)
+        await this.dependencies.runtime.activate(result.previousProject.path);
       throw error;
     }
   }
 
   async deleteProject(projectPath: string) {
     const project = this.dependencies.projects.getProject(projectPath);
-    const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === project.path;
-    if (wasActive) await this.dependencies.runtime.closeForProjectMutation(project.path);
+    const wasActive =
+      this.dependencies.projects.getSnapshot().activeProjectPath ===
+      project.path;
+    if (wasActive)
+      await this.dependencies.runtime.closeForProjectMutation(project.path);
     try {
       await this.dependencies.bookshelf.createProjectArchive(project.id);
       await shell.trashItem(project.path);
@@ -610,7 +706,8 @@ export default class DesktopController {
   }
 
   async switchProject(projectPath: string | null) {
-    const previousPath = this.dependencies.projects.getSnapshot().activeProjectPath;
+    const previousPath =
+      this.dependencies.projects.getSnapshot().activeProjectPath;
     await this.dependencies.runtime.activate(projectPath);
     try {
       this.dependencies.projects.switchProject(projectPath);
@@ -622,20 +719,39 @@ export default class DesktopController {
   }
 
   async removeProject(projectPath: string) {
-    const wasActive = this.dependencies.projects.getSnapshot().activeProjectPath === projectPath;
-    if (wasActive) await this.dependencies.runtime.closeForProjectMutation(projectPath);
+    const wasActive =
+      this.dependencies.projects.getSnapshot().activeProjectPath ===
+      projectPath;
+    if (wasActive)
+      await this.dependencies.runtime.closeForProjectMutation(projectPath);
     const snapshot = this.dependencies.projects.removeProject(projectPath);
     await this.dependencies.runtime.activate(snapshot.activeProjectPath);
     return this.getWorkspaceSnapshot();
   }
 
-  shutdown(): Promise<void> { return this.dependencies.runtime.shutdown(); }
-  hasActiveRun(): boolean { return this.dependencies.runtime.hasActiveRun(); }
-  closeForDeveloper(): Promise<void> { return this.dependencies.runtime.closeForDeveloper(); }
+  shutdown(): Promise<void> {
+    return this.dependencies.runtime.shutdown();
+  }
+  hasActiveRun(): boolean {
+    return this.dependencies.runtime.hasActiveRun();
+  }
+  closeForDeveloper(): Promise<void> {
+    return this.dependencies.runtime.closeForDeveloper();
+  }
 
-  getSkillSnapshot() { return this.dependencies.runtime.skills.getSnapshot(); }
-  getSkill(skillId: string) { return this.dependencies.runtime.skills.getSkill(skillId); }
-  useSkill(skillId: string, threadId?: string) { return this.dependencies.runtime.threads.useSkill(skillId, threadId); }
-  disableSkill(skillId: string, threadId?: string) { return this.dependencies.runtime.threads.disableSkill(skillId, threadId); }
-  clearSkillState(threadId?: string) { return this.dependencies.runtime.threads.clearSkillState(threadId); }
+  getSkillSnapshot() {
+    return this.dependencies.runtime.skills.getSnapshot();
+  }
+  getSkill(skillId: string) {
+    return this.dependencies.runtime.skills.getSkill(skillId);
+  }
+  useSkill(skillId: string, threadId?: string) {
+    return this.dependencies.runtime.threads.useSkill(skillId, threadId);
+  }
+  disableSkill(skillId: string, threadId?: string) {
+    return this.dependencies.runtime.threads.disableSkill(skillId, threadId);
+  }
+  clearSkillState(threadId?: string) {
+    return this.dependencies.runtime.threads.clearSkillState(threadId);
+  }
 }

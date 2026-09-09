@@ -5,15 +5,8 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-} from "react";
-import type {
-  BookWorkspaceChapterDto,
-} from "../../../../shared/agent/contracts.ts";
+import { lazy, Suspense, useEffect, useState } from "react";
+import type { BookWorkspaceChapterDto } from "../../../../shared/agent/contracts.ts";
 import {
   countTiptapCharacters,
   decodeStoredChapterContent,
@@ -45,6 +38,10 @@ type ChapterEditorPanelProps = {
     pages: readonly LiveChapterPage[],
   ) => void;
   readonly onSaveTitle: (title: string) => Promise<void>;
+  readonly onSaveDraft: (
+    content: string,
+    baseRevisionId: string | null,
+  ) => Promise<void>;
   readonly onSaveContent: (
     content: string,
     expectedCurrentRevisionId: string | null,
@@ -65,6 +62,7 @@ export default function ChapterEditorPanel({
   onPaginationChange,
   onSaveTitle,
   onSaveContent,
+  onSaveDraft,
   onAskAi,
   onEditorContextChange,
   onEditorBridgeChange,
@@ -72,7 +70,8 @@ export default function ChapterEditorPanel({
   const [title, setTitle] = useState(chapter.title);
   const [saveState, setSaveState] = useState<BookSaveState>("saved");
   const [characterCount, setCharacterCount] = useState(() =>
-    countTiptapCharacters(decodeStoredChapterContent(chapter.content)));
+    countTiptapCharacters(decodeStoredChapterContent(chapter.content)),
+  );
 
   useEffect(() => {
     setTitle(chapter.title);
@@ -104,9 +103,11 @@ export default function ChapterEditorPanel({
   };
 
   const askAiAboutSelection = (selection: string | null) => {
-    onAskAi(selection
-      ? `请帮我分析并润色这段文字：\n“${selection}”`
-      : `请分析第${chapterNumber}章《${title}》的节奏和氛围。`);
+    onAskAi(
+      selection
+        ? `请帮我分析并润色这段文字：\n“${selection}”`
+        : `请分析第${chapterNumber}章《${title}》的节奏和氛围。`,
+    );
   };
 
   return (
@@ -134,16 +135,21 @@ export default function ChapterEditorPanel({
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-neutral-400 sm:gap-2.5">
           <span className="hidden items-center gap-1 sm:inline-flex">
-            {aiGenerating ? <Sparkles className="text-violet-500" size={12} /> :
-              saveState === "saved" && <Check size={12} />}
+            {aiGenerating ? (
+              <Sparkles className="text-violet-500" size={12} />
+            ) : (
+              saveState === "saved" && <Check size={12} />
+            )}
             {saveState === "error" && (
               <TriangleAlert className="text-red-500" size={12} />
             )}
             {aiGenerating
               ? "AI 生成中…"
               : saveState === "saved"
-              ? "已保存"
-              : saveState === "saving" ? "保存中…" : "保存失败"}
+                ? "已保存"
+                : saveState === "saving"
+                  ? "保存中…"
+                  : "保存失败"}
           </span>
           <span>{characterCount.toLocaleString("zh-CN")} 字</span>
           <button
@@ -177,6 +183,8 @@ export default function ChapterEditorPanel({
           content={chapter.content}
           previewContent={aiPreviewContent}
           currentRevisionId={chapter.currentRevisionId}
+          initialDraft={chapter.draft ?? null}
+          onSaveDraft={onSaveDraft}
           pageTarget={pageTarget}
           onPageChange={onPageChange}
           onPaginationChange={onPaginationChange}

@@ -1,26 +1,31 @@
+import { z } from "zod";
+import type { ChapterDraftRequest } from "../../shared/book/drafts.ts";
 import { BrowserWindow, ipcMain } from "electron";
 import { registerBookReaderIpc } from "./bookReader.ts";
 import StoryAgentService from "../agent/StoryAgentService.ts";
 import { AGENT_IPC_CHANNELS } from "../../shared/agent/contracts.ts";
-import type { CreateProjectRequest, RenameProjectRequest } from "../agent/application/projectContracts.ts";
 import type {
-    ConversationRef,
-    ConversationScope,
-    CreateConversationRequest,
-    SendConversationMessageRequest,
+  CreateProjectRequest,
+  RenameProjectRequest,
+} from "../agent/application/projectContracts.ts";
+import type {
+  ConversationRef,
+  ConversationScope,
+  CreateConversationRequest,
+  SendConversationMessageRequest,
 } from "../agent/application/conversationContracts.ts";
 import type { ConversationTurnContext } from "../agent/application/conversationTurnContext.ts";
 import type { AgentConfigurationRequest } from "../agent/StoryAgentService.ts";
 import type { ToolApprovalDecision } from "../agent/security/ToolPolicy.ts";
 import type {
-    CreateBookChapterRequest,
-    CreateBookRequest,
-    CreateBookVolumeRequest,
-    DeleteBookChapterRequest,
-    DeleteBookVolumeRequest,
-    SaveBookChapterContentRequest,
-    UpdateBookRequest,
-    UpdateBookChapterRequest,
+  CreateBookChapterRequest,
+  CreateBookRequest,
+  CreateBookVolumeRequest,
+  DeleteBookChapterRequest,
+  DeleteBookVolumeRequest,
+  SaveBookChapterContentRequest,
+  UpdateBookRequest,
+  UpdateBookChapterRequest,
 } from "../agent/application/bookWorkspaceContracts.ts";
 import type { NovelStatus } from "../agent/application/novelPorts.ts";
 import type RendererEditorToolBridge from "../agent/electron/RendererEditorToolBridge.ts";
@@ -28,437 +33,690 @@ import type { RendererEditorToolResponse } from "../agent/tools/editor/contracts
 import type { CreateBookshelfBookRequest } from "../agent/application/bookshelfContracts.ts";
 import type { RestoreProjectArchiveDesktopRequest } from "../../shared/agent/contracts.ts";
 import type {
-    BookTransferFormat,
-    CommitBookExportRequest,
-    CommitBookImportRequest,
-    ExportBookOptions,
-    PrepareBookExportRequest,
-    PrepareBookImportRequest,
+  BookTransferFormat,
+  CommitBookExportRequest,
+  CommitBookImportRequest,
+  ExportBookOptions,
+  PrepareBookExportRequest,
+  PrepareBookImportRequest,
 } from "../agent/application/bookTransferContracts.ts";
 
-function requireApprovalDecision(decision: ToolApprovalDecision): ToolApprovalDecision {
-    if (!["allow_once", "allow_session", "deny"].includes(decision)) {
-        throw new Error("Invalid tool approval decision.");
-    }
-    return decision;
+function requireApprovalDecision(
+  decision: ToolApprovalDecision,
+): ToolApprovalDecision {
+  if (!["allow_once", "allow_session", "deny"].includes(decision)) {
+    throw new Error("Invalid tool approval decision.");
+  }
+  return decision;
 }
 
 function requireProjectArchiveBookStrategy(
-    value: unknown,
+  value: unknown,
 ): RestoreProjectArchiveDesktopRequest["bookStrategy"] {
-    if (value !== "snapshot" && value !== "current") {
-        throw new Error("Invalid project archive book strategy.");
-    }
-    return value;
+  if (value !== "snapshot" && value !== "current") {
+    throw new Error("Invalid project archive book strategy.");
+  }
+  return value;
 }
 
 function requireConversationScope(scope: ConversationScope): ConversationScope {
-    if (!scope || typeof scope !== "object") {
-        throw new Error("Conversation scope is required.");
-    }
-    if (scope.kind === "global") return Object.freeze({ kind: "global" });
-    if (scope.kind !== "project") throw new Error("Invalid conversation scope.");
-    const projectId = scope.projectId?.trim();
-    if (!projectId) throw new Error("Project id is required.");
-    return Object.freeze({ kind: "project", projectId });
+  if (!scope || typeof scope !== "object") {
+    throw new Error("Conversation scope is required.");
+  }
+  if (scope.kind === "global") return Object.freeze({ kind: "global" });
+  if (scope.kind !== "project") throw new Error("Invalid conversation scope.");
+  const projectId = scope.projectId?.trim();
+  if (!projectId) throw new Error("Project id is required.");
+  return Object.freeze({ kind: "project", projectId });
 }
 
 function requireText(value: unknown, label: string): string {
-    if (typeof value !== "string") throw new Error(`${label} is required.`);
-    const normalized = value.trim();
-    if (!normalized) throw new Error(`${label} is required.`);
-    return normalized;
+  if (typeof value !== "string") throw new Error(`${label} is required.`);
+  const normalized = value.trim();
+  if (!normalized) throw new Error(`${label} is required.`);
+  return normalized;
 }
 
 function requireConversationRef(request: ConversationRef): ConversationRef {
-    const threadId = requireText(request?.threadId, "Thread id");
-    return Object.freeze({
-        scope: requireConversationScope(request.scope),
-        threadId,
-    });
+  const threadId = requireText(request?.threadId, "Thread id");
+  return Object.freeze({
+    scope: requireConversationScope(request.scope),
+    threadId,
+    afterSequence: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .parse(request.afterSequence),
+    limit: z.number().int().min(1).max(1000).optional().parse(request.limit),
+  });
 }
 
 function requireContent(value: unknown): string {
-    if (typeof value !== "string") {
-        throw new Error("Chapter content must be a string.");
-    }
-    return value;
+  if (typeof value !== "string") {
+    throw new Error("Chapter content must be a string.");
+  }
+  return value;
 }
 
 function requireNullableRevisionId(value: unknown): string | null {
-    if (value === null) return null;
-    return requireText(value, "Expected chapter revision id");
+  if (value === null) return null;
+  return requireText(value, "Expected chapter revision id");
 }
 
 function requireConversationTurnContext(
-    value: ConversationTurnContext,
+  value: ConversationTurnContext,
 ): ConversationTurnContext {
-    if (!value || typeof value !== "object" || value.kind !== "book_editor") {
-        throw new Error("Invalid conversation context.");
-    }
-    const book = value.book === null ? null : Object.freeze({
-        id: requireText(value.book?.id, "Book id"),
-        title: requireText(value.book?.title, "Book title"),
-    });
-    const chapter = value.chapter === null ? null : Object.freeze({
-        id: requireText(value.chapter?.id, "Chapter id"),
-        title: requireText(value.chapter?.title, "Chapter title"),
-        number: requirePositiveInteger(value.chapter?.number, "Chapter number"),
-        volumeTitle: requireText(value.chapter?.volumeTitle, "Volume title"),
-        revisionNumber: value.chapter?.revisionNumber === null
-            ? null
-            : requirePositiveInteger(value.chapter?.revisionNumber, "Revision number"),
-        pageNumber: value.chapter?.pageNumber === null
-            ? null
-            : requirePositiveInteger(value.chapter?.pageNumber, "Page number"),
-        documentText: requireString(value.chapter?.documentText, "Chapter text"),
-        selection: value.chapter?.selection === null ? null : Object.freeze({
-            from: requireNonNegativeInteger(value.chapter?.selection?.from, "Selection start"),
-            to: requireNonNegativeInteger(value.chapter?.selection?.to, "Selection end"),
-            text: requireText(value.chapter?.selection?.text, "Selection text"),
-        }),
-    });
-    if (chapter?.selection && chapter.selection.to <= chapter.selection.from) {
-        throw new Error("Selection end must be after selection start.");
-    }
-    return Object.freeze({
-        kind: "book_editor",
-        projectId: requireText(value.projectId, "Project id"),
-        projectName: requireText(value.projectName, "Project name"),
-        book,
-        chapter,
-    });
+  if (!value || typeof value !== "object" || value.kind !== "book_editor") {
+    throw new Error("Invalid conversation context.");
+  }
+  const book =
+    value.book === null
+      ? null
+      : Object.freeze({
+          id: requireText(value.book?.id, "Book id"),
+          title: requireText(value.book?.title, "Book title"),
+        });
+  const chapter =
+    value.chapter === null
+      ? null
+      : Object.freeze({
+          id: requireText(value.chapter?.id, "Chapter id"),
+          title: requireText(value.chapter?.title, "Chapter title"),
+          number: requirePositiveInteger(
+            value.chapter?.number,
+            "Chapter number",
+          ),
+          volumeTitle: requireText(value.chapter?.volumeTitle, "Volume title"),
+          revisionNumber:
+            value.chapter?.revisionNumber === null
+              ? null
+              : requirePositiveInteger(
+                  value.chapter?.revisionNumber,
+                  "Revision number",
+                ),
+          pageNumber:
+            value.chapter?.pageNumber === null
+              ? null
+              : requirePositiveInteger(
+                  value.chapter?.pageNumber,
+                  "Page number",
+                ),
+          documentText: requireString(
+            value.chapter?.documentText,
+            "Chapter text",
+          ),
+          selection:
+            value.chapter?.selection === null
+              ? null
+              : Object.freeze({
+                  from: requireNonNegativeInteger(
+                    value.chapter?.selection?.from,
+                    "Selection start",
+                  ),
+                  to: requireNonNegativeInteger(
+                    value.chapter?.selection?.to,
+                    "Selection end",
+                  ),
+                  text: requireText(
+                    value.chapter?.selection?.text,
+                    "Selection text",
+                  ),
+                }),
+        });
+  if (chapter?.selection && chapter.selection.to <= chapter.selection.from) {
+    throw new Error("Selection end must be after selection start.");
+  }
+  return Object.freeze({
+    kind: "book_editor",
+    projectId: requireText(value.projectId, "Project id"),
+    projectName: requireText(value.projectName, "Project name"),
+    book,
+    chapter,
+  });
 }
 
 function requireString(value: unknown, label: string): string {
-    if (typeof value !== "string") throw new Error(`${label} must be a string.`);
-    return value;
+  if (typeof value !== "string") throw new Error(`${label} must be a string.`);
+  return value;
 }
 
 function requireBoundedString(
-    value: unknown,
-    label: string,
-    maximumLength: number,
+  value: unknown,
+  label: string,
+  maximumLength: number,
 ): string {
-    const result = requireString(value, label);
-    if (result.length > maximumLength) {
-        throw new Error(`${label} must be ${maximumLength} characters or fewer.`);
-    }
-    return result;
+  const result = requireString(value, label);
+  if (result.length > maximumLength) {
+    throw new Error(`${label} must be ${maximumLength} characters or fewer.`);
+  }
+  return result;
 }
 
 function requireNonNegativeInteger(value: unknown, label: string): number {
-    if (!Number.isInteger(value) || (value as number) < 0) {
-        throw new Error(`${label} must be a non-negative integer.`);
-    }
-    return value as number;
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+  return value as number;
 }
 
 function requirePositiveInteger(value: unknown, label: string): number {
-    const result = requireNonNegativeInteger(value, label);
-    if (result === 0) throw new Error(`${label} must be a positive integer.`);
-    return result;
+  const result = requireNonNegativeInteger(value, label);
+  if (result === 0) throw new Error(`${label} must be a positive integer.`);
+  return result;
 }
 
 function requireNovelStatus(value: unknown): NovelStatus {
-    if (!["planning", "writing", "completed", "archived"].includes(
-        value as string,
-    )) {
-        throw new Error("Invalid book status.");
-    }
-    return value as NovelStatus;
+  if (
+    !["planning", "writing", "completed", "archived"].includes(value as string)
+  ) {
+    throw new Error("Invalid book status.");
+  }
+  return value as NovelStatus;
 }
 
 function requireBookTransferFormat(value: unknown): BookTransferFormat {
-    if (!["storyos", "text", "markdown", "docx", "epub", "pdf"].includes(value as string)) {
-        throw new Error("Invalid book transfer format.");
-    }
-    return value as BookTransferFormat;
+  if (
+    !["storyos", "text", "markdown", "docx", "epub", "pdf"].includes(
+      value as string,
+    )
+  ) {
+    throw new Error("Invalid book transfer format.");
+  }
+  return value as BookTransferFormat;
 }
 
 function requireBookExportOptions(value: unknown): ExportBookOptions {
-    if (value === undefined) return Object.freeze({});
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("Invalid book export options.");
-    }
-    const input = value as Record<string, unknown>;
-    const keys = [
-        "includeTitlePage",
-        "includeSynopsis",
-        "includeVolumeSummaries",
-        "includeTableOfContents",
-        "chapterPageBreaks",
-        "markdownBundle",
-        "splitTextFiles",
-    ] as const;
-    const result: Record<string, boolean> = {};
-    for (const key of keys) {
-        if (input[key] === undefined) continue;
-        if (typeof input[key] !== "boolean") throw new Error(`Invalid export option: ${key}`);
-        result[key] = input[key] as boolean;
-    }
-    return Object.freeze(result);
+  if (value === undefined) return Object.freeze({});
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Invalid book export options.");
+  }
+  const input = value as Record<string, unknown>;
+  const keys = [
+    "includeTitlePage",
+    "includeSynopsis",
+    "includeVolumeSummaries",
+    "includeTableOfContents",
+    "chapterPageBreaks",
+    "markdownBundle",
+    "splitTextFiles",
+  ] as const;
+  const result: Record<string, boolean> = {};
+  for (const key of keys) {
+    if (input[key] === undefined) continue;
+    if (typeof input[key] !== "boolean")
+      throw new Error(`Invalid export option: ${key}`);
+    result[key] = input[key] as boolean;
+  }
+  return Object.freeze(result);
 }
 
 export function registerAgentIpc(
-    service: StoryAgentService,
-    rendererEditorTools?: RendererEditorToolBridge,
+  service: StoryAgentService,
+  rendererEditorTools?: RendererEditorToolBridge,
 ): () => void {
-    const registeredChannels: string[] = [];
-    const closeBookReaderIpc = registerBookReaderIpc(service);
-    const handle = <TArgs extends unknown[]>(
-        channel: string,
-        listener: (...args: TArgs) => unknown,
-    ) => {
-        ipcMain.handle(channel, (_event, ...args) => service.runBusinessRequest(() => listener(...args as TArgs)));
-        registeredChannels.push(channel);
-    };
+  const registeredChannels: string[] = [];
+  const closeBookReaderIpc = registerBookReaderIpc(service);
+  const handle = <TArgs extends unknown[]>(
+    channel: string,
+    listener: (...args: TArgs) => unknown,
+  ) => {
+    ipcMain.handle(channel, (_event, ...args) =>
+      service.runBusinessRequest(() => listener(...(args as TArgs))),
+    );
+    registeredChannels.push(channel);
+  };
 
-    handle(AGENT_IPC_CHANNELS.status, () => service.getStatus());
-    handle(AGENT_IPC_CHANNELS.configure, (request: AgentConfigurationRequest) => service.configure(request));
-    handle(AGENT_IPC_CHANNELS.sendMessage, (request: { threadId: string; content: string }) => service.requireController().sendMessage(request));
-    handle(AGENT_IPC_CHANNELS.sendConversationMessage, (request: SendConversationMessageRequest) =>
-        service.requireController().sendConversationMessage({
-            ...requireConversationRef(request),
-            content: requireText(request?.content, "Message content"),
-            ...(request?.context === undefined
-                ? {}
-                : { context: requireConversationTurnContext(request.context) }),
-        }));
-    handle(AGENT_IPC_CHANNELS.cancelRun, (runId: string) => service.requireController().cancelRun(runId));
-    handle(AGENT_IPC_CHANNELS.cancelConversationRun, (scope: ConversationScope, runId: string) =>
-        service.requireController().cancelConversationRun(
-            requireConversationScope(scope),
-            requireText(runId, "Run id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.listRuns, () => service.requireController().listRuns());
-    handle(AGENT_IPC_CHANNELS.listConversationRuns, (scope: ConversationScope) =>
-        service.requireController().listConversationRuns(requireConversationScope(scope)));
-    handle(AGENT_IPC_CHANNELS.resolveApproval, (approvalId: string, decision: ToolApprovalDecision) => service.requireController().resolveApproval(approvalId, requireApprovalDecision(decision)));
-    handle(AGENT_IPC_CHANNELS.resolveConversationApproval, (
-        scope: ConversationScope,
-        approvalId: string,
-        decision: ToolApprovalDecision,
-    ) => service.requireController().resolveConversationApproval(
-        requireConversationScope(scope),
-        requireText(approvalId, "Approval id"),
-        requireApprovalDecision(decision),
-    ));
-    handle(AGENT_IPC_CHANNELS.threadSnapshot, () => service.requireController().getThreadSnapshot());
-    handle(AGENT_IPC_CHANNELS.conversationSnapshot, (scope: ConversationScope) =>
-        service.requireController().getConversationSnapshot(requireConversationScope(scope)));
-    handle(AGENT_IPC_CHANNELS.listMessages, (threadId?: string) => service.requireController().listMessages(threadId));
-    handle(AGENT_IPC_CHANNELS.listConversationMessages, (request: ConversationRef) =>
-        service.requireController().listConversationMessages(requireConversationRef(request)));
-    handle(AGENT_IPC_CHANNELS.listConversationEvents, (request: ConversationRef) =>
-        service.requireController().listConversationEvents(requireConversationRef(request)));
-    handle(AGENT_IPC_CHANNELS.createThread, (title: string) => service.requireController().createThread(title));
-    handle(AGENT_IPC_CHANNELS.createConversation, (request: CreateConversationRequest) =>
-        service.requireController().createConversation({
-            scope: requireConversationScope(request?.scope),
-            title: requireText(request?.title, "Thread title"),
-        }));
-    handle(AGENT_IPC_CHANNELS.switchThread, (threadId: string) => service.requireController().switchThread(threadId));
-    handle(AGENT_IPC_CHANNELS.switchConversation, (request: ConversationRef) =>
-        service.requireController().switchConversation(requireConversationRef(request)));
-    handle(AGENT_IPC_CHANNELS.deleteThread, (threadId: string) => service.requireController().deleteThread(threadId));
-    handle(AGENT_IPC_CHANNELS.deleteConversation, (request: ConversationRef) =>
-        service.requireController().deleteConversation(requireConversationRef(request)));
-    handle(AGENT_IPC_CHANNELS.projectSnapshot, () => service.requireController().getProjectSnapshot());
-    handle(AGENT_IPC_CHANNELS.projectNavigation, (projectId: string) =>
-        service.requireController().getProjectNavigation(
-            requireText(projectId, "Project id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.bookshelfBooks, () =>
-        service.requireController().getBookshelfBooks());
-    handle(AGENT_IPC_CHANNELS.createBookshelfBook, (
-        request: CreateBookshelfBookRequest,
-    ) => service.requireController().createBookshelfBook({
+  handle(AGENT_IPC_CHANNELS.status, () => service.getStatus());
+  handle(AGENT_IPC_CHANNELS.configure, (request: AgentConfigurationRequest) =>
+    service.configure(request),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.sendMessage,
+    (request: { threadId: string; content: string }) =>
+      service.requireController().sendMessage(request),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.sendConversationMessage,
+    (request: SendConversationMessageRequest) =>
+      service.requireController().sendConversationMessage({
+        ...requireConversationRef(request),
+        content: requireText(request?.content, "Message content"),
+        ...(request?.context === undefined
+          ? {}
+          : { context: requireConversationTurnContext(request.context) }),
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.cancelRun, (runId: string) =>
+    service.requireController().cancelRun(runId),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.cancelConversationRun,
+    (scope: ConversationScope, runId: string) =>
+      service
+        .requireController()
+        .cancelConversationRun(
+          requireConversationScope(scope),
+          requireText(runId, "Run id"),
+        ),
+  );
+  handle(AGENT_IPC_CHANNELS.listRuns, () =>
+    service.requireController().listRuns(),
+  );
+  handle(AGENT_IPC_CHANNELS.listConversationRuns, (scope: ConversationScope) =>
+    service
+      .requireController()
+      .listConversationRuns(requireConversationScope(scope)),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.resolveApproval,
+    (approvalId: string, decision: ToolApprovalDecision) =>
+      service
+        .requireController()
+        .resolveApproval(approvalId, requireApprovalDecision(decision)),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.resolveConversationApproval,
+    (
+      scope: ConversationScope,
+      approvalId: string,
+      decision: ToolApprovalDecision,
+    ) =>
+      service
+        .requireController()
+        .resolveConversationApproval(
+          requireConversationScope(scope),
+          requireText(approvalId, "Approval id"),
+          requireApprovalDecision(decision),
+        ),
+  );
+  handle(AGENT_IPC_CHANNELS.threadSnapshot, () =>
+    service.requireController().getThreadSnapshot(),
+  );
+  handle(AGENT_IPC_CHANNELS.conversationSnapshot, (scope: ConversationScope) =>
+    service
+      .requireController()
+      .getConversationSnapshot(requireConversationScope(scope)),
+  );
+  handle(AGENT_IPC_CHANNELS.listMessages, (threadId?: string) =>
+    service.requireController().listMessages(threadId),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.listConversationMessages,
+    (request: ConversationRef) =>
+      service
+        .requireController()
+        .listConversationMessages(requireConversationRef(request)),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.listConversationEvents,
+    (request: ConversationRef) =>
+      service
+        .requireController()
+        .listConversationEvents(requireConversationRef(request)),
+  );
+  handle(AGENT_IPC_CHANNELS.createThread, (title: string) =>
+    service.requireController().createThread(title),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.createConversation,
+    (request: CreateConversationRequest) =>
+      service.requireController().createConversation({
+        scope: requireConversationScope(request?.scope),
+        title: requireText(request?.title, "Thread title"),
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.switchThread, (threadId: string) =>
+    service.requireController().switchThread(threadId),
+  );
+  handle(AGENT_IPC_CHANNELS.switchConversation, (request: ConversationRef) =>
+    service
+      .requireController()
+      .switchConversation(requireConversationRef(request)),
+  );
+  handle(AGENT_IPC_CHANNELS.deleteThread, (threadId: string) =>
+    service.requireController().deleteThread(threadId),
+  );
+  handle(AGENT_IPC_CHANNELS.deleteConversation, (request: ConversationRef) =>
+    service
+      .requireController()
+      .deleteConversation(requireConversationRef(request)),
+  );
+  handle(AGENT_IPC_CHANNELS.projectSnapshot, () =>
+    service.requireController().getProjectSnapshot(),
+  );
+  handle(AGENT_IPC_CHANNELS.projectNavigation, (projectId: string) =>
+    service
+      .requireController()
+      .getProjectNavigation(requireText(projectId, "Project id")),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.bookshelfBooks,
+    (page?: { after?: string; limit: number }) =>
+      service.requireController().getBookshelfBooks(
+        z
+          .object({
+            after: z.string().max(1000).optional(),
+            limit: z.number().int().min(1).max(500),
+          })
+          .optional()
+          .parse(page) as { after?: string; limit: number } | undefined,
+      ),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.createBookshelfBook,
+    (request: CreateBookshelfBookRequest) =>
+      service.requireController().createBookshelfBook({
         title: requireText(request?.title, "Book title"),
-        synopsis: requireBoundedString(request?.synopsis, "Book synopsis", 20_000),
-    }));
-    handle(AGENT_IPC_CHANNELS.importBookshelfBook, (
-        request: { readonly packagePath: string },
-    ) => service.requireController().importBookshelfBook({
+        synopsis: requireBoundedString(
+          request?.synopsis,
+          "Book synopsis",
+          20_000,
+        ),
+      }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.importBookshelfBook,
+    (request: { readonly packagePath: string }) =>
+      service.requireController().importBookshelfBook({
         packagePath: requireText(request?.packagePath, "Book package path"),
-    }));
-    handle(AGENT_IPC_CHANNELS.exportBookshelfBook, (
-        request: { readonly bookId: string; readonly outputPath: string },
-    ) => service.requireController().exportBookshelfBook({
+      }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.exportBookshelfBook,
+    (request: { readonly bookId: string; readonly outputPath: string }) =>
+      service.requireController().exportBookshelfBook({
         bookId: requireText(request?.bookId, "Book id"),
         outputPath: requireText(request?.outputPath, "Book export path"),
-    }));
-    handle(AGENT_IPC_CHANNELS.bookTransferFormats, () =>
-        service.requireController().getBookTransferFormats());
-    handle(AGENT_IPC_CHANNELS.prepareBookshelfBookImport, (
-        request: PrepareBookImportRequest,
-    ) => {
-        const expected = request?.expectedFormat === undefined
-            ? undefined
-            : requireBookTransferFormat(request.expectedFormat);
-        if (expected === "epub" || expected === "pdf") {
-            throw new Error("Selected format cannot be imported.");
-        }
-        return service.requireController().prepareBookshelfBookImport({
-            filePath: requireText(request?.filePath, "Book import path"),
-            ...(expected ? { expectedFormat: expected } : {}),
-        });
-    });
-    handle(AGENT_IPC_CHANNELS.commitBookshelfBookImport, (
-        request: CommitBookImportRequest,
-    ) => service.requireController().commitBookshelfBookImport({
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.bookTransferFormats, () =>
+    service.requireController().getBookTransferFormats(),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.prepareBookshelfBookImport,
+    (request: PrepareBookImportRequest) => {
+      const expected =
+        request?.expectedFormat === undefined
+          ? undefined
+          : requireBookTransferFormat(request.expectedFormat);
+      if (expected === "epub" || expected === "pdf") {
+        throw new Error("Selected format cannot be imported.");
+      }
+      return service.requireController().prepareBookshelfBookImport({
+        filePath: requireText(request?.filePath, "Book import path"),
+        ...(expected ? { expectedFormat: expected } : {}),
+      });
+    },
+  );
+  handle(
+    AGENT_IPC_CHANNELS.commitBookshelfBookImport,
+    (request: CommitBookImportRequest) =>
+      service.requireController().commitBookshelfBookImport({
         sessionId: requireText(request?.sessionId, "Book import session id"),
-    }));
-    handle(AGENT_IPC_CHANNELS.cancelBookshelfBookImport, (sessionId: string) =>
-        service.requireController().cancelBookshelfBookImport(
-            requireText(sessionId, "Book import session id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.prepareBookshelfBookExport, (
-        request: PrepareBookExportRequest,
-    ) => service.requireController().prepareBookshelfBookExport({
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.cancelBookshelfBookImport, (sessionId: string) =>
+    service
+      .requireController()
+      .cancelBookshelfBookImport(
+        requireText(sessionId, "Book import session id"),
+      ),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.prepareBookshelfBookExport,
+    (request: PrepareBookExportRequest) =>
+      service.requireController().prepareBookshelfBookExport({
         bookId: requireText(request?.bookId, "Book id"),
         format: requireBookTransferFormat(request?.format),
         options: requireBookExportOptions(request?.options),
-    }));
-    handle(AGENT_IPC_CHANNELS.commitBookshelfBookExport, (
-        request: CommitBookExportRequest,
-    ) => service.requireController().commitBookshelfBookExport({
+      }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.commitBookshelfBookExport,
+    (request: CommitBookExportRequest) =>
+      service.requireController().commitBookshelfBookExport({
         exportId: requireText(request?.exportId, "Book export id"),
         outputPath: requireText(request?.outputPath, "Book export path"),
         overwrite: request?.overwrite === true,
-    }));
-    handle(AGENT_IPC_CHANNELS.cancelBookshelfBookExport, (exportId: string) =>
-        service.requireController().cancelBookshelfBookExport(
-            requireText(exportId, "Book export id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.bookshelfTrash, () =>
-        service.requireController().getBookshelfTrash());
-    handle(AGENT_IPC_CHANNELS.moveBookshelfBookToTrash, (bookId: string) =>
-        service.requireController().moveBookshelfBookToTrash(
-            requireText(bookId, "Book id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.restoreBookshelfBookFromTrash, (bookId: string) =>
-        service.requireController().restoreBookshelfBookFromTrash(
-            requireText(bookId, "Book id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.permanentlyDeleteBookshelfBook, (
-        request: { readonly bookId: string; readonly confirmationBookId: string },
-    ) => service.requireController().permanentlyDeleteBookshelfBook({
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.cancelBookshelfBookExport, (exportId: string) =>
+    service
+      .requireController()
+      .cancelBookshelfBookExport(requireText(exportId, "Book export id")),
+  );
+  handle(AGENT_IPC_CHANNELS.bookshelfTrash, () =>
+    service.requireController().getBookshelfTrash(),
+  );
+  handle(AGENT_IPC_CHANNELS.moveBookshelfBookToTrash, (bookId: string) =>
+    service
+      .requireController()
+      .moveBookshelfBookToTrash(requireText(bookId, "Book id")),
+  );
+  handle(AGENT_IPC_CHANNELS.restoreBookshelfBookFromTrash, (bookId: string) =>
+    service
+      .requireController()
+      .restoreBookshelfBookFromTrash(requireText(bookId, "Book id")),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.permanentlyDeleteBookshelfBook,
+    (request: {
+      readonly bookId: string;
+      readonly confirmationBookId: string;
+    }) =>
+      service.requireController().permanentlyDeleteBookshelfBook({
         bookId: requireText(request?.bookId, "Book id"),
         confirmationBookId: requireText(
-            request?.confirmationBookId,
-            "Book deletion confirmation id",
+          request?.confirmationBookId,
+          "Book deletion confirmation id",
         ),
-    }));
-    handle(AGENT_IPC_CHANNELS.bookProjectArchives, (bookId: string) =>
-        service.requireController().getBookProjectArchives(
-            requireText(bookId, "Book id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.restoreProjectArchive, (
-        request: RestoreProjectArchiveDesktopRequest,
-    ) => service.requireController().restoreProjectArchive({
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.bookProjectArchives, (bookId: string) =>
+    service
+      .requireController()
+      .getBookProjectArchives(requireText(bookId, "Book id")),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.restoreProjectArchive,
+    (request: RestoreProjectArchiveDesktopRequest) =>
+      service.requireController().restoreProjectArchive({
         archiveId: requireText(request?.archiveId, "Project archive id"),
         targetParentPath: requireText(
-            request?.targetParentPath,
-            "Project restore parent path",
+          request?.targetParentPath,
+          "Project restore parent path",
         ),
         projectName: requireText(request?.projectName, "Project restore name"),
         bookStrategy: requireProjectArchiveBookStrategy(request?.bookStrategy),
-    }));
-    handle(AGENT_IPC_CHANNELS.bookWorkspace, (projectId: string) =>
-        service.requireController().getBookWorkspace(
-            requireText(projectId, "Project id"),
-        ));
-    handle(AGENT_IPC_CHANNELS.createBook, (
-        request: CreateBookRequest,
-    ) => service.requireController().createBook({
-        projectId: requireText(request?.projectId, "Project id"),
-        title: requireText(request?.title, "Book title"),
-        synopsis: requireContent(request?.synopsis),
-        status: requireNovelStatus(request?.status),
-    }));
-    handle(AGENT_IPC_CHANNELS.createBookChapter, (
-        request: CreateBookChapterRequest,
-    ) => service.requireController().createBookChapter({
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.bookWorkspace, (projectId: string) =>
+    service
+      .requireController()
+      .getBookWorkspace(requireText(projectId, "Project id")),
+  );
+  handle(AGENT_IPC_CHANNELS.createBook, (request: CreateBookRequest) =>
+    service.requireController().createBook({
+      projectId: requireText(request?.projectId, "Project id"),
+      title: requireText(request?.title, "Book title"),
+      synopsis: requireContent(request?.synopsis),
+      status: requireNovelStatus(request?.status),
+    }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.createBookChapter,
+    (request: CreateBookChapterRequest) =>
+      service.requireController().createBookChapter({
         projectId: requireText(request?.projectId, "Project id"),
         volumeId: requireText(request?.volumeId, "Volume id"),
         title: requireText(request?.title, "Chapter title"),
-    }));
-    handle(AGENT_IPC_CHANNELS.createBookVolume, (
-        request: CreateBookVolumeRequest,
-    ) => service.requireController().createBookVolume({
+      }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.createBookVolume,
+    (request: CreateBookVolumeRequest) =>
+      service.requireController().createBookVolume({
         projectId: requireText(request?.projectId, "Project id"),
         title: requireText(request?.title, "Volume title"),
-    }));
-    handle(AGENT_IPC_CHANNELS.deleteBookVolume, (
-        request: DeleteBookVolumeRequest,
-    ) => service.requireController().deleteBookVolume({
+      }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.deleteBookVolume,
+    (request: DeleteBookVolumeRequest) =>
+      service.requireController().deleteBookVolume({
         projectId: requireText(request?.projectId, "Project id"),
         volumeId: requireText(request?.volumeId, "Volume id"),
-    }));
-    handle(AGENT_IPC_CHANNELS.deleteBookChapter, (
-        request: DeleteBookChapterRequest,
-    ) => service.requireController().deleteBookChapter({
+      }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.deleteBookChapter,
+    (request: DeleteBookChapterRequest) =>
+      service.requireController().deleteBookChapter({
         projectId: requireText(request?.projectId, "Project id"),
         chapterId: requireText(request?.chapterId, "Chapter id"),
-    }));
-    handle(AGENT_IPC_CHANNELS.updateBook, (
-        request: UpdateBookRequest,
-    ) => service.requireController().updateBook({
-        projectId: requireText(request?.projectId, "Project id"),
-        title: requireText(request?.title, "Book title"),
-        synopsis: requireContent(request?.synopsis),
-        status: requireNovelStatus(request?.status),
-    }));
-    handle(AGENT_IPC_CHANNELS.updateBookChapter, (
-        request: UpdateBookChapterRequest,
-    ) => service.requireController().updateBookChapter({
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.updateBook, (request: UpdateBookRequest) =>
+    service.requireController().updateBook({
+      expectedRowVersion: z
+        .number()
+        .int()
+        .positive()
+        .parse(request.expectedRowVersion),
+      projectId: requireText(request?.projectId, "Project id"),
+      title: requireText(request?.title, "Book title"),
+      synopsis: requireContent(request?.synopsis),
+      status: requireNovelStatus(request?.status),
+    }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.updateBookChapter,
+    (request: UpdateBookChapterRequest) =>
+      service.requireController().updateBookChapter({
+        expectedRowVersion: z
+          .number()
+          .int()
+          .positive()
+          .parse(request.expectedRowVersion),
         projectId: requireText(request?.projectId, "Project id"),
         chapterId: requireText(request?.chapterId, "Chapter id"),
         title: requireText(request?.title, "Chapter title"),
-    }));
-    handle(AGENT_IPC_CHANNELS.saveBookChapterContent, (
-        request: SaveBookChapterContentRequest,
-    ) => service.requireController().saveBookChapterContent({
+      }),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.getBookChapterContent,
+    (request: { projectId: string; chapterId: string }) =>
+      service.requireController().getBookChapterContent({
+        projectId: requireText(request?.projectId, "Project id"),
+        chapterId: requireText(request?.chapterId, "Chapter id"),
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.chapterDraft, (request: ChapterDraftRequest) => {
+    const common = {
+      projectId: z.string().min(1).max(200),
+      chapterId: z.string().min(1).max(200),
+    };
+    const parsed = z
+      .discriminatedUnion("action", [
+        z.object({ ...common, action: z.literal("read") }),
+        z.object({
+          ...common,
+          action: z.literal("save"),
+          baseRevisionId: z.string().min(1).nullable(),
+          expectedDraftVersion: z.number().int().nonnegative(),
+          content: z.string().max(20_000_000),
+        }),
+      ])
+      .parse(request);
+    return service
+      .requireController()
+      .chapterDraft(parsed as ChapterDraftRequest);
+  });
+  handle(
+    AGENT_IPC_CHANNELS.saveBookChapterContent,
+    (request: SaveBookChapterContentRequest) =>
+      service.requireController().saveBookChapterContent({
         projectId: requireText(request?.projectId, "Project id"),
         chapterId: requireText(request?.chapterId, "Chapter id"),
         content: requireContent(request?.content),
+        expectedRowVersion: z
+          .number()
+          .int()
+          .positive()
+          .parse(request?.expectedRowVersion),
+        expectedDraftVersion: z
+          .number()
+          .int()
+          .nonnegative()
+          .optional()
+          .parse(request?.expectedDraftVersion),
         expectedCurrentRevisionId: requireNullableRevisionId(
-            request?.expectedCurrentRevisionId,
+          request?.expectedCurrentRevisionId,
         ),
-    }));
-    handle(AGENT_IPC_CHANNELS.workspaceSnapshot, () => service.requireController().getWorkspaceSnapshot());
-    handle(AGENT_IPC_CHANNELS.createProject, (request: CreateProjectRequest) => service.requireController().createProject(request));
-    handle(AGENT_IPC_CHANNELS.openProject, (projectPath: string) => service.requireController().openProject(projectPath));
-    handle(AGENT_IPC_CHANNELS.openProjectDirectory, (projectPath: string) => service.requireController().openProjectDirectory(projectPath));
-    handle(AGENT_IPC_CHANNELS.renameProject, (request: RenameProjectRequest) => service.requireController().renameProject(request));
-    handle(AGENT_IPC_CHANNELS.deleteProject, (projectPath: string) => service.requireController().deleteProject(projectPath));
-    handle(AGENT_IPC_CHANNELS.switchProject, (projectPath: string | null) => service.requireController().switchProject(projectPath));
-    handle(AGENT_IPC_CHANNELS.removeProject, (projectPath: string) => service.requireController().removeProject(projectPath));
-    handle(AGENT_IPC_CHANNELS.skillSnapshot, () => service.requireController().getSkillSnapshot());
-    handle(AGENT_IPC_CHANNELS.getSkill, (skillId: string) => service.requireController().getSkill(skillId));
-    handle(AGENT_IPC_CHANNELS.useSkill, (skillId: string, threadId?: string) => service.requireController().useSkill(skillId, threadId));
-    handle(AGENT_IPC_CHANNELS.disableSkill, (skillId: string, threadId?: string) => service.requireController().disableSkill(skillId, threadId));
-    handle(AGENT_IPC_CHANNELS.clearSkillState, (threadId?: string) => service.requireController().clearSkillState(threadId));
+      }),
+  );
+  handle(AGENT_IPC_CHANNELS.workspaceSnapshot, () =>
+    service.requireController().getWorkspaceSnapshot(),
+  );
+  handle(AGENT_IPC_CHANNELS.createProject, (request: CreateProjectRequest) =>
+    service.requireController().createProject(request),
+  );
+  handle(AGENT_IPC_CHANNELS.openProject, (projectPath: string) =>
+    service.requireController().openProject(projectPath),
+  );
+  handle(AGENT_IPC_CHANNELS.openProjectDirectory, (projectPath: string) =>
+    service.requireController().openProjectDirectory(projectPath),
+  );
+  handle(AGENT_IPC_CHANNELS.renameProject, (request: RenameProjectRequest) =>
+    service.requireController().renameProject(request),
+  );
+  handle(AGENT_IPC_CHANNELS.deleteProject, (projectPath: string) =>
+    service.requireController().deleteProject(projectPath),
+  );
+  handle(AGENT_IPC_CHANNELS.switchProject, (projectPath: string | null) =>
+    service.requireController().switchProject(projectPath),
+  );
+  handle(AGENT_IPC_CHANNELS.removeProject, (projectPath: string) =>
+    service.requireController().removeProject(projectPath),
+  );
+  handle(AGENT_IPC_CHANNELS.skillSnapshot, () =>
+    service.requireController().getSkillSnapshot(),
+  );
+  handle(AGENT_IPC_CHANNELS.getSkill, (skillId: string) =>
+    service.requireController().getSkill(skillId),
+  );
+  handle(AGENT_IPC_CHANNELS.useSkill, (skillId: string, threadId?: string) =>
+    service.requireController().useSkill(skillId, threadId),
+  );
+  handle(
+    AGENT_IPC_CHANNELS.disableSkill,
+    (skillId: string, threadId?: string) =>
+      service.requireController().disableSkill(skillId, threadId),
+  );
+  handle(AGENT_IPC_CHANNELS.clearSkillState, (threadId?: string) =>
+    service.requireController().clearSkillState(threadId),
+  );
 
-    const unsubscribe = service.subscribe((event) => {
-        for (const window of BrowserWindow.getAllWindows()) {
-            if (!window.isDestroyed()) window.webContents.send(AGENT_IPC_CHANNELS.event, event);
-        }
-    });
-    const onEditorToolResponse = (
-        _event: Electron.IpcMainEvent,
-        response: RendererEditorToolResponse,
-    ) => rendererEditorTools?.acceptResponse(response);
-    ipcMain.on(AGENT_IPC_CHANNELS.editorToolResponse, onEditorToolResponse);
+  const unsubscribe = service.subscribe((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed())
+        window.webContents.send(AGENT_IPC_CHANNELS.event, event);
+    }
+  });
+  const onEditorToolResponse = (
+    _event: Electron.IpcMainEvent,
+    response: RendererEditorToolResponse,
+  ) => rendererEditorTools?.acceptResponse(response);
+  ipcMain.on(AGENT_IPC_CHANNELS.editorToolResponse, onEditorToolResponse);
 
-    return () => {
-        closeBookReaderIpc();
-        unsubscribe();
-        ipcMain.removeListener(
-            AGENT_IPC_CHANNELS.editorToolResponse,
-            onEditorToolResponse,
-        );
-        for (const channel of registeredChannels) ipcMain.removeHandler(channel);
-    };
+  return () => {
+    closeBookReaderIpc();
+    unsubscribe();
+    ipcMain.removeListener(
+      AGENT_IPC_CHANNELS.editorToolResponse,
+      onEditorToolResponse,
+    );
+    for (const channel of registeredChannels) ipcMain.removeHandler(channel);
+  };
 }

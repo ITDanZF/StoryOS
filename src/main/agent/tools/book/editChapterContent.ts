@@ -17,7 +17,9 @@ function requireChapterState(context: BookToolContext, chapterId: string) {
   const book = context.requireBook();
   const chapter = context.novels.getChapter(chapterId);
   if (chapter.novelId !== book.id) {
-    throw new Error(`Chapter does not belong to the current book: ${chapterId}`);
+    throw new Error(
+      `Chapter does not belong to the current book: ${chapterId}`,
+    );
   }
   const revision = context.novels.getCurrentRevision(chapter.id);
   const document = revision
@@ -63,11 +65,15 @@ function replaceChapterText(input: {
 }) {
   const occurrences = collectOccurrences(input.currentText, input.expectedText);
   if (occurrences.length === 0) {
-    throw new Error("Expected text was not found in the persisted chapter text.");
+    throw new Error(
+      "Expected text was not found in the persisted chapter text.",
+    );
   }
   if (input.replaceAll) {
     return {
-      nextText: input.currentText.split(input.expectedText).join(input.replacementText),
+      nextText: input.currentText
+        .split(input.expectedText)
+        .join(input.replacementText),
       replacementCount: occurrences.length,
     };
   }
@@ -96,12 +102,15 @@ function replaceChapterText(input: {
   };
 }
 
-function savePlainTextRevision(context: BookToolContext, input: {
-  readonly chapterId: string;
-  readonly text: string;
-  readonly expectedCurrentRevisionId: string | null;
-  readonly changeSummary?: string;
-}) {
+function savePlainTextRevision(
+  context: BookToolContext,
+  input: {
+    readonly chapterId: string;
+    readonly text: string;
+    readonly expectedCurrentRevisionId: string | null;
+    readonly changeSummary?: string;
+  },
+) {
   const document = plainTextToTiptapDocument(input.text);
   const content = serializeTiptapDocument(document);
   return context.novels.saveRevision({
@@ -110,6 +119,8 @@ function savePlainTextRevision(context: BookToolContext, input: {
     characterCount: countTiptapCharacters(document),
     changeSummary: input.changeSummary,
     expectedCurrentRevisionId: input.expectedCurrentRevisionId,
+    expectedRowVersion: context.novels.getChapter(input.chapterId).rowVersion,
+    origin: "agent",
   });
 }
 
@@ -163,12 +174,40 @@ export function createBookChapterContentTools(context: BookToolContext) {
         "This saves a new plain-text Tiptap revision and may normalize rich-text formatting; do not use it for styling-only changes.",
       ].join(" "),
       schema: z.object({
-        chapter_id: z.string().min(1).describe("Chapter id from get_book_outline or read_book_chapter."),
-        expected_revision_number: z.number().int().positive().nullable().describe("The current persisted revision number, or null if the chapter has no revision."),
-        expected_text: z.string().min(1).describe("Exact persisted plain text to replace."),
-        replacement_text: z.string().describe("Replacement plain text. Use an empty string to delete the expected text."),
-        occurrence: z.number().int().positive().optional().describe("1-based occurrence to replace when expected_text appears more than once."),
-        replace_all: z.boolean().optional().default(false).describe("Replace every occurrence of expected_text."),
+        chapter_id: z
+          .string()
+          .min(1)
+          .describe("Chapter id from get_book_outline or read_book_chapter."),
+        expected_revision_number: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .describe(
+            "The current persisted revision number, or null if the chapter has no revision.",
+          ),
+        expected_text: z
+          .string()
+          .min(1)
+          .describe("Exact persisted plain text to replace."),
+        replacement_text: z
+          .string()
+          .describe(
+            "Replacement plain text. Use an empty string to delete the expected text.",
+          ),
+        occurrence: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "1-based occurrence to replace when expected_text appears more than once.",
+          ),
+        replace_all: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Replace every occurrence of expected_text."),
         change_summary: z.string().trim().min(1).max(200).optional(),
       }),
     },
@@ -189,7 +228,9 @@ export function createBookChapterContentTools(context: BookToolContext) {
         chapter_id,
       );
       if (state.text !== expected_current_text) {
-        throw new Error("Persisted chapter text does not match expected_current_text.");
+        throw new Error(
+          "Persisted chapter text does not match expected_current_text.",
+        );
       }
       const revision = savePlainTextRevision(context, {
         chapterId: state.chapter.id,
@@ -217,10 +258,26 @@ export function createBookChapterContentTools(context: BookToolContext) {
         "This saves a plain-text Tiptap revision and may normalize rich-text formatting; do not use it for styling-only changes.",
       ].join(" "),
       schema: z.object({
-        chapter_id: z.string().min(1).describe("Chapter id from get_book_outline or read_book_chapter."),
-        expected_revision_number: z.number().int().positive().nullable().describe("The current persisted revision number, or null if the chapter has no revision."),
-        expected_current_text: z.string().describe("Exact full persisted plain text returned by read_book_chapter."),
-        new_text: z.string().describe("New full plain text to save for the chapter."),
+        chapter_id: z
+          .string()
+          .min(1)
+          .describe("Chapter id from get_book_outline or read_book_chapter."),
+        expected_revision_number: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .describe(
+            "The current persisted revision number, or null if the chapter has no revision.",
+          ),
+        expected_current_text: z
+          .string()
+          .describe(
+            "Exact full persisted plain text returned by read_book_chapter.",
+          ),
+        new_text: z
+          .string()
+          .describe("New full plain text to save for the chapter."),
         change_summary: z.string().trim().min(1).max(200).optional(),
       }),
     },

@@ -71,10 +71,10 @@ function samePath(first: string, second: string): boolean {
 }
 
 export default class WorkspaceRuntimeManager {
-  private readonly subscribers =
-    new Set<ConversationApplicationEventHandler>();
+  private readonly subscribers = new Set<ConversationApplicationEventHandler>();
   private globalRuntime: ActiveWorkspaceRuntime | null = null;
   private projectRuntime: ActiveWorkspaceRuntime | null = null;
+  private activationQueue: Promise<void> = Promise.resolve();
   private readonly modelConnection: LiveModelConnection;
 
   private constructor(
@@ -88,7 +88,9 @@ export default class WorkspaceRuntimeManager {
     this.modelConnection = new LiveModelConnection(modelConfiguration);
   }
 
-  prepareModelConfiguration(configuration: ModelConnectionConfiguration): () => void {
+  prepareModelConfiguration(
+    configuration: ModelConnectionConfiguration,
+  ): () => void {
     return this.modelConnection.prepareUpdate(configuration);
   }
 
@@ -119,22 +121,26 @@ export default class WorkspaceRuntimeManager {
       | RendererEditorToolClient,
     rendererEditorTools?: RendererEditorToolClient,
   ): Promise<WorkspaceRuntimeManager> {
-    const bookRuntimes = typeof bookRuntimesOrAgentHome === "string"
-      ? new BookRuntimeManager(bookRuntimesOrAgentHome, books)
-      : bookRuntimesOrAgentHome;
-    const bookProvisioning = typeof bookRuntimesOrAgentHome === "string"
-      ? new BookProvisioningService(
-          bookRuntimesOrAgentHome,
-          books,
-          bookRuntimes,
-        )
-      : provisioningOrConfiguration as BookProvisioningService;
-    const modelConfiguration = typeof bookRuntimesOrAgentHome === "string"
-      ? provisioningOrConfiguration as ModelConnectionConfiguration
-      : configurationOrRenderer as ModelConnectionConfiguration;
-    const editorTools = typeof bookRuntimesOrAgentHome === "string"
-      ? configurationOrRenderer as RendererEditorToolClient | undefined
-      : rendererEditorTools;
+    const bookRuntimes =
+      typeof bookRuntimesOrAgentHome === "string"
+        ? new BookRuntimeManager(bookRuntimesOrAgentHome, books)
+        : bookRuntimesOrAgentHome;
+    const bookProvisioning =
+      typeof bookRuntimesOrAgentHome === "string"
+        ? new BookProvisioningService(
+            bookRuntimesOrAgentHome,
+            books,
+            bookRuntimes,
+          )
+        : (provisioningOrConfiguration as BookProvisioningService);
+    const modelConfiguration =
+      typeof bookRuntimesOrAgentHome === "string"
+        ? (provisioningOrConfiguration as ModelConnectionConfiguration)
+        : (configurationOrRenderer as ModelConnectionConfiguration);
+    const editorTools =
+      typeof bookRuntimesOrAgentHome === "string"
+        ? (configurationOrRenderer as RendererEditorToolClient | undefined)
+        : rendererEditorTools;
     const manager = new WorkspaceRuntimeManager(
       projects,
       books,
@@ -147,8 +153,7 @@ export default class WorkspaceRuntimeManager {
       manager.globalRuntime = await manager.createRuntime(null);
       const activeProjectPath = projects.getSnapshot().activeProjectPath;
       if (activeProjectPath) {
-        manager.projectRuntime =
-          await manager.createRuntime(activeProjectPath);
+        manager.projectRuntime = await manager.createRuntime(activeProjectPath);
       }
       return manager;
     } catch (error) {
@@ -178,7 +183,14 @@ export default class WorkspaceRuntimeManager {
     return this.projectRuntime?.projectPath ?? null;
   }
 
-  async activate(projectPath: string | null): Promise<void> {
+  activate(projectPath: string | null): Promise<void> {
+    // Concurrent IPC reads must share the runtime created by the preceding activation.
+    const next = this.activationQueue.then(() => this.activateNow(projectPath));
+    this.activationQueue = next.catch((): void => undefined);
+    return next;
+  }
+
+  private async activateNow(projectPath: string | null): Promise<void> {
     if (projectPath === null) {
       if (!this.projectRuntime) return;
       this.assertCanLeaveProjectRuntime();
@@ -196,9 +208,7 @@ export default class WorkspaceRuntimeManager {
     await this.closeRuntime(previous);
   }
 
-  async resolve(
-    scope: ConversationScope,
-  ): Promise<ActiveWorkspaceRuntime> {
+  async resolve(scope: ConversationScope): Promise<ActiveWorkspaceRuntime> {
     if (scope.kind === "global") return this.requireGlobalRuntime();
     const snapshot = this.projects.getSnapshot();
     const project = snapshot.projects.find(
@@ -259,7 +269,11 @@ export default class WorkspaceRuntimeManager {
       const projectDatabase = new ProjectDatabase(layout.projectDatabasePath);
       resources.projectDatabase = projectDatabase;
       const threads = new ThreadApplication(
-        new SqliteThreadStore(projectDatabase.handle),
+        new SqliteThreadStore(projectDatabase.handle, () =>
+          project
+            ? (this.books.getBookForProject(project.id)?.id ?? null)
+            : null,
+        ),
       );
       if (project && !threads.getActiveThreadId()) {
         threads.createThread({ title: "新对话" });
@@ -314,8 +328,15 @@ export default class WorkspaceRuntimeManager {
         path.join(layout.stateRoot, "text-index"),
         new SqliteTextIndexStore(projectDatabase.handle),
       );
-      const runStore = new SqliteRunStore(projectDatabase.handle);
-      const conversationEvents = new SqliteConversationEventStore(projectDatabase.handle);
+      const runStore = new SqliteRunStore(projectDatabase.handle, 500, () => ({
+        ...this.modelConnection.getIdentity(),
+        bookId: project
+          ? (this.books.getBookForProject(project.id)?.id ?? null)
+          : null,
+      }));
+      const conversationEvents = new SqliteConversationEventStore(
+        projectDatabase.handle,
+      );
       const initialRuns = await runStore.loadRunSnapshots(100);
       const agent = new AgentApplication(
         createAgentOrchestrator({
@@ -343,7 +364,8 @@ export default class WorkspaceRuntimeManager {
         }),
         {
           checkpointPath: layout.checkpointPath,
-          withRunContext: (operation) => this.modelConnection.withNewTask(operation),
+          withRunContext: (operation) =>
+            this.modelConnection.withNewTask(operation),
           eventRecorder: {
             record: async (event) => {
               await Promise.all([
@@ -438,7 +460,9 @@ export default class WorkspaceRuntimeManager {
 
   private requireGlobalRuntime(): ActiveWorkspaceRuntime {
     if (!this.globalRuntime) {
-      throw new Error("StoryOS global conversation runtime is not initialized.");
+      throw new Error(
+        "StoryOS global conversation runtime is not initialized.",
+      );
     }
     return this.globalRuntime;
   }

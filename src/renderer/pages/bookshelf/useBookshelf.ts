@@ -7,9 +7,7 @@ import type {
 import BookshelfRefreshScheduler from "./bookshelfRefreshScheduler.ts";
 
 type BookshelfPhase = "loading" | "ready" | "error";
-type PendingAction =
-  | { readonly kind: "create" }
-  | null;
+type PendingAction = { readonly kind: "create" } | null;
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -29,7 +27,20 @@ export default function useBookshelf() {
     setPhase("loading");
     setLoadError(null);
     try {
-      const result = await window.storyOSAgent.getBookshelfBooks();
+      const result: BookshelfBookCard[] = [];
+      let after: string | undefined;
+      while (true) {
+        const page = await window.storyOSAgent.getBookshelfBooks({
+          after,
+          limit: 200,
+        });
+        if (requestId !== requestIdRef.current) return result;
+        result.push(...page);
+        if (page.length < 200) break;
+        const next = page.at(-1)?.listCursor;
+        if (!next || next === after) throw new Error("书架分页游标无效。");
+        after = next;
+      }
       if (requestId !== requestIdRef.current) return result;
       setBooks(result);
       setPhase("ready");
@@ -60,25 +71,28 @@ export default function useBookshelf() {
     };
   }, [load]);
 
-  const createBook = useCallback(async (
-    input: CreateBookshelfBookRequest,
-  ): Promise<CreateBookshelfBookResult> => {
-    if (pendingAction) throw new Error("另一项书架操作正在进行。");
-    setPendingAction({ kind: "create" });
-    setActionError(null);
-    setNotice(null);
-    try {
-      const result = await window.storyOSAgent.createBookshelfBook(input);
-      await load();
-      setNotice(`《${result.book.title}》已加入书架`);
-      return result;
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-      throw error;
-    } finally {
-      setPendingAction(null);
-    }
-  }, [load, pendingAction]);
+  const createBook = useCallback(
+    async (
+      input: CreateBookshelfBookRequest,
+    ): Promise<CreateBookshelfBookResult> => {
+      if (pendingAction) throw new Error("另一项书架操作正在进行。");
+      setPendingAction({ kind: "create" });
+      setActionError(null);
+      setNotice(null);
+      try {
+        const result = await window.storyOSAgent.createBookshelfBook(input);
+        await load();
+        setNotice(`《${result.book.title}》已加入书架`);
+        return result;
+      } catch (error) {
+        setActionError(getErrorMessage(error));
+        throw error;
+      } finally {
+        setPendingAction(null);
+      }
+    },
+    [load, pendingAction],
+  );
 
   return {
     phase,

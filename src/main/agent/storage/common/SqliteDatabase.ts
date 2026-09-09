@@ -43,10 +43,9 @@ export default class SqliteDatabase {
     this.handle.pragma("busy_timeout = 5000");
     this.handle.pragma("temp_store = MEMORY");
 
-    const currentApplicationId = this.handle.pragma(
-      "application_id",
-      { simple: true },
-    ) as number;
+    const currentApplicationId = this.handle.pragma("application_id", {
+      simple: true,
+    }) as number;
     if (currentApplicationId !== 0 && currentApplicationId !== applicationId) {
       throw new Error("The SQLite file belongs to another application.");
     }
@@ -56,14 +55,18 @@ export default class SqliteDatabase {
   }
 
   private migrate(migrations: readonly SqliteMigration[]): void {
-    const ordered = [...migrations].sort((left, right) => left.version - right.version);
+    const ordered = [...migrations].sort(
+      (left, right) => left.version - right.version,
+    );
     const versions = new Set<number>();
     for (const migration of ordered) {
       if (!Number.isInteger(migration.version) || migration.version <= 0) {
         throw new Error("SQLite migration versions must be positive integers.");
       }
       if (versions.has(migration.version)) {
-        throw new Error(`Duplicate SQLite migration version: ${migration.version}`);
+        throw new Error(
+          `Duplicate SQLite migration version: ${migration.version}`,
+        );
       }
       versions.add(migration.version);
     }
@@ -72,6 +75,13 @@ export default class SqliteDatabase {
       simple: true,
     }) as number;
     const latestVersion = ordered.at(-1)?.version ?? 0;
+    const baselineVersion = ordered[0]?.version ?? 0;
+    if (currentVersion !== 0 && currentVersion < baselineVersion) {
+      throw new Error(
+        `Storage reset required: schema ${currentVersion} predates baseline ${baselineVersion}. Run the explicit StoryOS storage reset command.`,
+      );
+    }
+
     if (currentVersion > latestVersion) {
       throw new Error(
         `SQLite schema version ${currentVersion} is newer than supported version ${latestVersion}.`,

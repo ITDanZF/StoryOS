@@ -16,6 +16,16 @@ export default class LiveModelConnection {
     this.current = this.createSnapshot(configuration);
   }
 
+  getIdentity(): { providerKey: string; modelKey: string } {
+    const configuration = (this.scope.getStore() ?? this.current).configuration;
+    const endpoint = new URL(configuration.baseUrl);
+    // Authentication and URL query parameters never enter run metadata.
+    return {
+      providerKey: endpoint.origin + endpoint.pathname,
+      modelKey: configuration.modelName,
+    };
+  }
+
   getClient(): ChatOpenAI {
     return (this.scope.getStore() ?? this.current).client;
   }
@@ -36,14 +46,22 @@ export default class LiveModelConnection {
   /** Prepare before persistence; the returned commit only replaces an in-memory reference. */
   prepareUpdate(configuration: ModelConnectionConfiguration): () => void {
     const previous = this.current.configuration;
-    if (previous.modelName === configuration.modelName && previous.baseUrl === configuration.baseUrl && previous.apiKey === configuration.apiKey) {
+    if (
+      previous.modelName === configuration.modelName &&
+      previous.baseUrl === configuration.baseUrl &&
+      previous.apiKey === configuration.apiKey
+    ) {
       return () => undefined;
     }
     const next = this.createSnapshot(configuration);
-    return () => { this.current = next; };
+    return () => {
+      this.current = next;
+    };
   }
 
-  private createSnapshot(configuration: ModelConnectionConfiguration): ConnectionSnapshot {
+  private createSnapshot(
+    configuration: ModelConnectionConfiguration,
+  ): ConnectionSnapshot {
     return Object.freeze({
       configuration: Object.freeze({ ...configuration }),
       client: new ChatOpenAI({
