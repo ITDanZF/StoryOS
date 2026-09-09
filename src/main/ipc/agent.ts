@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from "electron";
+import { registerBookReaderIpc } from "./bookReader.ts";
 import StoryAgentService from "../agent/StoryAgentService.ts";
 import { AGENT_IPC_CHANNELS } from "../../shared/agent/contracts.ts";
 import type { CreateProjectRequest, RenameProjectRequest } from "../agent/application/projectContracts.ts";
@@ -204,6 +205,7 @@ export function registerAgentIpc(
     rendererEditorTools?: RendererEditorToolBridge,
 ): () => void {
     const registeredChannels: string[] = [];
+    const closeBookReaderIpc = registerBookReaderIpc(service);
     const handle = <TArgs extends unknown[]>(
         channel: string,
         listener: (...args: TArgs) => unknown,
@@ -451,6 +453,7 @@ export function registerAgentIpc(
     ipcMain.on(AGENT_IPC_CHANNELS.editorToolResponse, onEditorToolResponse);
 
     return () => {
+        closeBookReaderIpc();
         unsubscribe();
         ipcMain.removeListener(
             AGENT_IPC_CHANNELS.editorToolResponse,

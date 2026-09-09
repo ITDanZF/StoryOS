@@ -1,3 +1,4 @@
+import { startReaderEntry } from "../reader/ReaderEntryLayer.tsx";
 import {
   BookOpen,
   LibraryBig,
@@ -8,7 +9,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { BookshelfBookCard } from "../../../shared/agent/contracts.ts";
 import { cn } from "../../../lib/utils.ts";
@@ -32,7 +33,11 @@ import useBookshelfTrash from "./trash/useBookshelfTrash.ts";
 import ImportBookDialog from "./transfer/ImportBookDialog.tsx";
 import ExportBookDialog from "./transfer/ExportBookDialog.tsx";
 
+import "./bookshelf.css";
+import useBookshelfDialogFocus from "./useBookshelfDialogFocus.ts";
+
 type ReadyBook = Extract<BookshelfBookCard, { availability: "ready" }>;
+const readerReturn = { pending: false, query: "", view: "grid" as BookshelfView, scrollTop: 0, focus: "" };
 
 export default function BookshelfPage() {
   const {
@@ -44,8 +49,8 @@ export default function BookshelfPage() {
   const navigate = useNavigate();
   const bookshelf = useBookshelf();
   const trash = useBookshelfTrash();
-  const [view, setView] = useState<BookshelfView>("grid");
-  const [query, setQuery] = useState("");
+  const [view, setView] = useState<BookshelfView>(() => readerReturn.pending ? readerReturn.view : "grid");
+  const [query, setQuery] = useState(() => readerReturn.pending ? readerReturn.query : "");
   const [newBookOpen, setNewBookOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [exportTarget, setExportTarget] = useState<ReadyBook | null>(null);
@@ -54,6 +59,26 @@ export default function BookshelfPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ReadyBook | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [menuBookId, setMenuBookId] = useState<string | null>(null);
+  const closeMenu = useCallback(() => setMenuBookId(null), []);
+  useEffect(closeMenu, [query, view, closeMenu]);
+  useBookshelfDialogFocus(Boolean(archiveTarget));
+  const shelfScrollRef = useRef<HTMLDivElement>(null);
+
+  const openReader = (book: ReadyBook) => {
+    Object.assign(readerReturn, { pending: true, query, view, scrollTop: shelfScrollRef.current?.scrollTop ?? 0,
+      focus: (document.activeElement as HTMLElement)?.dataset.readerEntry ?? `card-${book.bookId}` });
+    startReaderEntry(book, navigate);
+  };
+  useEffect(() => {
+    if (!readerReturn.pending || bookshelf.phase === "loading") return;
+    const frame = requestAnimationFrame(() => {
+      if (shelfScrollRef.current) shelfScrollRef.current.scrollTop = readerReturn.scrollTop;
+      document.querySelector<HTMLElement>(`[data-reader-entry="${CSS.escape(readerReturn.focus)}"]`)?.focus({ preventScroll: true });
+      readerReturn.pending = false;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bookshelf.phase]);
 
   const readyBooks = bookshelf.books.filter(
     (book): book is ReadyBook => book.availability === "ready",
@@ -149,75 +174,75 @@ export default function BookshelfPage() {
   };
 
   return (
-    <section className="m-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 border-border bg-[#f5f5f2] sm:m-1.5 sm:rounded-xl sm:border lg:ml-2 2xl:mr-3" aria-label="我的书架">
-      <header className="flex min-h-[76px] shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-2 backdrop-blur-xl sm:px-4 lg:px-8">
+    <section className="shelf-page m-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 border-border bg-[#f5f5f2] sm:m-1.5 sm:rounded-xl sm:border lg:ml-2 2xl:mr-3" aria-label="我的书架">
+      <header className="shelf-page-header flex min-h-[76px] shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-2 backdrop-blur-xl sm:px-4 lg:px-8">
         <div className="flex min-w-0 items-center gap-2.5">
           <button className="grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent hover:bg-neutral-100 lg:hidden" type="button" aria-label="打开侧栏" onClick={openSidebar}><Menu size={19} /></button>
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-neutral-900 text-white shadow-lg"><LibraryBig size={18} /></span>
           <span className="grid min-w-0 gap-0.5">
-            <small className="text-[8px] font-semibold tracking-[0.12em] text-stone-400">STORY LIBRARY</small>
-            <h1 className="m-0 text-base font-semibold tracking-tight text-neutral-900">我的书架</h1>
-            <p className="m-0 hidden truncate text-[9px] text-neutral-400 sm:block">让每一个正在生长的故事，都有清晰的下一步。</p>
+            <small className="text-[11px] font-semibold tracking-[0.12em] text-stone-600">STORY LIBRARY</small>
+            <h1 className="m-0 text-xl font-semibold tracking-tight text-neutral-900">我的书架</h1>
+            <p className="m-0 hidden truncate text-[13px] text-[#666] sm:block">让每一个正在生长的故事，都有清晰的下一步。</p>
           </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <button className="relative flex size-9 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white text-[10px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 sm:w-auto sm:px-3" type="button" aria-label="打开书架回收站" onClick={() => navigate("/bookshelf/trash")}><Trash2 size={14} /><span className="hidden sm:inline">回收站</span>{trash.entries.length > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-w-4 place-items-center rounded-full bg-neutral-900 px-1 text-[8px] leading-4 text-white">{trash.entries.length}</span>}</button>
-          <button className="flex size-9 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white text-[10px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 sm:w-auto sm:px-3" type="button" aria-label="导入书籍" disabled={busy} onClick={() => setImportOpen(true)}><Upload size={14} /><span className="hidden sm:inline">导入书籍</span></button>
-          <button className="flex h-9 items-center gap-2 rounded-xl border border-neutral-900 bg-neutral-900 px-3 text-[10px] font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-black disabled:opacity-50" type="button" disabled={busy} onClick={() => setNewBookOpen(true)}><Plus size={14} />新建书籍</button>
+        <div className="shelf-page-actions flex shrink-0 items-center gap-2">
+          <button className="relative flex size-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white text-[14px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 sm:w-auto sm:px-3" type="button" aria-label="打开书架回收站" onClick={() => navigate("/bookshelf/trash")}><Trash2 size={18} /><span className="hidden sm:inline">回收站</span>{trash.entries.length > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-w-4 place-items-center rounded-full bg-neutral-900 px-1 text-[11px] leading-4 text-white">{trash.entries.length}</span>}</button>
+          <button className="flex size-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white text-[14px] font-semibold text-neutral-600 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 sm:w-auto sm:px-3" type="button" aria-label="导入书籍" disabled={busy} onClick={() => setImportOpen(true)}><Upload size={18} /><span className="hidden sm:inline">导入书籍</span></button>
+          <button className="flex h-10 items-center gap-2 rounded-xl border border-neutral-900 bg-neutral-900 px-3 text-[14px] font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-black disabled:opacity-50" type="button" disabled={busy} onClick={() => setNewBookOpen(true)}><Plus size={18} />新建书籍</button>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto" aria-label="书架内容">
-        <div className="mx-auto w-[min(1080px,calc(100%_-_28px))] py-4 sm:w-[min(1080px,calc(100%_-_40px))] sm:py-7">
+      <div ref={shelfScrollRef} className="min-h-0 flex-1 overflow-y-auto" aria-label="书架内容">
+        <div className="shelf-content">
           {bookshelf.phase === "loading" && bookshelf.books.length === 0 ? (
             <div className="grid gap-4" aria-label="正在加载书架">
               <div className="h-[238px] animate-pulse rounded-[22px] bg-neutral-200" />
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((item) => <div className="h-52 animate-pulse rounded-2xl bg-neutral-200" key={item} />)}</div>
+              <div className="shelf-grid">{[0, 1, 2].map((item) => <div className="min-h-[272px] animate-pulse rounded-2xl bg-neutral-200" key={item} />)}</div>
             </div>
           ) : bookshelf.phase === "error" ? (
             <div className="grid place-items-center rounded-2xl border border-red-200 bg-white px-6 py-16 text-center">
               <strong className="text-sm text-neutral-800">书架加载失败</strong>
-              <p className="mb-4 mt-2 max-w-lg text-[11px] leading-5 text-red-700">{bookshelf.loadError}</p>
-              <button className="flex h-9 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-[10px] font-semibold hover:bg-neutral-50" type="button" onClick={() => void bookshelf.load()}><RefreshCw size={13} />重新加载</button>
+              <p className="mb-4 mt-2 max-w-lg text-[13px] leading-5 text-red-700">{bookshelf.loadError}</p>
+              <button className="flex h-10 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-[14px] font-semibold hover:bg-neutral-50" type="button" onClick={() => void bookshelf.load()}><RefreshCw size={13} />重新加载</button>
             </div>
           ) : bookshelf.books.length === 0 ? (
             <div className="grid place-items-center rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-20 text-center">
               <span className="grid size-12 place-items-center rounded-2xl bg-neutral-900 text-white"><BookOpen size={20} /></span>
               <strong className="mt-4 text-sm text-neutral-800">书架还是空的</strong>
-              <p className="mb-5 mt-2 text-[11px] text-neutral-500">新建第一本书，或导入已有的 StoryOS 书籍。</p>
+              <p className="mb-5 mt-2 text-[13px] text-neutral-600">新建第一本书，或导入已有的 StoryOS 书籍。</p>
               <div className="flex gap-2">
-                <button className="h-9 rounded-xl border border-neutral-200 bg-white px-4 text-[10px] font-semibold hover:bg-neutral-50" type="button" onClick={() => setImportOpen(true)}>导入书籍</button>
-                <button className="h-9 rounded-xl border border-neutral-900 bg-neutral-900 px-4 text-[10px] font-semibold text-white hover:bg-black" type="button" onClick={() => setNewBookOpen(true)}>新建书籍</button>
+                <button className="h-10 rounded-xl border border-neutral-200 bg-white px-4 text-[14px] font-semibold hover:bg-neutral-50" type="button" onClick={() => setImportOpen(true)}>导入书籍</button>
+                <button className="h-10 rounded-xl border border-neutral-900 bg-neutral-900 px-4 text-[14px] font-semibold text-white hover:bg-black" type="button" onClick={() => setNewBookOpen(true)}>新建书籍</button>
               </div>
             </div>
           ) : (
             <>
-              {featuredBook && <FeaturedBook book={featuredBook} busy={busy} onOpen={(book) => void openBook(book)} />}
+              {featuredBook && <FeaturedBook book={featuredBook} busy={busy} onOpen={(book) => void openBook(book)} onRead={openReader} />}
 
               <section className={cn(featuredBook ? "mt-8" : "mt-1")} aria-labelledby="all-books-title">
-                <div className="mb-4 flex items-end justify-between gap-4">
+                <div className="shelf-section-heading mb-4 flex items-end justify-between gap-4">
                   <div>
-                    <span className="text-[8px] font-semibold tracking-[0.12em] text-stone-400">ALL STORIES</span>
-                    <h2 className="mb-0 mt-1 flex items-center gap-2 text-xl font-semibold tracking-tight" id="all-books-title">全部作品 <small className="rounded-full bg-neutral-200 px-2 py-0.5 text-[9px] font-semibold text-neutral-500">{bookshelf.books.length}</small></h2>
+                    <span className="text-[11px] font-semibold tracking-[0.12em] text-stone-600">ALL STORIES</span>
+                    <h2 className="mb-0 mt-1 flex items-center gap-2 text-xl font-semibold tracking-tight" id="all-books-title">全部作品 <small className="rounded-full bg-neutral-200 px-2 py-0.5 text-[13px] font-semibold text-neutral-600">{bookshelf.books.length}</small></h2>
                   </div>
-                  <p className="m-0 pb-0.5 text-[9px] text-neutral-400">{totals.chapters} 章 · {formatCharacterCount(totals.characters)} 字</p>
+                  <p className="m-0 pb-0.5 text-[13px] text-[#666]">{totals.chapters} 章 · {formatCharacterCount(totals.characters)} 字</p>
                 </div>
 
                 <BookshelfToolbar query={query} view={view} searchInputRef={searchInputRef} onQueryChange={setQuery} onViewChange={setView} />
 
                 {visibleBooks.length > 0 ? (
-                  <div className={cn("grid gap-4", view === "grid" ? "md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1")}>
+                  <div className={cn("shelf-grid", view === "list" && "shelf-list")}>
                     {visibleBooks.map((book, index) => (
-                      <BookshelfBookCardView book={book} index={index} view={view} busy={busy} onOpen={(readyBook) => void openBook(readyBook)} onExport={setExportTarget} onArchives={setArchiveTarget} onTrash={(readyBook) => void moveBookToTrash(readyBook)} key={book.bookId} />
+                      <BookshelfBookCardView book={book} index={index} view={view} busy={busy} menuOpen={menuBookId === book.bookId} onMenuToggle={() => setMenuBookId(id => id === book.bookId ? null : book.bookId)} onMenuClose={closeMenu} onOpen={(readyBook) => void openBook(readyBook)} onRead={openReader} onExport={setExportTarget} onArchives={setArchiveTarget} onTrash={(readyBook) => void moveBookToTrash(readyBook)} key={book.bookId} />
                     ))}
                   </div>
                 ) : (
                   <div className="grid place-items-center rounded-2xl border border-dashed border-neutral-300 px-5 py-14 text-center">
-                    <span className="grid size-11 place-items-center rounded-xl bg-neutral-200 text-neutral-500"><Search size={18} /></span>
-                    <strong className="mt-3 text-xs text-neutral-700">没有找到相关作品</strong>
-                    <p className="mb-3 mt-1 text-[10px] text-neutral-400">换一个关键词再试一次。</p>
-                    <button className="text-[10px] font-semibold text-neutral-700 underline underline-offset-4" type="button" onClick={() => setQuery("")}>清除搜索</button>
+                    <span className="grid size-11 place-items-center rounded-xl bg-neutral-200 text-neutral-600"><Search size={18} /></span>
+                    <strong className="mt-3 text-base text-neutral-700">没有找到相关作品</strong>
+                    <p className="mb-3 mt-1 text-[14px] text-[#666]">换一个关键词再试一次。</p>
+                    <button className="text-[14px] font-semibold text-neutral-700 underline underline-offset-4" type="button" onClick={() => setQuery("")}>清除搜索</button>
                   </div>
                 )}
               </section>
@@ -227,10 +252,10 @@ export default function BookshelfPage() {
       </div>
 
       {(bookshelf.actionError || trash.actionError || pageError) && (
-        <div className="fixed bottom-4 right-4 z-[80] flex max-w-[min(430px,calc(100vw-32px))] items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[11px] text-red-800 shadow-xl" role="alert"><span className="flex-1">{pageError ?? bookshelf.actionError ?? trash.actionError}</span><button className="font-semibold" type="button" onClick={() => { setPageError(null); bookshelf.clearActionError(); trash.clearActionError(); }}>关闭</button></div>
+        <div className="fixed bottom-4 right-4 z-[80] flex max-w-[min(430px,calc(100vw-32px))] items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800 shadow-xl" role="alert"><span className="flex-1">{pageError ?? bookshelf.actionError ?? trash.actionError}</span><button className="font-semibold" type="button" onClick={() => { setPageError(null); bookshelf.clearActionError(); trash.clearActionError(); }}>关闭</button></div>
       )}
       {(bookshelf.notice || trash.notice) && !bookshelf.actionError && !trash.actionError && !pageError && (
-        <div className="fixed bottom-4 right-4 z-[80] flex max-w-[min(430px,calc(100vw-32px))] items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[11px] text-emerald-800 shadow-xl" role="status" aria-live="polite"><span className="flex-1">{bookshelf.notice ?? trash.notice}</span><button className="font-semibold" type="button" onClick={() => { bookshelf.clearNotice(); trash.clearNotice(); }}>关闭</button></div>
+        <div className="fixed bottom-4 right-4 z-[80] flex max-w-[min(430px,calc(100vw-32px))] items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-800 shadow-xl" role="status" aria-live="polite"><span className="flex-1">{bookshelf.notice ?? trash.notice}</span><button className="font-semibold" type="button" onClick={() => { bookshelf.clearNotice(); trash.clearNotice(); }}>关闭</button></div>
       )}
 
       {archiveTarget && <BookArchivesDialog book={archiveTarget} onClose={() => setArchiveTarget(null)} />}

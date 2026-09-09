@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { AGENT_IPC_CHANNELS } from "../shared/agent/contracts.ts";
+import { READER_CHANNELS } from "../shared/book/reader.ts";
 import type {
     AgentConfigurationRequest,
     AgentDesktopApi,
@@ -10,6 +11,11 @@ import type {
 } from "../shared/agent/contracts.ts";
 
 const agentApi: AgentDesktopApi = {
+    openBookReader: (bookId) => ipcRenderer.invoke(READER_CHANNELS.openBookReader, bookId),
+    readBookReaderChapter: (request) => ipcRenderer.invoke(READER_CHANNELS.readBookReaderChapter, request),
+    getBookReaderStatus: (snapshotId) => ipcRenderer.invoke(READER_CHANNELS.getBookReaderStatus, snapshotId),
+    saveBookReadingState: (request) => ipcRenderer.invoke(READER_CHANNELS.saveBookReadingState, request),
+    closeBookReader: (snapshotId) => ipcRenderer.invoke(READER_CHANNELS.closeBookReader, snapshotId),
     getStatus: () => ipcRenderer.invoke(AGENT_IPC_CHANNELS.status),
     configure: (request: AgentConfigurationRequest) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.configure, request),
     sendMessage: (request) => ipcRenderer.invoke(AGENT_IPC_CHANNELS.sendMessage, request),

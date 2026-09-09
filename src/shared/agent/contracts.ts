@@ -148,7 +148,7 @@ export type WorkspaceSnapshot = {
     readonly threads: ThreadSnapshot;
 };
 
-export type AgentDesktopApi = {
+export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
     getStatus(): Promise<AgentServiceStatus>;
     configure(request: AgentConfigurationRequest): Promise<AgentServiceStatus>;
     sendMessage(request: { threadId: string; content: string }): Promise<{ runId: string }>;

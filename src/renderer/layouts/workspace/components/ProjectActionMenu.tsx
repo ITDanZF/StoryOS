@@ -116,7 +116,7 @@ export default function ProjectActionMenu({
             <FolderOpen className="text-neutral-500" size={16} />
             <span>在文件资源管理器中打开</span>
           </button>
-          <button className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-left text-xs transition-colors hover:bg-neutral-100" type="button" role="menuitem" onClick={() => { onClose(); onRename(); }}>
+          <button className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 text-left text-xs transition-colors hover:bg-neutral-100" type="button" role="menuitem" onClick={() => { buttonRef.current?.focus({ preventScroll: true }); onClose(); onRename(); }}>
             <Pencil className="text-neutral-500" size={16} />
             <span>重命名</span>
           </button>

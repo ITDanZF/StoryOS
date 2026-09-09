@@ -33,6 +33,10 @@ export const router = createHashRouter([
         Component: BookshelfTrashPage,
       },
       {
+        path: "bookshelf/:bookId/read",
+        lazy: async () => ({ Component: (await import("../pages/reader/BookReaderPage.tsx")).default }),
+      },
+      {
         path: "projects/:projectId/book",
         Component: BookWorkspacePage,
       },

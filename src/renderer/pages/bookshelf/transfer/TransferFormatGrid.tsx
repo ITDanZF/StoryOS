@@ -1,6 +1,7 @@
 import { Archive, FileText, FileType2, Files, FileOutput, BookOpen } from "lucide-react";
 import type { BookTransferFormatCapability } from "../../../../shared/agent/contracts.ts";
 import { cn } from "../../../../lib/utils.ts";
+import "../../../components/motion/motion.css";
 
 export const TRANSFER_FORMAT_ICONS = {
   storyos: Archive,
@@ -74,7 +75,7 @@ export default function TransferFormatGrid({
   readonly onSelect: (format: BookTransferFormatCapability) => void;
 }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="transfer-format-grid motion-stagger grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {formats.map((format) => {
         const Icon = TRANSFER_FORMAT_ICONS[format.id];
         const visual = TRANSFER_FORMAT_VISUALS[format.id];

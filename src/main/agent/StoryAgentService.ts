@@ -25,6 +25,8 @@ import BookTransferService from "./application/BookTransferService.ts";
 import ProjectArchiveService from "./application/ProjectArchiveService.ts";
 import SqliteProjectArchiveStore from "./storage/global/SqliteProjectArchiveStore.ts";
 import type { RendererEditorToolClient } from "./tools/editor/contracts.ts";
+import BookReaderApplication from "./application/BookReaderApplication.ts";
+import SqliteBookReadingStateStore from "./storage/global/SqliteBookReadingStateStore.ts";
 
 export type AgentConfigurationRequest = {
     readonly provider: "deepseek" | "openai" | "qwen";
@@ -66,6 +68,14 @@ export default class StoryAgentService {
     private activeConfiguration: InfoType | null = null;
     private developerPaused = false;
     private businessRequests = 0;
+    private bookReader: BookReaderApplication | null = null;
+
+    requireBookReader(): BookReaderApplication {
+        if (!this.bookReader) throw new Error("阅读服务尚未初始化，请重新打开应用。");
+        return this.bookReader;
+    }
+
+    closeBookReaders(owner: number): void { this.bookReader?.closeOwner(owner); }
 
     async runBusinessRequest<T>(run: () => T | Promise<T>): Promise<T> {
         if (this.developerPaused) throw new Error("数据库编辑会话期间，业务访问已暂停。");
@@ -79,6 +89,8 @@ export default class StoryAgentService {
             throw new Error("仍有任务或数据操作进行中，请等待完成后再开启编辑会话。");
         }
         this.developerPaused = true;
+        this.bookReader?.dispose();
+        this.bookReader = null;
         const controller = this.controller;
         for (const unsubscribe of this.controllerUnsubscribers.values()) unsubscribe();
         this.controllerUnsubscribers.clear();
@@ -218,6 +230,8 @@ export default class StoryAgentService {
         if (this.runtimeInitialization) {
             await Promise.allSettled([this.runtimeInitialization]);
         }
+        this.bookReader?.dispose();
+        this.bookReader = null;
         const controller = this.controller;
         this.controller = null;
         for (const unsubscribe of this.controllerUnsubscribers.values()) {
@@ -346,6 +360,7 @@ export default class StoryAgentService {
                 );
             }
             this.applicationDatabase = applicationDatabase;
+            this.bookReader = new BookReaderApplication(bookRuntimes, new SqliteBookReadingStateStore(applicationDatabase.handle));
             this.controller = controller;
         } catch (error) {
             applicationDatabase.close();

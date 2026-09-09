@@ -1,4 +1,5 @@
 import type { Database as BetterSqliteDatabase } from "better-sqlite3";
+import type { ReaderManifest } from "../../../../shared/book/reader.ts";
 import type {
   ChapterRecord,
   ChapterRevisionRecord,
@@ -53,6 +54,32 @@ type RevisionRow = {
 
 export default class SqliteNovelStore implements NovelPersistence {
   constructor(private readonly database: BetterSqliteDatabase) {}
+
+  readReaderManifest(): ReaderManifest {
+    return this.database.transaction(() => {
+      const novels = this.listNovels();
+      if (novels.length !== 1) throw new Error("书籍内容不存在或不唯一。");
+      const novel = novels[0];
+      const volumes = this.listVolumes(novel.id);
+      const chapters = this.database.prepare(`SELECT c.id, c.volume_id, c.title, c.sort_order,
+        c.current_revision_id, r.content_hash, r.character_count
+        FROM chapters c LEFT JOIN chapter_revisions r ON r.id = c.current_revision_id
+        WHERE c.novel_id = ? ORDER BY c.sort_order, c.id`).all(novel.id) as {
+          id: string; volume_id: string | null; title: string; sort_order: number;
+          current_revision_id: string | null; content_hash: string | null; character_count: number | null;
+        }[];
+      return {
+        book: { ...novel, createdAt: novel.createdAt.toISOString(), updatedAt: novel.updatedAt.toISOString() },
+        volumes: volumes.map(v => ({ ...v, createdAt: v.createdAt.toISOString(), updatedAt: v.updatedAt.toISOString() })),
+        chapters: chapters.map(c => {
+          if (c.current_revision_id && c.content_hash === null) throw new Error(`章节修订已丢失：${c.title}`);
+          if (c.volume_id !== null && !volumes.some(v => v.id === c.volume_id)) throw new Error(`章节引用不存在的分卷：${c.title}`);
+          return { id: c.id, volumeId: c.volume_id, title: c.title, sortOrder: c.sort_order,
+            revisionId: c.current_revision_id, contentHash: c.content_hash, characterCount: c.character_count ?? 0 };
+        }),
+      };
+    })();
+  }
 
   createNovel(
     input: Omit<NovelRecord, "createdAt" | "updatedAt">,

@@ -1,8 +1,10 @@
+import ReaderEntryLayer from "../../pages/reader/ReaderEntryLayer.tsx";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ConversationScope } from "../../../shared/agent/contracts.ts";
 import WindowTitleBar from "../../components/WindowTitleBar.tsx";
+import { AnimatedPage } from "../../components/motion/index.ts";
 import "../../features/agent/api/previewAgentApi.ts";
 import "../../features/file-browser/previewWindowApi.ts";
 import { useAgentWorkspace } from "../../features/agent/hooks/useAgentWorkspace.ts";
@@ -27,6 +29,7 @@ export default function WorkspaceLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const reading = /^\/bookshelf\/[^/]+\/read$/.test(location.pathname);
 
   const openConversation = useCallback(async (
     scope: ConversationScope = { kind: "global" },
@@ -62,8 +65,8 @@ export default function WorkspaceLayout() {
 
   return (
     <main className="flex h-dvh w-full min-w-0 overflow-hidden bg-neutral-100 pt-8 font-sans text-neutral-900 antialiased [font-synthesis:none] [text-rendering:optimizeLegibility] [&_button:disabled]:cursor-not-allowed [&_button:not(:disabled)]:cursor-pointer">
-      <WindowTitleBar />
-      {location.pathname !== "/settings" && <WorkspaceSidebar
+      <WindowTitleBar /><ReaderEntryLayer />
+      {location.pathname !== "/settings" && !reading && <WorkspaceSidebar
         open={sidebarOpen}
         bookshelfActive={location.pathname.startsWith("/bookshelf")}
         projects={state.projects}
@@ -129,7 +132,9 @@ export default function WorkspaceLayout() {
         }}
       />}
 
-      <Outlet context={{ ...workspace, openSidebar: () => setSidebarOpen(true) }} />
+      <AnimatedPage transitionKey={location.pathname} disabled={reading}>
+        <Outlet context={{ ...workspace, openSidebar: () => setSidebarOpen(true) }} />
+      </AnimatedPage>
 
       {state.error && (
         <div className="fixed bottom-4 right-4 z-[70] flex max-w-[min(430px,calc(100vw-32px))] items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800 shadow-xl" role="alert">

@@ -1,0 +1,6 @@
+.book-cover-art { position:relative; width:100%; height:100%; overflow:hidden; container-type:size; font-family:Georgia,"Songti SC",SimSun,serif; box-shadow:inset 6px 0 8px #0003; }
+.book-cover-art-border { position:absolute; inset:4%; border:1px solid currentColor; opacity:.28; }
+.book-cover-art-edition { position:absolute; top:9%; left:8%; right:8%; text-align:center; font:500 clamp(7px,2.4cqw,12px)/1.5 sans-serif; letter-spacing:.12em; opacity:.7; }
+.book-cover-art-emblem { position:absolute; top:24%; left:42%; width:16%; aspect-ratio:1; display:grid; place-items:center; border:1px solid currentColor; border-radius:50%; font:italic clamp(18px,8cqw,38px) Georgia,serif; opacity:.8; }
+.book-cover-art-title { position:absolute; top:43%; left:12%; right:12%; font-size:clamp(15px,8cqw,40px); line-height:1.6; font-weight:400; letter-spacing:.1em; text-align:center; overflow-wrap:anywhere; max-height:40%; overflow:hidden; }
+.book-cover-art-bottom { position:absolute; bottom:10%; left:8%; right:8%; text-align:center; font-size:clamp(6px,2.5cqw,12px); letter-spacing:.08em; opacity:.6; }

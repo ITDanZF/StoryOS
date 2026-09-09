@@ -15,6 +15,7 @@ import type {
   ThreadDto,
   ThreadSnapshot,
 } from "../../../../shared/agent/contracts.ts";
+import { createPreviewBookReader } from "./previewBookReader.ts";
 import {
   deriveThreadTitle,
   isUntitledThreadTitle,
@@ -230,6 +231,13 @@ if (previewEnabled && !window.storyOSAgent) {
   const initialStatus: AgentServiceStatus = { configured: true, initialized: true, provider: "deepseek", modelName: "deepseek-chat", baseUrl: "https://api.deepseek.com", workspacePath: "", restartRequired: false };
   let previewStatus = initialStatus;
   const api: AgentDesktopApi = {
+    ...createPreviewBookReader(bookId => {
+      if (trashedBooks.has(bookId)) throw new Error("书籍已移入回收站。");
+      const projectId = [...projectBookIds].find(([, id]) => id === bookId)?.[0];
+      const book = projectId ? bookWorkspaces.get(projectId) : standaloneBooks.get(bookId);
+      if (!book || book.state !== "ready") throw new Error("书籍不存在。");
+      return book;
+    }),
     getStatus: async () => ({ ...previewStatus }),
     configure: async (request) => {
       const canReuseKey = request.provider === previewStatus.provider && request.baseUrl.trim() === previewStatus.baseUrl;

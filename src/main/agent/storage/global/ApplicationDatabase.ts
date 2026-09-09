@@ -204,6 +204,15 @@ const migrations: readonly SqliteMigration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    up(database) {
+      database.exec(`CREATE TABLE book_reading_states (
+        book_id TEXT PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+        state_json TEXT NOT NULL
+      );`);
+    },
+  },
 ];
 
 export default class ApplicationDatabase extends SqliteDatabase {

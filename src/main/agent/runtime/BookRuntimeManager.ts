@@ -113,6 +113,15 @@ export default class BookRuntimeManager {
     this.runtimes.clear();
   }
 
+  readReaderManifest(bookId: string) {
+    const lease = this.acquire(bookId);
+    try {
+      const runtime = this.runtimes.get(bookId);
+      if (!runtime) throw new Error("Book runtime not found.");
+      return runtime.persistence.readReaderManifest();
+    } finally { lease.close(); }
+  }
+
   inspectStorage(bookId: string): BookStorageHealth {
     const book = this.registry.getBookById(bookId);
     if (!book) {
