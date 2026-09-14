@@ -36,7 +36,10 @@ async function loadRoot(input: {
   readonly loadedAt: Date;
 }): Promise<SkillLoadResult> {
   if (!(await exists(input.root))) {
-    return Object.freeze({ skills: Object.freeze([]), issues: Object.freeze([]) });
+    return Object.freeze({
+      skills: Object.freeze([]),
+      issues: Object.freeze([]),
+    });
   }
 
   const entries = await readdir(input.root, { withFileTypes: true });
@@ -70,7 +73,9 @@ async function loadRoot(input: {
       });
 
       if (manifest.id !== entry.name) {
-        throw new Error(`Skill directory must match manifest id: ${entry.name} != ${manifest.id}`);
+        throw new Error(
+          `Skill directory must match manifest id: ${entry.name} != ${manifest.id}`,
+        );
       }
 
       skills.push(
