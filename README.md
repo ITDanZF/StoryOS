@@ -1,11 +1,5 @@
 <div align="center">
-  <img src="assets/branding/storyos-logo.svg" width="96" height="96" alt="StoryOS Logo" />
-
-  # StoryOS
-
-  **为长篇故事创作而生的本地 AI 桌面工作台**
-
-  把项目管理、分卷分章写作、AI 对话与智能体任务放进同一个创作空间。
+  <img src="assets/branding/storyos-readme-banner.svg" width="800" alt="StoryOS：为长篇故事创作而生的本地 AI 桌面工作台" />
 
   [![Platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows11&logoColor=white)](#环境要求)
   [![Electron](https://img.shields.io/badge/Electron-42-47848F?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title description">
+  <title id="title">StoryOS</title>
+  <desc id="description">为长篇故事创作而生的本地 AI 桌面工作台</desc>
+  <rect width="1200" height="340" rx="28" fill="#FFF8EC"/>
+  <path d="M0 262C186 220 314 291 501 258C670 228 780 171 942 210C1050 236 1129 249 1200 217V340H0Z" fill="#F3EAFB"/>
+  <circle cx="110" cy="84" r="42" fill="#F1E9DC"/>
+  <circle cx="1095" cy="268" r="60" fill="#ECE5FA"/>
+  <g transform="translate(552 26)" fill="none">
+    <rect x="12" y="12" width="72" height="72" rx="22" fill="#FFF8EC" stroke="#2B2730" stroke-width="3"/>
+    <path d="M33 31H61C65.4183 31 69 34.5817 69 39C69 43.4183 65.4183 47 61 47H35C30.5817 47 27 50.5817 27 55C27 59.4183 30.5817 63 35 63H63" stroke="#2B2730" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="33" cy="31" r="4.5" fill="#FFF8EC" stroke="#2B2730" stroke-width="3"/>
+    <circle cx="69" cy="47" r="4.5" fill="#FFF8EC" stroke="#2B2730" stroke-width="3"/>
+    <circle cx="27" cy="55" r="4.5" fill="#FFF8EC" stroke="#2B2730" stroke-width="3"/>
+    <circle cx="63" cy="63" r="4.5" fill="#6F56F6"/>
+  </g>
+  <text x="600" y="177" text-anchor="middle" fill="#2B2730" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="700" letter-spacing="1">StoryOS</text>
+  <rect x="530" y="193" width="140" height="4" rx="2" fill="#6F56F6"/>
+  <text x="600" y="240" text-anchor="middle" fill="#2B2730" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="25" font-weight="600">为长篇故事创作而生的本地 AI 桌面工作台</text>
+  <text x="600" y="283" text-anchor="middle" fill="#595260" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18">整理作品 · 写作与修订 · AI 协作 · 阅读与导出</text>
+</svg>
