@@ -21,6 +21,7 @@ import type {
   BookPageSlice,
   LiveChapterPagination,
 } from "../../book-content/paginationModel.ts";
+import type { ChapterGenerationView } from "../../agent/types.ts";
 import BookPageGrid from "./BookPageGrid.tsx";
 import DeleteBookItemDialog, {
   type DeleteBookItemTarget,
@@ -38,6 +39,7 @@ type BookCatalogPanelProps = {
   readonly activeChapterId: string | null;
   readonly activeChapterPageNumber: number | null;
   readonly livePagination: LiveChapterPagination | null;
+  readonly chapterGenerations: Readonly<Record<string, ChapterGenerationView>>;
   readonly onSelectChapter: (chapterId: string) => void;
   readonly onSelectPage: (page: BookPageSlice) => void;
   readonly onCreatePage: (
@@ -61,6 +63,7 @@ export default function BookCatalogPanel({
   activeChapterId,
   activeChapterPageNumber,
   livePagination,
+  chapterGenerations,
   onSelectChapter,
   onSelectPage,
   onCreatePage,
@@ -354,6 +357,7 @@ export default function BookCatalogPanel({
             activeChapterId={activeChapterId}
             activeChapterPageNumber={activeChapterPageNumber}
             livePagination={livePagination}
+            chapterGenerations={chapterGenerations}
             onSelectPage={onSelectPage}
             onCreatePage={onCreatePage}
             onMovePage={onMovePage}

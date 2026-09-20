@@ -286,33 +286,46 @@ export function useAgentWorkspace() {
           projectId: event.projectId,
           chapterId: event.chapterId,
           mode: event.mode,
-          initialText: event.initialText,
-          generatedText: "",
-          reasoningText: "",
-          sequence: 0,
-          status: "streaming",
+          status: "generating",
+          thinkingText: "",
+          publishedPageCount: 0,
+          generatedCharacterCount: 0,
           updatedAt: event.timestamp,
         },
       }));
       return;
     }
 
-    if (event.type === "chapter_generation_reasoning") {
+    if (event.type === "chapter_generation_thinking") {
       setChapterGenerations((current) => {
         const existing = current[event.chapterId];
-        if (
-          !existing ||
-          existing.generationId !== event.generationId ||
-          event.sequence <= existing.sequence
-        )
+        if (!existing || existing.generationId !== event.generationId)
           return current;
         return {
           ...current,
           [event.chapterId]: {
             ...existing,
-            reasoningText: `${existing.reasoningText}${event.text}`,
-            sequence: event.sequence,
-            status: "streaming",
+            thinkingText: event.text,
+            updatedAt: event.timestamp,
+          },
+        };
+      });
+      return;
+    }
+
+    if (event.type === "chapter_generation_page_ready") {
+      setChapterGenerations((current) => {
+        const existing = current[event.chapterId];
+        if (!existing || existing.generationId !== event.generationId)
+          return current;
+        return {
+          ...current,
+          [event.chapterId]: {
+            ...existing,
+            previewContent: event.content,
+            publishedPageCount: event.pageNumber,
+            generatedCharacterCount: event.generatedCharacterCount,
+            status: "generating",
             updatedAt: event.timestamp,
           },
         };
@@ -329,36 +342,10 @@ export function useAgentWorkspace() {
           ...current,
           [event.chapterId]: {
             ...existing,
-            reasoningText: "",
+            thinkingText: "",
             retryAttempt: event.attempt,
             retryMaxAttempts: event.maxAttempts,
-            status: "streaming",
-            updatedAt: event.timestamp,
-          },
-        };
-      });
-      return;
-    }
-
-    if (event.type === "chapter_generation_delta") {
-      setChapterGenerations((current) => {
-        const existing = current[event.chapterId];
-        if (
-          !existing ||
-          existing.generationId !== event.generationId ||
-          event.sequence <= existing.sequence
-        )
-          return current;
-        const { retryAttempt, retryMaxAttempts, ...rest } = existing;
-        void retryAttempt;
-        void retryMaxAttempts;
-        return {
-          ...current,
-          [event.chapterId]: {
-            ...rest,
-            generatedText: `${existing.generatedText}${event.text}`,
-            sequence: event.sequence,
-            status: "streaming",
+            status: "generating",
             updatedAt: event.timestamp,
           },
         };
@@ -376,9 +363,26 @@ export function useAgentWorkspace() {
           [event.chapterId]: {
             ...existing,
             status: "completed",
-            content: event.content,
+            previewContent: event.content,
             revisionNumber: event.revisionNumber,
             characterCount: event.characterCount,
+            updatedAt: event.timestamp,
+          },
+        };
+      });
+      return;
+    }
+
+    if (event.type === "chapter_generation_cancelled") {
+      setChapterGenerations((current) => {
+        const existing = current[event.chapterId];
+        if (!existing || existing.generationId !== event.generationId)
+          return current;
+        return {
+          ...current,
+          [event.chapterId]: {
+            ...existing,
+            status: "cancelled",
             updatedAt: event.timestamp,
           },
         };

@@ -12,12 +12,8 @@ export type ConversationEventBatcherOptions = {
   readonly cancelFrame?: (handle: FrameHandle) => void;
 };
 
-function isVisualDelta(event: ConversationEvent): boolean {
-  return event.type === "assistant.block.delta" || event.type === "tool.call.progress";
-}
-
 export class ConversationEventBatcher {
-  private readonly pending: ConversationEvent[] = [];
+  private readonly pendingToolProgress: ConversationEvent[] = [];
   private readonly requestFrame: (callback: () => void) => FrameHandle;
   private readonly cancelFrame: (handle: FrameHandle) => void;
   private frameHandle: FrameHandle | null = null;
@@ -42,17 +38,30 @@ export class ConversationEventBatcher {
   }
 
   enqueue(event: ConversationEvent): void {
-    if (!isVisualDelta(event)) {
-      this.flush();
+    if (event.type === "assistant.block.delta") {
+      // Token-sized deltas are intentionally non-visual. Current producers emit
+      // one completed block with the full content; retaining the legacy deltas
+      // here would recreate an unbounded renderer-side stream buffer.
+      return;
+    }
+
+    if (event.type === "assistant.block.completed") {
+      this.flushToolProgress();
       this.sink.applyEvent(event);
       return;
     }
 
-    this.pending.push(event);
+    if (event.type !== "tool.call.progress") {
+      this.flushToolProgress();
+      this.sink.applyEvent(event);
+      return;
+    }
+
+    this.pendingToolProgress.push(event);
     if (this.frameHandle !== null) return;
     this.frameHandle = this.requestFrame(() => {
       this.frameHandle = null;
-      this.flushPending();
+      this.flushToolProgress();
     });
   }
 
@@ -61,16 +70,15 @@ export class ConversationEventBatcher {
       this.cancelFrame(this.frameHandle);
       this.frameHandle = null;
     }
-    this.flushPending();
+    this.flushToolProgress();
   }
 
   dispose(): void {
     this.flush();
   }
 
-  private flushPending(): void {
-    if (this.pending.length === 0) return;
-    this.sink.applyEvents(this.pending.splice(0));
+  private flushToolProgress(): void {
+    if (this.pendingToolProgress.length === 0) return;
+    this.sink.applyEvents(this.pendingToolProgress.splice(0));
   }
 }
-

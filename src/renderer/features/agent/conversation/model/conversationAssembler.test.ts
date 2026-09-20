@@ -63,6 +63,34 @@ describe("conversation assembler", () => {
     expect(node?.state).toBe("settled");
   });
 
+  it("uses completed block content as the atomic final value", () => {
+    const projection = assembleConversation(events(
+      {
+        ...common,
+        eventId: "answer-start",
+        sequence: 1,
+        type: "assistant.block.started",
+        stepId: "step-1",
+        blockId: "answer-1",
+        payload: { channel: "answer" },
+      },
+      {
+        ...common,
+        eventId: "answer-complete",
+        sequence: 2,
+        type: "assistant.block.completed",
+        stepId: "step-1",
+        blockId: "answer-1",
+        payload: { channel: "answer", content: "完整回答" },
+      },
+    ));
+
+    const node = projection.nodes[projection.order[0]];
+    expect(node?.kind).toBe("assistant-text");
+    expect(node?.kind === "assistant-text" ? node.content : null).toBe("完整回答");
+    expect(node?.state).toBe("settled");
+  });
+
   it("keeps answer, tool and later answer as independent ordered nodes", () => {
     const projection = assembleConversation(events(
       {

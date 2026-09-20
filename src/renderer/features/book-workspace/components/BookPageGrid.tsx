@@ -2,10 +2,11 @@ import {
   FileText,
   LoaderCircle,
   Plus,
+  Sparkles,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "../../../../lib/utils.ts";
 import {
   flattenBookChapterGroups,
@@ -17,12 +18,15 @@ import type {
   LiveChapterPagination,
 } from "../../book-content/paginationModel.ts";
 import DeleteBookItemDialog from "./DeleteBookItemDialog.tsx";
+import type { ChapterGenerationView } from "../../agent/types.ts";
+import { applyChapterGenerationPreviews } from "./bookPageGridModel.ts";
 
 type BookPageGridProps = {
   readonly groups: readonly BookChapterGroup[];
   readonly activeChapterId: string | null;
   readonly activeChapterPageNumber: number | null;
   readonly livePagination: LiveChapterPagination | null;
+  readonly chapterGenerations: Readonly<Record<string, ChapterGenerationView>>;
   readonly onSelectPage: (page: BookPageSlice) => void;
   readonly onCreatePage: (
     chapterId: string,
@@ -33,11 +37,94 @@ type BookPageGridProps = {
   readonly onClose: () => void;
 };
 
+function usableGenerationPreview(
+  generation: ChapterGenerationView | undefined,
+): string | null {
+  return generation &&
+      generation.status !== "failed" &&
+      generation.status !== "cancelled"
+    ? generation.previewContent ?? null
+    : null;
+}
+
+function useStablePaginationChapters(
+  chapters: readonly ReturnType<typeof flattenBookChapterGroups>[number][],
+  generations: Readonly<Record<string, ChapterGenerationView>>,
+) {
+  const cache = useRef<{
+    readonly source: readonly ReturnType<typeof flattenBookChapterGroups>[number][];
+    readonly previews: readonly (string | null)[];
+    readonly result: ReturnType<typeof applyChapterGenerationPreviews>;
+  } | null>(null);
+  const previews = chapters.map((chapter) =>
+    usableGenerationPreview(generations[chapter.id]));
+  const previous = cache.current;
+  const unchanged = previous !== null &&
+    previous.source.length === chapters.length &&
+    chapters.every((chapter, index) =>
+      previous.source[index] === chapter && previous.previews[index] === previews[index]);
+  if (unchanged) return previous.result;
+  const result = applyChapterGenerationPreviews(chapters, generations);
+  cache.current = { source: chapters, previews, result };
+  return result;
+}
+
+function NewPageButton({
+  chapterTitle,
+  pageCount,
+  generation,
+  onCreate,
+}: {
+  readonly chapterTitle: string;
+  readonly pageCount: number;
+  readonly generation: ChapterGenerationView | null;
+  readonly onCreate: () => void;
+}) {
+  const generating = generation?.status === "generating";
+  return (
+    <button
+      className="group relative aspect-[3/4] overflow-hidden rounded-md border border-dashed border-border-strong bg-surface-subtle/70 text-text-subtle transition hover:border-accent-border hover:bg-accent/50 hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border disabled:cursor-default"
+      type="button"
+      disabled={generating}
+      title={generating
+        ? `AI 正在为“${chapterTitle}”生成第 ${generation.publishedPageCount + 1} 页`
+        : `在“${chapterTitle}”末尾新建一页`}
+      onClick={onCreate}
+    >
+      <span className={cn("transition-opacity", generating && "group-hover:opacity-0")}>
+        <span className="mx-auto grid size-7 place-items-center rounded-full border border-current transition group-hover:bg-card">
+          {generating ? <Sparkles size={14} /> : <Plus size={14} />}
+        </span>
+        <span className="mt-2 block text-[9px] font-medium">
+          {generating
+            ? `AI 生成中 · ${generation.publishedPageCount} 页已更新`
+            : "新建页面"}
+        </span>
+      </span>
+      {generating && (
+        <span className="pointer-events-none absolute inset-1 flex flex-col rounded bg-card/95 p-2 text-left opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+          <span className="mb-1 inline-flex items-center gap-1 text-[8px] font-semibold text-accent-foreground">
+            <Sparkles size={9} /> AI 思考过程
+          </span>
+          <span className="min-h-0 flex-1 overflow-hidden whitespace-pre-wrap text-[7px] leading-[1.45] text-text-secondary">
+            {generation.thinkingText || "正在分析章节上下文并组织下一页内容…"}
+          </span>
+          <span className="mt-1 text-[7px] tabular-nums text-text-subtle">
+            已生成 {generation.generatedCharacterCount.toLocaleString("zh-CN")} 字
+          </span>
+        </span>
+      )}
+      <span className="sr-only">第 {pageCount + 1} 页</span>
+    </button>
+  );
+}
+
 export default function BookPageGrid({
   groups,
   activeChapterId,
   activeChapterPageNumber,
   livePagination,
+  chapterGenerations,
   onSelectPage,
   onCreatePage,
   onMovePage,
@@ -54,7 +141,11 @@ export default function BookPageGrid({
     () => flattenBookChapterGroups(groups),
     [groups],
   );
-  const pagination = useBookPagination(orderedChapters, livePagination);
+  const paginationChapters = useStablePaginationChapters(
+    orderedChapters,
+    chapterGenerations,
+  );
+  const pagination = useBookPagination(paginationChapters, livePagination);
   const pagesByChapter = useMemo(() => {
     const result = new Map<string, BookPageSlice[]>();
     for (const page of pagination.pages) {
@@ -78,6 +169,9 @@ export default function BookPageGrid({
         const pages = pagesByChapter.get(chapter.id) ?? [];
         const measured = pagination.measuredChapterIds.has(chapter.id);
         const failed = pagination.failedChapterIds.has(chapter.id);
+        const unloaded = pagination.unloadedChapterIds.has(chapter.id);
+        const generation = chapterGenerations[chapter.id];
+        const generating = generation?.status === "generating";
         return (
           <section className="mb-5" key={chapter.id}>
             <header className="mb-2 flex items-start justify-between gap-2 px-1">
@@ -90,7 +184,11 @@ export default function BookPageGrid({
                 </span>
               </div>
               <span className="shrink-0 text-[9px] tabular-nums text-text-subtle">
-                {measured ? `${pages.length} 页` : `第 ${chapterIndex + 1} 章`}
+                {measured
+                  ? `${pages.length} 页`
+                  : unloaded
+                    ? "未排版"
+                    : `第 ${chapterIndex + 1} 章`}
               </span>
             </header>
 
@@ -101,7 +199,25 @@ export default function BookPageGrid({
               </div>
             )}
 
-            {!measured && !failed && (
+            {unloaded && (generating ? (
+              <div className="grid grid-cols-2 gap-2">
+                <NewPageButton
+                  chapterTitle={chapter.title}
+                  pageCount={0}
+                  generation={generation ?? null}
+                  onCreate={() => {
+                    onCreatePage(chapter.id, 1);
+                    if (window.innerWidth < 1024) onClose();
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-surface-subtle/70 px-2.5 py-3 text-center text-[10px] text-text-subtle">
+                打开章节后生成页面预览
+              </div>
+            ))}
+
+            {!measured && !failed && !unloaded && (
               <div className="grid grid-cols-2 gap-2">
                 {[0, 1].map((item) => (
                   <div className="aspect-[3/4] animate-pulse rounded-md border border-border bg-card" key={item} />
@@ -180,7 +296,7 @@ export default function BookPageGrid({
                             <FileText size={7} /> {page.chapterPageNumber}
                           </span>
                           <strong className={cn("font-medium", active && "text-accent-foreground")}>
-                            {page.globalPageNumber}
+                            {page.globalPageNumber ?? "—"}
                           </strong>
                         </span>
                       </button>
@@ -201,22 +317,15 @@ export default function BookPageGrid({
                   );
                 })}
                 {measured && !failed && (
-                  <button
-                    className="group aspect-[3/4] rounded-md border border-dashed border-border-strong bg-surface-subtle/70 text-text-subtle transition hover:border-accent-border hover:bg-accent/50 hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border"
-                    type="button"
-                    title={`在“${chapter.title}”末尾新建一页`}
-                    onClick={() => {
+                  <NewPageButton
+                    chapterTitle={chapter.title}
+                    pageCount={pages.length}
+                    generation={generating ? generation ?? null : null}
+                    onCreate={() => {
                       onCreatePage(chapter.id, pages.length + 1);
                       if (window.innerWidth < 1024) onClose();
                     }}
-                  >
-                    <span className="mx-auto grid size-7 place-items-center rounded-full border border-current transition group-hover:bg-card">
-                      <Plus size={14} />
-                    </span>
-                    <span className="mt-2 block text-[9px] font-medium">
-                      新建页面
-                    </span>
-                  </button>
+                  />
                 )}
               </div>
             )}

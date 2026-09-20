@@ -7,10 +7,12 @@ import "../editor/chapterEditor.css";
 import {
   CHAPTER_PAGE_SPEC,
   createChapterPaginationCacheKey,
+  isLoadedBookWorkspaceChapter,
   numberBookPages,
   type BookPageSlice,
   type ChapterPageMeasurement,
   type LiveChapterPagination,
+  type LoadedBookWorkspaceChapterDto,
 } from "../../book-content/paginationModel.ts";
 import "./pagination.css";
 import {
@@ -26,6 +28,7 @@ export type BookPaginationState = {
   readonly pages: readonly BookPageSlice[];
   readonly measuredChapterIds: ReadonlySet<string>;
   readonly failedChapterIds: ReadonlySet<string>;
+  readonly unloadedChapterIds: ReadonlySet<string>;
   readonly running: boolean;
 };
 
@@ -49,7 +52,7 @@ function nextFrame(): Promise<void> {
 }
 
 async function measureChapter(
-  chapter: BookWorkspaceChapterDto,
+  chapter: LoadedBookWorkspaceChapterDto,
 ): Promise<readonly ChapterPageMeasurement[]> {
   const host = document.createElement("div");
   host.className = "book-pagination-measure-host";
@@ -100,13 +103,19 @@ export default function useBookPagination(
     measurements: new Map(),
     measuredChapterIds: new Set(),
     failedChapterIds: new Set(),
-    running: chapters.length > 0,
+    unloadedChapterIds: new Set(
+      chapters
+        .filter((chapter) => !isLoadedBookWorkspaceChapter(chapter))
+        .map((chapter) => chapter.id),
+    ),
+    running: chapters.some(isLoadedBookWorkspaceChapter),
   });
 
   useEffect(() => {
     let cancelled = false;
+    const loadedChapters = chapters.filter(isLoadedBookWorkspaceChapter);
     const validCacheKeys = new Set(
-      chapters.map((chapter) =>
+      loadedChapters.map((chapter) =>
         createChapterPaginationCacheKey(chapter, layoutFingerprint)),
     );
     for (const cacheKey of measurementCache.keys()) {
@@ -118,16 +127,22 @@ export default function useBookPagination(
     >();
     const measuredChapterIds = new Set<string>();
     const failedChapterIds = new Set<string>();
+    const unloadedChapterIds = new Set(
+      chapters
+        .filter((chapter) => !isLoadedBookWorkspaceChapter(chapter))
+        .map((chapter) => chapter.id),
+    );
 
     setState({
       measurements: new Map(),
       measuredChapterIds,
       failedChapterIds,
-      running: chapters.length > 0,
+      unloadedChapterIds,
+      running: loadedChapters.length > 0,
     });
 
     const run = async () => {
-      for (const chapter of chapters) {
+      for (const chapter of loadedChapters) {
         if (cancelled) return;
         const cacheKey = createChapterPaginationCacheKey(
           chapter,
@@ -149,8 +164,9 @@ export default function useBookPagination(
           measurements: new Map(measurements),
           measuredChapterIds: new Set(measuredChapterIds),
           failedChapterIds: new Set(failedChapterIds),
+          unloadedChapterIds,
           running: measuredChapterIds.size + failedChapterIds.size <
-            chapters.length,
+            loadedChapters.length,
         });
         await nextFrame();
       }
@@ -183,17 +199,20 @@ export default function useBookPagination(
 
   const measuredChapterIds = new Set(state.measuredChapterIds);
   const failedChapterIds = new Set(state.failedChapterIds);
+  const unloadedChapterIds = new Set(state.unloadedChapterIds);
   if (livePagination && chapters.some(
     (chapter) => chapter.id === livePagination.chapterId,
   )) {
     measuredChapterIds.add(livePagination.chapterId);
     failedChapterIds.delete(livePagination.chapterId);
+    unloadedChapterIds.delete(livePagination.chapterId);
   }
 
   return {
     pages,
     measuredChapterIds,
     failedChapterIds,
+    unloadedChapterIds,
     running: state.running,
   };
 }

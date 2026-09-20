@@ -122,7 +122,9 @@ function updateAssistantNode(
       state,
       text: event.type === "assistant.block.delta"
         ? `${node.text}${event.payload.delta}`
-        : node.text,
+        : event.type === "assistant.block.completed" && event.payload.content !== undefined
+          ? event.payload.content
+          : node.text,
     };
   }
   return {
@@ -132,7 +134,9 @@ function updateAssistantNode(
     state,
     content: event.type === "assistant.block.delta"
       ? `${node.content}${event.payload.delta}`
-      : node.content,
+      : event.type === "assistant.block.completed" && event.payload.content !== undefined
+        ? event.payload.content
+        : node.content,
   };
 }
 

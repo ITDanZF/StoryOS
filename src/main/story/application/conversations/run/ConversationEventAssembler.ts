@@ -14,6 +14,7 @@ export default class ConversationEventAssembler {
     {
       readonly stepId: string;
       readonly blockId: string;
+      content: string;
     }
   >();
 
@@ -24,6 +25,7 @@ export default class ConversationEventAssembler {
     {
       readonly stepId: string;
       readonly blockId: string;
+      content: string;
     }
   >();
 
@@ -38,22 +40,12 @@ export default class ConversationEventAssembler {
       block = {
         stepId: `step-${blockNumber}`,
         blockId: `answer-${blockNumber}`,
+        content: "",
       };
       this.activeAnswerBlocks.set(runId, block);
-      await this.emitConversation(runId, threadId, {
-        type: "assistant.block.started",
-        stepId: block.stepId,
-        blockId: block.blockId,
-        payload: { channel: "answer" },
-      });
     }
 
-    await this.emitConversation(runId, threadId, {
-      type: "assistant.block.delta",
-      stepId: block.stepId,
-      blockId: block.blockId,
-      payload: { channel: "answer", delta: chunk },
-    });
+    block.content += chunk;
   }
 
   async completeAnswerBlock(runId: string, threadId: string): Promise<void> {
@@ -64,7 +56,7 @@ export default class ConversationEventAssembler {
       type: "assistant.block.completed",
       stepId: block.stepId,
       blockId: block.blockId,
-      payload: { channel: "answer" },
+      payload: { channel: "answer", content: block.content },
     });
   }
 
@@ -76,21 +68,11 @@ export default class ConversationEventAssembler {
       block = {
         stepId: `reasoning-step-${blockNumber}`,
         blockId: `reasoning-${blockNumber}`,
+        content: "",
       };
       this.activeReasoningBlocks.set(runId, block);
-      await this.emitConversation(runId, threadId, {
-        type: "assistant.block.started",
-        stepId: block.stepId,
-        blockId: block.blockId,
-        payload: { channel: "reasoning" },
-      });
     }
-    await this.emitConversation(runId, threadId, {
-      type: "assistant.block.delta",
-      stepId: block.stepId,
-      blockId: block.blockId,
-      payload: { channel: "reasoning", delta: chunk },
-    });
+    block.content += chunk;
   }
 
   async completeReasoningBlock(runId: string, threadId: string): Promise<void> {
@@ -101,7 +83,7 @@ export default class ConversationEventAssembler {
       type: "assistant.block.completed",
       stepId: block.stepId,
       blockId: block.blockId,
-      payload: { channel: "reasoning" },
+      payload: { channel: "reasoning", content: block.content },
     });
   }
 

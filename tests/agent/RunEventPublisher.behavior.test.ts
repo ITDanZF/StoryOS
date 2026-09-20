@@ -18,7 +18,7 @@ describe("durable run events", () => {
     expect(app.listRuns()[0].status).toBe("failed");
     await app.shutdown();
   });
-  it.each(["run_started", "assistant.block.delta", "run_completed"])(
+  it.each(["run_started", "assistant.block.completed", "run_completed"])(
     "settles and releases the thread when %s cannot be persisted",
     async (failedType) => {
       const runner: AgentRunner = {

@@ -143,14 +143,13 @@ export default function BookWorkspacePage() {
         : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
       : "未分卷";
 
-  const currentChapterGeneration = useMemo(
-    () =>
-      Object.values(state.chapterGenerations)
-        .filter((generation) => generation.projectId === projectId)
-        .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt))
-        .at(-1) ?? null,
-    [projectId, state.chapterGenerations],
-  );
+  const activeChapterGeneration = activeChapterId
+    ? state.chapterGenerations[activeChapterId] ?? null
+    : null;
+  const currentChapterGeneration =
+    activeChapterGeneration?.projectId === projectId
+      ? activeChapterGeneration
+      : null;
 
   useEffect(() => {
     if (!workspace) return;
@@ -174,8 +173,6 @@ export default function BookWorkspacePage() {
   const aiPreviewContent = useChapterGenerationPreview({
     generation: currentChapterGeneration,
     workspace,
-    reloadWorkspace: reloadBookWorkspace,
-    openChapter: openChapterFromTool,
   });
 
   useBookEditorToolHandler({
@@ -358,6 +355,7 @@ export default function BookWorkspacePage() {
             activeChapterId={activeChapter?.id ?? null}
             activeChapterPageNumber={activeChapterPageNumber}
             livePagination={livePagination}
+            chapterGenerations={state.chapterGenerations}
             onSelectChapter={selectChapter}
             onSelectPage={selectBookPage}
             onCreatePage={createBookPage}
@@ -397,10 +395,7 @@ export default function BookWorkspacePage() {
           chapterNumber !== null && (
             <ChapterEditorPanel
               chapter={activeChapter}
-              aiGenerating={
-                currentChapterGeneration?.chapterId === activeChapter.id &&
-                currentChapterGeneration.status === "streaming"
-              }
+              aiPreviewActive={aiPreviewContent !== null}
               aiPreviewContent={
                 currentChapterGeneration?.chapterId === activeChapter.id
                   ? aiPreviewContent

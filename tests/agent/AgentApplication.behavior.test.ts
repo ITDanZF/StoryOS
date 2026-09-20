@@ -23,7 +23,7 @@ function waitForEvent(
 }
 
 describe("AgentApplication behavior", () => {
-  it("publishes streamed chunks and records a completed run", async () => {
+  it("accumulates streamed chunks and publishes one completed block", async () => {
     const runner: AgentRunner = {
       run: async (_input, options) => {
         await options.onChunk("hello ");
@@ -45,13 +45,14 @@ describe("AgentApplication behavior", () => {
       "run_started",
       "user.message.created",
       "turn.started",
-      "assistant.block.started",
-      "assistant.block.delta",
-      "assistant.block.delta",
       "assistant.block.completed",
       "turn.completed",
       "run_completed",
     ]);
+    expect(events.find((event) => event.type === "assistant.block.completed"))
+      .toMatchObject({
+        payload: { channel: "answer", content: "hello world" },
+      });
     expect(application.getRun(runId)).toMatchObject({
       runId,
       threadId: "thread-1",

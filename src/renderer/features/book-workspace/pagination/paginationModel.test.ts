@@ -10,15 +10,17 @@ import {
   chapterPaginationStageHeight,
   clampChapterEditablePosition,
   createChapterPaginationCacheKey,
+  isLoadedBookWorkspaceChapter,
   numberBookPages,
   type ChapterPageMeasurement,
+  type LoadedBookWorkspaceChapterDto,
 } from "../../book-content/paginationModel.ts";
 
 function chapter(
   id: string,
   content: string,
   revisionId: string | null,
-): BookWorkspaceChapterDto {
+): LoadedBookWorkspaceChapterDto {
   return {
     id,
     novelId: "novel-1",
@@ -30,6 +32,7 @@ function chapter(
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     content,
+    contentLoaded: true,
     characterCount: content.length,
     revisionNumber: revisionId ? 1 : null,
   };
@@ -55,6 +58,27 @@ function page(
 }
 
 describe("pagination model", () => {
+  it("requires loaded content before a chapter can be paginated", () => {
+    const loaded = chapter("chapter-loaded", "正文", "revision-loaded");
+    const summary: BookWorkspaceChapterDto = {
+      id: loaded.id,
+      novelId: loaded.novelId,
+      volumeId: loaded.volumeId,
+      title: loaded.title,
+      status: loaded.status,
+      sortOrder: loaded.sortOrder,
+      currentRevisionId: loaded.currentRevisionId,
+      createdAt: loaded.createdAt,
+      updatedAt: loaded.updatedAt,
+      characterCount: loaded.characterCount,
+      revisionNumber: loaded.revisionNumber,
+      contentLoaded: false,
+    };
+
+    expect(isLoadedBookWorkspaceChapter(loaded)).toBe(true);
+    expect(isLoadedBookWorkspaceChapter(summary)).toBe(false);
+  });
+
   it("fits the logical page to the viewport without crossing scale bounds", () => {
     expect(calculateChapterPageScale(1440, 1200)).toBe(1.15);
     expect(calculateChapterPageScale(600, 800)).toBeCloseTo(5 / 6);
@@ -111,7 +135,7 @@ describe("pagination model", () => {
     ]);
   });
 
-  it("waits for earlier chapters before numbering later pages", () => {
+  it("keeps later chapter pages visible when earlier chapters are not loaded", () => {
     const chapters = [
       chapter("chapter-1", "first", "revision-1"),
       chapter("chapter-2", "second", "revision-2"),
@@ -119,7 +143,13 @@ describe("pagination model", () => {
     const measurements = new Map([
       ["chapter-2", [page("chapter-2", 1)]],
     ]);
-    expect(numberBookPages(chapters, measurements)).toEqual([]);
+    expect(numberBookPages(chapters, measurements)).toEqual([
+      expect.objectContaining({
+        chapterId: "chapter-2",
+        chapterPageNumber: 1,
+        globalPageNumber: null,
+      }),
+    ]);
   });
 
   it("invalidates cached pagination when content changes", () => {

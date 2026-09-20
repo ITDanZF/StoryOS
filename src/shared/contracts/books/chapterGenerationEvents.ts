@@ -2,17 +2,16 @@ export type ChapterGenerationEvent =
   | (ChapterGenerationEventBase & {
       readonly type: "chapter_generation_started";
       readonly mode: ChapterGenerationMode;
-      readonly initialText: string;
     })
   | (ChapterGenerationEventBase & {
-      readonly type: "chapter_generation_reasoning";
-      readonly sequence: number;
+      readonly type: "chapter_generation_thinking";
       readonly text: string;
     })
   | (ChapterGenerationEventBase & {
-      readonly type: "chapter_generation_delta";
-      readonly sequence: number;
-      readonly text: string;
+      readonly type: "chapter_generation_page_ready";
+      readonly pageNumber: number;
+      readonly content: string;
+      readonly generatedCharacterCount: number;
     })
   | (ChapterGenerationEventBase & {
       readonly type: "chapter_generation_retrying";
@@ -25,6 +24,9 @@ export type ChapterGenerationEvent =
       readonly revisionNumber: number;
       readonly content: string;
       readonly characterCount: number;
+    })
+  | (ChapterGenerationEventBase & {
+      readonly type: "chapter_generation_cancelled";
     })
   | (ChapterGenerationEventBase & {
       readonly type: "chapter_generation_failed";

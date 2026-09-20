@@ -27,7 +27,7 @@ const ChapterRichTextEditor = lazy(
 
 type ChapterEditorPanelProps = {
   readonly chapter: BookWorkspaceChapterDto;
-  readonly aiGenerating: boolean;
+  readonly aiPreviewActive: boolean;
   readonly aiPreviewContent: string | null;
   readonly chapterNumber: number;
   readonly volumeTitle: string;
@@ -53,7 +53,7 @@ type ChapterEditorPanelProps = {
 
 export default function ChapterEditorPanel({
   chapter,
-  aiGenerating,
+  aiPreviewActive,
   aiPreviewContent,
   chapterNumber,
   volumeTitle,
@@ -121,7 +121,7 @@ export default function ChapterEditorPanel({
             className="min-w-0 max-w-[420px] border-0 bg-transparent p-0 text-xl font-bold tracking-tight text-foreground outline-none sm:text-[22px] 2xl:text-2xl"
             value={title}
             aria-label="章节标题"
-            disabled={aiGenerating}
+            disabled={aiPreviewActive}
             onChange={(event) => setTitle(event.target.value)}
             onBlur={() => void saveTitle()}
             onKeyDown={(event) => {
@@ -135,16 +135,16 @@ export default function ChapterEditorPanel({
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-text-subtle sm:gap-2.5">
           <span className="hidden items-center gap-1 sm:inline-flex">
-            {aiGenerating ? (
+            {aiPreviewActive ? (
               <Sparkles className="text-accent-foreground" size={12} />
-            ) : (
-              saveState === "saved" && <Check size={12} />
-            )}
+            ) : saveState === "saved" ? (
+              <Check size={12} />
+            ) : null}
             {saveState === "error" && (
               <TriangleAlert className="text-danger-text" size={12} />
             )}
-            {aiGenerating
-              ? "AI 生成中…"
+            {aiPreviewActive
+              ? "AI 正在更新正文…"
               : saveState === "saved"
                 ? "已保存"
                 : saveState === "saving"
@@ -179,7 +179,7 @@ export default function ChapterEditorPanel({
         <ChapterRichTextEditor
           key={chapter.id}
           chapterNumber={chapterNumber}
-          aiGenerating={aiGenerating}
+          aiPreviewActive={aiPreviewActive}
           content={chapter.content}
           previewContent={aiPreviewContent}
           currentRevisionId={chapter.currentRevisionId}

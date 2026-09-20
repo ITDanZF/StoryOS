@@ -72,13 +72,17 @@ afterEach(() => {
 });
 
 describe("book read tools", () => {
-  it("streams generated prose and commits exactly one final revision", async () => {
+  it("publishes complete page batches and commits one final revision automatically", async () => {
     const { chapter, novels } = createHarness();
     const events: ChapterGenerationEvent[] = [];
+    const firstPage = "门".repeat(1_600);
     const model: ModelGateway = {
       async *stream() {
-        yield "门外站着";
-        yield "一个陌生人。";
+        yield { channel: "reasoning", delta: "先建立来访者的压迫感。" } as const;
+        yield firstPage;
+        expect(events.filter((event) => event.type === "chapter_generation_page_ready"))
+          .toHaveLength(2);
+        yield "外站着一个陌生人。";
       },
     };
     const generation = new ChapterGenerationService(model, novels, (event) => {
@@ -96,14 +100,16 @@ describe("book read tools", () => {
     expect(novels.listRevisions(chapter.id)).toHaveLength(2);
     expect(events.map((event) => event.type)).toEqual([
       "chapter_generation_started",
-      "chapter_generation_delta",
+      "chapter_generation_thinking",
+      "chapter_generation_page_ready",
+      "chapter_generation_page_ready",
+      "chapter_generation_page_ready",
       "chapter_generation_completed",
     ]);
-    expect(events[1]).toMatchObject({
-      sequence: 1,
-      text: "门外站着一个陌生人。",
-    });
-    expect(novels.getCurrentRevision(chapter.id)?.content).toContain("门外站着一个陌生人");
+    expect(events[1]).toMatchObject({ text: "先建立来访者的压迫感。" });
+    expect(events[2]).toMatchObject({ pageNumber: 1, generatedCharacterCount: 800 });
+    expect(events[3]).toMatchObject({ pageNumber: 2, generatedCharacterCount: 1_600 });
+    expect(novels.getCurrentRevision(chapter.id)?.content).toContain("外站着一个陌生人");
   });
 
   it("keeps canonical content unchanged when generation fails", async () => {
@@ -137,7 +143,7 @@ describe("book read tools", () => {
     });
   });
 
-  it("rejects a final write when the chapter changes during generation", async () => {
+  it("rejects the final write when the chapter changes during generation", async () => {
     const { chapter, novels } = createHarness();
     const model: ModelGateway = {
       async *stream() {
@@ -163,14 +169,12 @@ describe("book read tools", () => {
       events.push(event);
     });
 
-    await expect(
-      generation.generate({
-        projectId: "project-story",
-        chapterId: chapter.id,
-        mode: "append",
-        instruction: "继续写。",
-      }),
-    ).rejects.toThrow("Chapter revision conflict");
+    await expect(generation.generate({
+      projectId: "project-story",
+      chapterId: chapter.id,
+      mode: "append",
+      instruction: "继续写。",
+    })).rejects.toThrow("Chapter revision conflict");
 
     expect(novels.listRevisions(chapter.id)).toHaveLength(2);
     expect(novels.getCurrentRevision(chapter.id)?.content).toContain("用户在生成期间保存的内容");

@@ -91,7 +91,7 @@ describe("live model switching", () => {
     const connection = new LiveModelConnection(configuration);
     const seen: string[] = [];
     const novels = {
-      getChapter: () => ({ id: "chapter", title: "Chapter" }),
+      getChapter: () => ({ id: "chapter", title: "Chapter", rowVersion: 1 }),
       getCurrentRevision: (): null => null,
       saveRevision: () => ({ revisionNumber: 1, characterCount: 7 }),
     } as unknown as NovelApplication;

@@ -23,9 +23,9 @@ export function createBookChapterGenerationTools(context: BookToolContext) {
       {
         name: "generate_book_chapter_content",
         description: [
-          "Generate or continue a chapter through StoryOS's dedicated streaming writer and save one final revision.",
+          "Generate or continue a chapter through StoryOS's dedicated writer, publish page-sized previews, and save one final revision automatically.",
           "Use this whenever the user asks to draft, write, continue, or substantially expand fictional chapter prose; prefer it over rewrite_book_chapter_text for creative generation.",
-          "Create the chapter first if it does not exist. The writer reads the latest persisted revision when execution begins and rejects concurrent changes made during generation.",
+          "Create the chapter first if it does not exist. The writer reads the latest persisted revision when execution begins and rejects the final save if the chapter changed concurrently.",
           "Use append to preserve current text and add new prose, or rewrite to replace the full chapter.",
         ].join(" "),
         schema: z.object({

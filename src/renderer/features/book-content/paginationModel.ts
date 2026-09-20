@@ -1,5 +1,16 @@
 import type { BookWorkspaceChapterDto } from "../../../shared/agent/contracts.ts";
 
+export type LoadedBookWorkspaceChapterDto = BookWorkspaceChapterDto & {
+  readonly contentLoaded: true;
+  readonly content: string;
+};
+
+export function isLoadedBookWorkspaceChapter(
+  chapter: BookWorkspaceChapterDto,
+): chapter is LoadedBookWorkspaceChapterDto {
+  return chapter.contentLoaded === true && typeof chapter.content === "string";
+}
+
 export type ChapterPageSpec = {
   readonly layoutVersion: number;
   readonly width: number;
@@ -112,7 +123,7 @@ export type BookPageSlice = ChapterPage & {
   readonly chapterId: string;
   readonly revisionId: string | null;
   readonly chapterPageNumber: number;
-  readonly globalPageNumber: number;
+  readonly globalPageNumber: number | null;
   readonly previewText: string;
 };
 
@@ -181,7 +192,7 @@ export function hashChapterContent(content: string): number {
 }
 
 export function createChapterPaginationCacheKey(
-  chapter: BookWorkspaceChapterDto,
+  chapter: LoadedBookWorkspaceChapterDto,
   layoutFingerprint = String(CHAPTER_PAGE_SPEC.layoutVersion),
 ): string {
   return [
@@ -199,13 +210,20 @@ export function numberBookPages(
   measurements: ReadonlyMap<string, readonly ChapterPageMeasurement[]>,
 ): readonly BookPageSlice[] {
   let globalPageNumber = 1;
+  let globalNumberKnown = true;
   const pages: BookPageSlice[] = [];
   for (const chapter of chapters) {
     const chapterPages = measurements.get(chapter.id);
-    if (!chapterPages) break;
+    if (!chapterPages) {
+      globalNumberKnown = false;
+      continue;
+    }
     for (const page of chapterPages) {
-      pages.push({ ...page, globalPageNumber });
-      globalPageNumber += 1;
+      pages.push({
+        ...page,
+        globalPageNumber: globalNumberKnown ? globalPageNumber : null,
+      });
+      if (globalNumberKnown) globalPageNumber += 1;
     }
   }
   return pages;

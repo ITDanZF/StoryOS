@@ -15,11 +15,14 @@ import type {
 
 export const DEFAULT_CHAPTER_GENERATION_STREAM_IDLE_TIMEOUT_MS = 300_000;
 export const DEFAULT_CHAPTER_GENERATION_MAX_ATTEMPTS = 3;
+export const DEFAULT_CHAPTER_GENERATION_PAGE_CHARACTER_TARGET = 800;
 
 const CHAPTER_IDLE_TIMEOUT_ENV = "MINI_AGENT_CHAPTER_IDLE_TIMEOUT_MS";
 const CHAPTER_MAX_ATTEMPTS_ENV = "MINI_AGENT_CHAPTER_MAX_ATTEMPTS";
 const INITIAL_RETRY_DELAY_MS = 500;
 const MAX_RETRY_DELAY_MS = 5_000;
+const THINKING_PUBLISH_INTERVAL_MS = 500;
+const MAX_THINKING_PREVIEW_CHARACTERS = 2_000;
 
 class ChapterGenerationIdleTimeoutError extends Error {
   constructor(readonly timeoutMs: number) {
@@ -192,11 +195,9 @@ export default class ChapterGenerationService {
       ...eventBase,
       type: "chapter_generation_started",
       mode: input.mode,
-      initialText,
       timestamp: new Date().toISOString(),
     });
 
-    let sequence = 0;
     const maxAttempts = readPositiveIntegerEnv(
       CHAPTER_MAX_ATTEMPTS_ENV,
       DEFAULT_CHAPTER_GENERATION_MAX_ATTEMPTS,
@@ -208,36 +209,43 @@ export default class ChapterGenerationService {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const chunks: string[] = [];
-      let pendingDelta = "";
-      let lastDeltaAt = Date.now();
       let lastActivityAt = Date.now();
-      let pendingReasoning = "";
-      let lastReasoningAt = Date.now();
-      const flushDelta = async (): Promise<void> => {
-        if (!pendingDelta) return;
-        const text = pendingDelta;
-        pendingDelta = "";
-        sequence += 1;
-        lastDeltaAt = Date.now();
+      let generatedCharacterCount = 0;
+      let publishedCharacterCount = 0;
+      let publishedPageCount = 0;
+      let thinkingText = "";
+      let thinkingPending = false;
+      let lastThinkingPublishedAt = 0;
+      const publishThinking = async (): Promise<void> => {
+        if (!thinkingPending) return;
+        thinkingPending = false;
+        lastThinkingPublishedAt = Date.now();
         await this.onEvent({
           ...eventBase,
-          type: "chapter_generation_delta",
-          sequence,
-          text,
+          type: "chapter_generation_thinking",
+          text: thinkingText,
           timestamp: new Date().toISOString(),
         });
       };
-      const flushReasoning = async (): Promise<void> => {
-        if (!pendingReasoning) return;
-        const text = pendingReasoning;
-        pendingReasoning = "";
-        sequence += 1;
-        lastReasoningAt = Date.now();
+      const publishPage = async (throughCharacterCount: number): Promise<void> => {
+        if (throughCharacterCount <= publishedCharacterCount) return;
+        const pageText = Array.from(chunks.join(""))
+          .slice(0, throughCharacterCount)
+          .join("");
+        if (!pageText.trim()) {
+          publishedCharacterCount = throughCharacterCount;
+          return;
+        }
+        const generatedText = pageText.trimEnd();
+        const previewText = combineText(input.mode, initialText, generatedText);
+        publishedPageCount += 1;
+        publishedCharacterCount = throughCharacterCount;
         await this.onEvent({
           ...eventBase,
-          type: "chapter_generation_reasoning",
-          sequence,
-          text,
+          type: "chapter_generation_page_ready",
+          pageNumber: publishedPageCount,
+          content: serializeTiptapDocument(plainTextToTiptapDocument(previewText)),
+          generatedCharacterCount: throughCharacterCount,
           timestamp: new Date().toISOString(),
         });
       };
@@ -283,18 +291,30 @@ export default class ChapterGenerationService {
               const reasoning = !isText && chunk.channel === "reasoning" ? chunk.delta : "";
               if (reasoning) {
                 lastActivityAt = Date.now();
-                pendingReasoning += reasoning;
-                if (Date.now() - lastReasoningAt >= 150) await flushReasoning();
+                thinkingText = `${thinkingText}${reasoning}`.slice(
+                  -MAX_THINKING_PREVIEW_CHARACTERS,
+                );
+                thinkingPending = true;
+                if (Date.now() - lastThinkingPublishedAt >= THINKING_PUBLISH_INTERVAL_MS) {
+                  await publishThinking();
+                }
               } else if (Date.now() - lastActivityAt >= idleTimeoutMs) {
                 throw new ChapterGenerationIdleTimeoutError(idleTimeoutMs);
               }
               continue;
             }
             lastActivityAt = Date.now();
-            await flushReasoning();
             chunks.push(text);
-            pendingDelta += text;
-            if (Date.now() - lastDeltaAt >= 60) await flushDelta();
+            generatedCharacterCount += Array.from(text).length;
+            while (
+              generatedCharacterCount - publishedCharacterCount >=
+                DEFAULT_CHAPTER_GENERATION_PAGE_CHARACTER_TARGET
+            ) {
+              await publishThinking();
+              await publishPage(
+                publishedCharacterCount + DEFAULT_CHAPTER_GENERATION_PAGE_CHARACTER_TARGET,
+              );
+            }
           }
         } finally {
           attemptScope.dispose();
@@ -306,19 +326,21 @@ export default class ChapterGenerationService {
             }
           }
         }
-        await flushReasoning();
-        await flushDelta();
-
+        await publishThinking();
+        await publishPage(generatedCharacterCount);
         const generatedText = chunks.join("").trim();
         if (!generatedText) throw new ChapterGenerationEmptyResponseError();
         const finalText = combineText(input.mode, initialText, generatedText);
         const document = plainTextToTiptapDocument(finalText);
         const content = serializeTiptapDocument(document);
+        if (chapter.rowVersion === undefined) {
+          throw new Error("Chapter row version is missing.");
+        }
         const saved = this.novels.saveRevision({
           chapterId: chapter.id,
           content,
           characterCount: countTiptapCharacters(document),
-          changeSummary: input.mode === "append" ? "AI 流式续写章节" : "AI 流式生成章节",
+          changeSummary: input.mode === "append" ? "AI 按页续写章节" : "AI 按页改写章节",
           expectedCurrentRevisionId: revision?.id ?? null,
           expectedRowVersion: chapter.rowVersion,
           origin: "agent",
@@ -339,6 +361,14 @@ export default class ChapterGenerationService {
           generatedCharacterCount: Array.from(generatedText).length,
         });
       } catch (error) {
+        if (input.signal?.aborted) {
+          await this.onEvent({
+            ...eventBase,
+            type: "chapter_generation_cancelled",
+            timestamp: new Date().toISOString(),
+          });
+          throw error;
+        }
         const canRetry =
           chunks.length === 0 &&
           !input.signal?.aborted &&

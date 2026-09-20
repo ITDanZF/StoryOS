@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 250;
+const SYNC_COALESCE_DELAY_MS = 120;
 
 type UseBookMutationSyncOptions = {
   readonly projectId: string | undefined;
@@ -36,7 +37,10 @@ export default function useBookMutationSync({
       }
     };
 
-    void synchronize(1);
+    retryTimer = window.setTimeout(() => {
+      retryTimer = null;
+      void synchronize(1);
+    }, SYNC_COALESCE_DELAY_MS);
     return () => {
       disposed = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);

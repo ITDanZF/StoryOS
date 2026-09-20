@@ -7,7 +7,6 @@ import { useEditor } from "@tiptap/react";
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -49,7 +48,7 @@ type ChapterRichTextEditorProps = {
     baseRevisionId: string | null,
   ) => Promise<void>;
   readonly chapterNumber: number;
-  readonly aiGenerating: boolean;
+  readonly aiPreviewActive: boolean;
   readonly content: string;
   readonly previewContent: string | null;
   readonly currentRevisionId: string | null;
@@ -93,7 +92,7 @@ export default function ChapterRichTextEditor({
   chapterNumber,
   initialDraft,
   onSaveDraft,
-  aiGenerating,
+  aiPreviewActive,
   content,
   previewContent,
   currentRevisionId,
@@ -200,7 +199,7 @@ export default function ChapterRichTextEditor({
       content: decodeStoredChapterContent(
         previewContent ?? persistence.recoveredContent ?? content,
       ) as unknown as Content,
-      editable: !aiGenerating && !draftConflict,
+      editable: !aiPreviewActive && !draftConflict,
       editorProps: {
         attributes: {
           class: "chapter-rich-text chapter-pagination-layout-root",
@@ -239,15 +238,10 @@ export default function ChapterRichTextEditor({
     [flush, openFind, paginationController, publishContext],
   );
 
-  useLayoutEffect(() => {
-    paginationController.setContentStreaming(aiGenerating);
-    return () => paginationController.setContentStreaming(false);
-  }, [aiGenerating, paginationController]);
-
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    synchronizeEditorEditable(editor, !aiGenerating && !draftConflict);
-  }, [aiGenerating, draftConflict, editor]);
+    synchronizeEditorEditable(editor, !aiPreviewActive && !draftConflict);
+  }, [aiPreviewActive, draftConflict, editor]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
