@@ -249,25 +249,18 @@ export default class AgentGenerator {
         );
       }
 
-      let attempt = execute(compiledPrompt, true);
+      let attempt = execute(compiledPrompt, false);
       let result = await attempt.result;
       if (result.status === "completed" && !requiredEffectResolved) {
         attempt = execute(
           `${input.completion?.retryInstruction ?? REQUIRED_EFFECT_RETRY_INSTRUCTION}\n\n${compiledPrompt}`,
-          true,
+          false,
         );
         result = await attempt.result;
       }
 
       if (result.status === "completed" && !requiredEffectResolved) {
         throw new RequiredEffectNotCompletedError(requiredEffects);
-      }
-
-      for (const event of attempt.bufferedEvents) {
-        await options.onAgentEvent?.(event);
-      }
-      for (const chunk of attempt.bufferedChunks) {
-        await options.onChunk?.(chunk);
       }
 
       return await this.resolveExecutionResult(result, initiallyAborted);

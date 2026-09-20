@@ -87,7 +87,9 @@ npm install
 npm start
 ```
 
-首次启动后，在 StoryOS 的设置页面中选择模型服务，并填写模型名称与 API Key。
+首次启动从空的实例面板新建实例。表单会把 `%USERPROFILE%\.mini-agent` 作为可编辑的建议路径，并要求填写实例名称和对话模型配置；Text Embedding 可跳过。首次创建成功后，下次启动会直接进入上次使用的实例，主界面的设置菜单可返回实例面板。
+
+> 本版本不自动接管或清理旧版 `%USERPROFILE%\.mini-agent` 数据。如果建议路径已经包含旧数据，请先改用空目录，或自行处理旧目录后再创建实例。
 
 > `npm start` 会自动为 Electron 运行时重新构建 `better-sqlite3`。如果原生依赖安装失败，请确认当前 Node.js/npm 环境和网络状态后重新执行 `npm install`。
 

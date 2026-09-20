@@ -61,6 +61,7 @@ export default function BookshelfPage() {
   const [archiveTarget, setArchiveTarget] = useState<ReadyBook | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [menuBookId, setMenuBookId] = useState<string | null>(null);
+  const importedBookIdRef = useRef<string | null>(null);
   const closeMenu = useCallback(() => setMenuBookId(null), []);
   useEffect(closeMenu, [query, view, closeMenu]);
 
@@ -246,7 +247,12 @@ export default function BookshelfPage() {
 
       {archiveTarget && <BookArchivesDialog book={archiveTarget} onClose={() => setArchiveTarget(null)} />}
 
-      {importOpen && <ImportBookDialog onClose={() => setImportOpen(false)} onImported={async () => { await bookshelf.load(); }} />}
+      {importOpen && <ImportBookDialog onClose={() => {
+        setImportOpen(false);
+        const bookId = importedBookIdRef.current;
+        importedBookIdRef.current = null;
+        if (bookId) setProjectTargetBookId(bookId);
+      }} onImported={async (result) => { await bookshelf.load(); importedBookIdRef.current = result.bookId; }} />}
 
       {exportTarget && <ExportBookDialog book={exportTarget} onClose={() => setExportTarget(null)} />}
 

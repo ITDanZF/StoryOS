@@ -1,15 +1,17 @@
-import { ChevronRight, Info, Settings2, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, Info, Settings2, SlidersHorizontal, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export type SettingsPage = "settings" | "about";
 
 type SettingsLauncherProps = {
   readonly onSelect: (page: SettingsPage) => void;
+  readonly onSwitchInstance: () => void;
 };
 
-export default function SettingsLauncher({ onSelect }: SettingsLauncherProps) {
+export default function SettingsLauncher({ onSelect, onSwitchInstance }: SettingsLauncherProps) {
   const [open, setOpen] = useState(false);
   const launcherRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -30,8 +32,15 @@ export default function SettingsLauncher({ onSelect }: SettingsLauncherProps) {
   }, [open]);
 
   const select = (page: SettingsPage) => {
+    triggerRef.current?.focus();
     setOpen(false);
     onSelect(page);
+  };
+
+  const switchInstance = () => {
+    triggerRef.current?.focus();
+    setOpen(false);
+    onSwitchInstance();
   };
 
   return (
@@ -53,9 +62,15 @@ export default function SettingsLauncher({ onSelect }: SettingsLauncherProps) {
           <span className="flex-1">关于我们</span>
           <ChevronRight className="text-text-subtle group-hover:text-muted-foreground" size={15} />
         </button>
+        <button className="group flex h-10 w-full items-center gap-2.5 rounded-xl border-0 bg-transparent px-2.5 text-left text-xs text-text-secondary transition hover:bg-muted hover:text-foreground" type="button" role="menuitem" tabIndex={open ? 0 : -1} onClick={switchInstance}>
+          <Layers className="text-muted-foreground group-hover:text-foreground" size={16} />
+          <span className="flex-1">切换实例</span>
+          <ChevronRight className="text-text-subtle group-hover:text-muted-foreground" size={15} />
+        </button>
       </div>
 
       <button
+        ref={triggerRef}
         className={`flex h-11 w-full items-center gap-2.5 rounded-xl border-0 px-2.5 text-left text-[13px] font-medium transition ${
           open ? "bg-card text-foreground shadow-sm" : "bg-transparent text-text-secondary hover:bg-border/70"
         }`}

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type { ConversationNode, TurnState } from "../model/conversationNode.ts";
 import type { ConversationStore } from "../store/conversationStore.ts";
 import ConversationNodeSeat from "./ConversationNodeSeat.tsx";
@@ -15,7 +15,7 @@ function isProcessNode(node: ConversationNode): boolean {
   return node.kind === "reasoning" || node.kind === "tool-call" || node.kind === "task";
 }
 
-export default function TurnGroup({ nodes, store, turn }: TurnGroupProps) {
+export default memo(function TurnGroup({ nodes, store, turn }: TurnGroupProps) {
   const reversedNodes = [...nodes].reverse();
   const finalAnswerKey = reversedNodes
     .find((node) => node.kind === "assistant-text" && node.channel === "answer" && node.content.trim())?.key
@@ -55,4 +55,4 @@ export default function TurnGroup({ nodes, store, turn }: TurnGroupProps) {
       {turn?.status === "running" && <TurnStatus runId={turn.runId} store={store} />}
     </section>
   );
-}
+});

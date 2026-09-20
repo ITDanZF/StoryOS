@@ -11,6 +11,7 @@ const streaming: ChapterGenerationView = {
   mode: "append",
   initialText: "已有正文。",
   generatedText: "新增正文。",
+  reasoningText: "",
   sequence: 1,
   status: "streaming",
   updatedAt: new Date(0).toISOString(),

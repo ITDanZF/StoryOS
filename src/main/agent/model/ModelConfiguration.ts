@@ -5,14 +5,14 @@ export type ModelConnectionConfiguration = {
 };
 
 type ModelConfigurationSource = {
-  readonly MODEL_NAME?: string;
-  readonly MODEL_API_KEY?: string;
-  readonly MODEL_BASE_URL?: string;
+  readonly modelName?: string;
+  readonly apiKey?: string;
+  readonly baseUrl?: string;
 };
 
 function requireConfigurationValue(
   value: string | undefined,
-  key: keyof ModelConfigurationSource,
+  key: keyof ModelConnectionConfiguration,
 ): string {
   const normalized = value?.trim();
   if (!normalized) throw new Error(`Missing model configuration: ${key}`);
@@ -23,9 +23,9 @@ export function createModelConnectionConfiguration(
   source: ModelConfigurationSource,
 ): ModelConnectionConfiguration {
   return Object.freeze({
-    modelName: requireConfigurationValue(source.MODEL_NAME, "MODEL_NAME"),
-    apiKey: requireConfigurationValue(source.MODEL_API_KEY, "MODEL_API_KEY"),
-    baseUrl: requireConfigurationValue(source.MODEL_BASE_URL, "MODEL_BASE_URL"),
+    modelName: requireConfigurationValue(source.modelName, "modelName"),
+    apiKey: requireConfigurationValue(source.apiKey, "apiKey"),
+    baseUrl: requireConfigurationValue(source.baseUrl, "baseUrl"),
   });
 }
 
@@ -33,8 +33,8 @@ export function readModelConnectionConfigurationFromEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): ModelConnectionConfiguration {
   return createModelConnectionConfiguration({
-    MODEL_NAME: environment.MODEL_NAME,
-    MODEL_API_KEY: environment.MODEL_API_KEY,
-    MODEL_BASE_URL: environment.MODEL_BASE_URL,
+    modelName: environment.MODEL_NAME,
+    apiKey: environment.MODEL_API_KEY,
+    baseUrl: environment.MODEL_BASE_URL,
   });
 }

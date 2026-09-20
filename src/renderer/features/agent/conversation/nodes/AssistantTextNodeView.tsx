@@ -1,8 +1,32 @@
 import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "../../../../../lib/utils.ts";
 import MessageMarkdown from "../../components/MessageMarkdown.tsx";
 import type { AssistantTextNode } from "../model/conversationNode.ts";
+
+function useThrottledContent(content: string, streaming: boolean): string {
+  const [display, setDisplay] = useState(content);
+  const ref = useRef(content);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  ref.current = content;
+
+  useEffect(() => {
+    if (!streaming) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      setDisplay(content);
+      return;
+    }
+    if (timer.current != null) return;
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      setDisplay(ref.current);
+    }, 120);
+  }, [content, streaming]);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return display;
+}
 
 export default function AssistantTextNodeView({
   node,
@@ -12,6 +36,7 @@ export default function AssistantTextNodeView({
   readonly final?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const renderedContent = useThrottledContent(node.content, node.state === "running");
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(node.content);
@@ -25,7 +50,7 @@ export default function AssistantTextNodeView({
   return (
     <article className={cn("group/answer min-w-0 px-1 text-foreground", final && "pt-1")}>
       <div className={cn(!final && "text-[13px] text-text-secondary [&>div]:text-[13px] [&>div]:leading-[22px]")}>
-        <MessageMarkdown compact content={node.content} />
+        <MessageMarkdown compact content={renderedContent} />
       </div>
       {node.state === "running" && (
         <span className="ml-1 inline-block h-4 w-1 animate-pulse rounded-full bg-accent align-[-3px] motion-reduce:animate-none" aria-label="正在生成" />

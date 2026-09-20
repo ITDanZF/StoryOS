@@ -27,8 +27,11 @@ export type ChapterGenerationView = {
   readonly mode: ChapterGenerationMode;
   readonly initialText: string;
   readonly generatedText: string;
+  readonly reasoningText: string;
   readonly sequence: number;
   readonly status: "streaming" | "completed" | "failed";
+  readonly retryAttempt?: number;
+  readonly retryMaxAttempts?: number;
   readonly content?: string;
   readonly revisionNumber?: number;
   readonly characterCount?: number;

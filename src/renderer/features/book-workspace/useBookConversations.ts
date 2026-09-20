@@ -32,7 +32,7 @@ type Input = {
   activeVolumeTitle: string;
   activeChapterPageNumber: number | null;
   editorBridgeRef: RefObject<ChapterEditorBridge | null>;
-  editorContext: ChapterEditorLiveContext | null;
+  editorContextRef: RefObject<ChapterEditorLiveContext | null>;
   assistantContextEnabled: boolean;
   reloadBookWorkspace: ReturnType<typeof useBookWorkspace>["load"];
   loadChapter: ReturnType<typeof useBookWorkspace>["loadChapter"];
@@ -49,7 +49,7 @@ export default function useBookConversations({
   activeVolumeTitle,
   activeChapterPageNumber,
   editorBridgeRef,
-  editorContext,
+  editorContextRef,
   assistantContextEnabled,
   reloadBookWorkspace,
   loadChapter,
@@ -161,7 +161,7 @@ export default function useBookConversations({
       ? await loadChapter(activeChapter.id)
       : null;
     const liveEditorContext =
-      editorBridgeRef.current?.getContext() ?? editorContext;
+      editorBridgeRef.current?.getContext() ?? editorContextRef.current;
     const context: ConversationTurnContext = {
       kind: "book_editor",
       projectId,

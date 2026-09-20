@@ -353,6 +353,7 @@ if (previewEnabled && !window.storyOSAgent) {
     baseUrl: "https://api.deepseek.com",
     workspacePath: "",
     restartRequired: false,
+    embedding: { enabled: false, configured: false },
   };
   let previewStatus = initialStatus;
   const api: AgentDesktopApi = {
@@ -368,6 +369,7 @@ if (previewEnabled && !window.storyOSAgent) {
       return book;
     }),
     getStatus: async () => ({ ...previewStatus }),
+    testEmbedding: async () => true,
     configure: async (request) => {
       const canReuseKey =
         request.provider === previewStatus.provider &&
@@ -382,6 +384,17 @@ if (previewEnabled && !window.storyOSAgent) {
         baseUrl: request.baseUrl.trim(),
         workspacePath: request.workspacePath?.trim() ?? "",
         restartRequired: Boolean(request.workspacePath?.trim()),
+        embedding: request.embedding.enabled
+          ? {
+              enabled: true,
+              configured: true,
+              modelName: request.embedding.modelName,
+              endpointUrl: request.embedding.endpointUrl,
+              ...(request.embedding.dimensions !== undefined
+                ? { dimensions: request.embedding.dimensions }
+                : {}),
+            }
+          : { enabled: false, configured: false },
       };
       return { ...previewStatus };
     },
@@ -490,12 +503,10 @@ if (previewEnabled && !window.storyOSAgent) {
       const cards = bookshelfCards();
       const start = page?.after ? Number(page.after) : 0;
       return page
-        ? cards
-            .slice(start, start + page.limit)
-            .map((card, index) => ({
-              ...card,
-              listCursor: String(start + index + 1),
-            }))
+        ? cards.slice(start, start + page.limit).map((card, index) => ({
+            ...card,
+            listCursor: String(start + index + 1),
+          }))
         : cards;
     },
     createBookshelfBook: async ({ title, synopsis }) => {

@@ -5,9 +5,20 @@ export type ChapterGenerationEvent =
       readonly initialText: string;
     })
   | (ChapterGenerationEventBase & {
+      readonly type: "chapter_generation_reasoning";
+      readonly sequence: number;
+      readonly text: string;
+    })
+  | (ChapterGenerationEventBase & {
       readonly type: "chapter_generation_delta";
       readonly sequence: number;
       readonly text: string;
+    })
+  | (ChapterGenerationEventBase & {
+      readonly type: "chapter_generation_retrying";
+      readonly attempt: number;
+      readonly maxAttempts: number;
+      readonly reason: string;
     })
   | (ChapterGenerationEventBase & {
       readonly type: "chapter_generation_completed";

@@ -5,6 +5,7 @@ export async function initializeFrontend() {
     new URLSearchParams(location.search).has("preview")
   ) {
     await import("../platform/preview/previewAgentApi.ts");
+    await import("../platform/preview/previewInstanceApi.ts");
     await import("../platform/preview/previewWindowApi.ts");
   }
 }

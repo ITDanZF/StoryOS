@@ -5,7 +5,15 @@ import {
   type ConversationNode,
   type ConversationProjection,
   type ReasoningNode,
+  type TurnState,
 } from "./conversationNode.ts";
+
+type MutableConversationProjection = {
+  order: string[];
+  nodes: Record<string, ConversationNode>;
+  turns: Record<string, TurnState>;
+  processedEventIds: Record<string, true>;
+};
 
 function assistantNodeKey(runId: string, blockId: string): string {
   return `assistant:${runId}:${blockId}`;
@@ -19,15 +27,33 @@ function taskNodeKey(runId: string, taskId: string): string {
   return `task:${runId}:${taskId}`;
 }
 
-function mergeOrder(
-  order: readonly string[],
-  nodes: Readonly<Record<string, ConversationNode>>,
-): readonly string[] {
-  const existing = new Set(order);
-  return [
-    ...order.filter((key) => Boolean(nodes[key])),
-    ...Object.keys(nodes).filter((key) => !existing.has(key)),
-  ];
+function eventNodeKey(event: ConversationEvent): string | null {
+  switch (event.type) {
+    case "user.message.created":
+      return `user:${event.payload.messageId}`;
+    case "assistant.block.started":
+    case "assistant.block.delta":
+    case "assistant.block.completed":
+      return assistantNodeKey(event.runId, event.blockId);
+    case "tool.call.started":
+    case "tool.call.progress":
+    case "tool.call.completed":
+    case "tool.call.failed":
+    case "tool.call.rejected":
+    case "approval.requested":
+    case "approval.resolved":
+      return toolNodeKey(event.runId, event.payload.toolCallId);
+    case "task.started":
+    case "task.progress":
+    case "task.completed":
+    case "task.failed":
+      return taskNodeKey(event.runId, event.payload.taskId);
+    case "turn.failed":
+      return `turn-error:${event.runId}`;
+    case "turn.started":
+    case "turn.completed":
+      return null;
+  }
 }
 
 function createAssistantNode(
@@ -126,14 +152,16 @@ function settleRunningAssistantNodes(
   }
 }
 
-export function applyConversationEvent(
-  projection: ConversationProjection,
+function applyConversationEventToDraft(
+  projection: MutableConversationProjection,
   event: ConversationEvent,
-): ConversationProjection {
-  if (projection.processedEventIds[event.eventId]) return projection;
+): boolean {
+  if (projection.processedEventIds[event.eventId]) return false;
 
-  const nodes: Record<string, ConversationNode> = { ...projection.nodes };
-  const turns = { ...projection.turns };
+  const nodes = projection.nodes;
+  const turns = projection.turns;
+  const nodeKey = eventNodeKey(event);
+  const appendNode = nodeKey !== null && !nodes[nodeKey];
   let applied = true;
 
   switch (event.type) {
@@ -392,20 +420,30 @@ export function applyConversationEvent(
     }
   }
 
-  if (!applied) return projection;
-  return {
-    order: mergeOrder(projection.order, nodes),
-    nodes,
-    turns,
-    processedEventIds: {
-      ...projection.processedEventIds,
-      [event.eventId]: true,
-    },
+  if (!applied) return false;
+  if (appendNode && nodeKey && nodes[nodeKey]) projection.order.push(nodeKey);
+  projection.processedEventIds[event.eventId] = true;
+  return true;
+}
+
+export function applyConversationEvent(
+  projection: ConversationProjection,
+  event: ConversationEvent,
+): ConversationProjection {
+  if (projection.processedEventIds[event.eventId]) return projection;
+  const draft: MutableConversationProjection = {
+    order: [...projection.order],
+    nodes: { ...projection.nodes },
+    turns: { ...projection.turns },
+    processedEventIds: { ...projection.processedEventIds },
   };
+  return applyConversationEventToDraft(draft, event) ? draft : projection;
 }
 
 export function assembleConversation(
   events: readonly ConversationEvent[],
 ): ConversationProjection {
-  return events.reduce(applyConversationEvent, createEmptyConversationProjection());
+  const draft = createEmptyConversationProjection() as MutableConversationProjection;
+  for (const event of events) applyConversationEventToDraft(draft, event);
+  return draft;
 }

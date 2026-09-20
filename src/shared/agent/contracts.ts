@@ -91,6 +91,7 @@ export type RestoreProjectArchiveDesktopRequest = {
 export const AGENT_IPC_CHANNELS = Object.freeze({
   status: "agent:status",
   configure: "agent:configure",
+  testEmbedding: "agent:embedding-test",
   sendMessage: "agent:send-message",
   sendConversationMessage: "agent:conversation-send-message",
   cancelRun: "agent:cancel-run",
@@ -166,26 +167,46 @@ export type WorkspaceSnapshot = {
 export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
   getStatus(): Promise<AgentServiceStatus>;
   configure(request: AgentConfigurationRequest): Promise<AgentServiceStatus>;
-  sendMessage(request: { threadId: string; content: string }): Promise<{ runId: string }>;
+  testEmbedding(
+    request: import("../contracts/settings/contracts.ts").EmbeddingConfigurationInput,
+  ): Promise<boolean>;
+  sendMessage(request: {
+    threadId: string;
+    content: string;
+  }): Promise<{ runId: string }>;
   sendConversationMessage(request: SendConversationMessageRequest): Promise<{
     runId: string;
     threads: ThreadSnapshot;
   }>;
   cancelRun(runId: string): Promise<boolean>;
-  cancelConversationRun(scope: ConversationScope, runId: string): Promise<boolean>;
+  cancelConversationRun(
+    scope: ConversationScope,
+    runId: string,
+  ): Promise<boolean>;
   listRuns(): Promise<readonly RunSnapshot[]>;
-  listConversationRuns(scope: ConversationScope): Promise<readonly RunSnapshot[]>;
-  resolveApproval(approvalId: string, decision: ToolApprovalDecision): Promise<boolean>;
+  listConversationRuns(
+    scope: ConversationScope,
+  ): Promise<readonly RunSnapshot[]>;
+  resolveApproval(
+    approvalId: string,
+    decision: ToolApprovalDecision,
+  ): Promise<boolean>;
   resolveConversationApproval(
     scope: ConversationScope,
     approvalId: string,
     decision: ToolApprovalDecision,
   ): Promise<boolean>;
   getThreadSnapshot(): Promise<ThreadSnapshot>;
-  getConversationSnapshot(scope: ConversationScope): Promise<ConversationSnapshot>;
+  getConversationSnapshot(
+    scope: ConversationScope,
+  ): Promise<ConversationSnapshot>;
   listMessages(threadId?: string): Promise<readonly MessageDto[]>;
-  listConversationMessages(request: ConversationRef): Promise<readonly MessageDto[]>;
-  listConversationEvents(request: ConversationRef): Promise<readonly ConversationEvent[]>;
+  listConversationMessages(
+    request: ConversationRef,
+  ): Promise<readonly MessageDto[]>;
+  listConversationEvents(
+    request: ConversationRef,
+  ): Promise<readonly ConversationEvent[]>;
   createThread(title: string): Promise<ThreadDto>;
   createConversation(request: CreateConversationRequest): Promise<ThreadDto>;
   switchThread(threadId: string): Promise<ThreadSnapshot>;
@@ -198,18 +219,30 @@ export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
     after?: string;
     limit: number;
   }): Promise<readonly BookshelfBookCard[]>;
-  createBookshelfBook(request: CreateBookshelfBookRequest): Promise<CreateBookshelfBookResult>;
-  importBookshelfBook(request: { readonly packagePath: string }): Promise<ImportBookResult>;
+  createBookshelfBook(
+    request: CreateBookshelfBookRequest,
+  ): Promise<CreateBookshelfBookResult>;
+  importBookshelfBook(request: {
+    readonly packagePath: string;
+  }): Promise<ImportBookResult>;
   exportBookshelfBook(request: {
     readonly bookId: string;
     readonly outputPath: string;
   }): Promise<void>;
   getBookTransferFormats(): Promise<readonly BookTransferFormatCapability[]>;
-  prepareBookshelfBookImport(request: PrepareBookImportRequest): Promise<ImportPreview>;
-  commitBookshelfBookImport(request: CommitBookImportRequest): Promise<ImportBookResult>;
+  prepareBookshelfBookImport(
+    request: PrepareBookImportRequest,
+  ): Promise<ImportPreview>;
+  commitBookshelfBookImport(
+    request: CommitBookImportRequest,
+  ): Promise<ImportBookResult>;
   cancelBookshelfBookImport(sessionId: string): Promise<void>;
-  prepareBookshelfBookExport(request: PrepareBookExportRequest): Promise<ExportPreview>;
-  commitBookshelfBookExport(request: CommitBookExportRequest): Promise<ExportBookResult>;
+  prepareBookshelfBookExport(
+    request: PrepareBookExportRequest,
+  ): Promise<ExportPreview>;
+  commitBookshelfBookExport(
+    request: CommitBookExportRequest,
+  ): Promise<ExportBookResult>;
   cancelBookshelfBookExport(exportId: string): Promise<void>;
   getBookshelfTrash(): Promise<readonly BookshelfTrashEntry[]>;
   moveBookshelfBookToTrash(bookId: string): Promise<BookshelfTrashEntry>;
@@ -218,19 +251,31 @@ export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
     readonly bookId: string;
     readonly confirmationBookId: string;
   }): Promise<void>;
-  getBookProjectArchives(bookId: string): Promise<readonly ProjectArchiveSummary[]>;
+  getBookProjectArchives(
+    bookId: string,
+  ): Promise<readonly ProjectArchiveSummary[]>;
   restoreProjectArchive(request: RestoreProjectArchiveDesktopRequest): Promise<{
     readonly result: RestoreProjectArchiveResult;
     readonly workspace: WorkspaceSnapshot;
   }>;
   getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot>;
   createBook(request: CreateBookRequest): Promise<BookWorkspaceSnapshot>;
-  createBookChapter(request: CreateBookChapterRequest): Promise<BookWorkspaceSnapshot>;
-  createBookVolume(request: CreateBookVolumeRequest): Promise<BookWorkspaceSnapshot>;
-  deleteBookVolume(request: DeleteBookVolumeRequest): Promise<BookWorkspaceSnapshot>;
-  deleteBookChapter(request: DeleteBookChapterRequest): Promise<BookWorkspaceSnapshot>;
+  createBookChapter(
+    request: CreateBookChapterRequest,
+  ): Promise<BookWorkspaceSnapshot>;
+  createBookVolume(
+    request: CreateBookVolumeRequest,
+  ): Promise<BookWorkspaceSnapshot>;
+  deleteBookVolume(
+    request: DeleteBookVolumeRequest,
+  ): Promise<BookWorkspaceSnapshot>;
+  deleteBookChapter(
+    request: DeleteBookChapterRequest,
+  ): Promise<BookWorkspaceSnapshot>;
   updateBook(request: UpdateBookRequest): Promise<BookWorkspaceSnapshot>;
-  updateBookChapter(request: UpdateBookChapterRequest): Promise<BookWorkspaceSnapshot>;
+  updateBookChapter(
+    request: UpdateBookChapterRequest,
+  ): Promise<BookWorkspaceSnapshot>;
   getBookChapterContent(request: {
     projectId: string;
     chapterId: string;

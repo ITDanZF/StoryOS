@@ -42,11 +42,10 @@ export default function ConversationFlow({
   store = conversationStore,
 }: ConversationFlowProps) {
   const order = useStore(store, (state) => state.order);
-  const nodes = useStore(store, (state) => state.nodes);
   const turns = useStore(store, (state) => state.turns);
   const groups = useMemo(
-    () => groupConversationTurns(order, nodes, turns),
-    [nodes, order, turns],
+    () => groupConversationTurns(order, store.getState().nodes, turns),
+    [order, turns, store],
   );
 
   return (

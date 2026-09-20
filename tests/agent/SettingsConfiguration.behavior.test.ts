@@ -15,16 +15,22 @@ import LiveModelConnection from "../../src/main/agent/model/LiveModelConnection.
 
 type ServiceInternals = {
   controller: DesktopController | null;
-  initializeRuntime: (configuration: ModelConnectionConfiguration) => Promise<void>;
+  initializeRuntime: (
+    configuration: ModelConnectionConfiguration,
+  ) => Promise<void>;
   runtimeInitialization: Promise<void> | null;
 };
 const original: InfoType = {
-  MODEL_PROVIDER: "deepseek",
-  MODEL_NAME: "deepseek-chat",
-  MODEL_BASE_URL: "https://api.deepseek.com",
-  MODEL_API_KEY: "original-test-key",
-  AGENT_WORKSPACE: "",
-  LOG_LEVEL: "debug",
+  schemaVersion: 2,
+  chat: {
+    provider: "deepseek",
+    modelName: "deepseek-chat",
+    baseUrl: "https://api.deepseek.com",
+    apiKey: "original-test-key",
+  },
+  embedding: { enabled: false },
+  workspace: { defaultProjectsRoot: "" },
+  logLevel: "debug",
 };
 const request: AgentConfigurationRequest = {
   provider: "deepseek",
@@ -32,6 +38,7 @@ const request: AgentConfigurationRequest = {
   baseUrl: "https://api.deepseek.com",
   apiKey: "",
   workspacePath: "",
+  embedding: { enabled: false },
 };
 let directory: string;
 let environment: NodeJS.ProcessEnv;
@@ -69,11 +76,15 @@ function createService() {
 beforeEach(() => {
   environment = { ...process.env };
   directory = fs.mkdtempSync(path.join(os.tmpdir(), "storyos-settings-"));
-  fs.writeFileSync(path.join(directory, "config.json"), JSON.stringify(original));
+  fs.writeFileSync(
+    path.join(directory, "config.json"),
+    JSON.stringify(original),
+  );
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const key of Object.keys(process.env)) if (!(key in environment)) delete process.env[key];
+  for (const key of Object.keys(process.env))
+    if (!(key in environment)) delete process.env[key];
   Object.assign(process.env, environment);
   fs.rmSync(directory, { recursive: true, force: true });
 });
@@ -96,23 +107,28 @@ describe("settings configuration lifecycle", () => {
     expect(initialize).toHaveBeenCalledOnce();
     expect(process.env.MODEL_NAME === environment.MODEL_NAME).toBe(true);
     expect(getClient()).toMatchObject({ model: "changed-model" });
-    expect(await service.runBusinessRequest(() => getCustomizeWorkSpace())).toBeNull();
+    expect(
+      await service.runBusinessRequest(() => getCustomizeWorkSpace()),
+    ).toBeNull();
     service.getStatus();
     expect(process.env.MODEL_NAME === environment.MODEL_NAME).toBe(true);
     expect(JSON.stringify(status)).not.toContain("original-test-key");
-    expect(new Configuration(directory).loadConfig(false)).toMatchObject({
-      MODEL_NAME: "changed-model",
-      MODEL_API_KEY: original.MODEL_API_KEY,
-      LOG_LEVEL: "debug",
+    expect(new Configuration(directory).loadConfig()).toMatchObject({
+      chat: {
+        modelName: "changed-model",
+        apiKey: original.chat.apiKey,
+      },
+      logLevel: "debug",
     });
   });
 
   it("clears pending status when all settings are restored and applies saved settings on the next startup", async () => {
     const { service } = createService();
     await service.initialize();
-    expect((await service.configure({ ...request, modelName: "next-model" })).restartRequired).toBe(
-      false,
-    );
+    expect(
+      (await service.configure({ ...request, modelName: "next-model" }))
+        .restartRequired,
+    ).toBe(false);
     expect((await service.configure(request)).restartRequired).toBe(false);
     await service.configure({
       ...request,
@@ -135,21 +151,32 @@ describe("settings configuration lifecycle", () => {
   it("requires a new key after changing provider or address and preserves the old file on validation errors", async () => {
     const { service } = createService();
     await service.initialize();
-    await expect(service.configure({ ...request, provider: "openai" })).rejects.toThrow("API Key");
+    await expect(
+      service.configure({ ...request, provider: "openai" }),
+    ).rejects.toThrow("API Key");
     await expect(
       service.configure({ ...request, baseUrl: "https://other.example/v1" }),
     ).rejects.toThrow("API Key");
     await expect(
-      service.configure({ ...request, apiKey: "new-key", baseUrl: "file:///tmp/model" }),
+      service.configure({
+        ...request,
+        apiKey: "new-key",
+        baseUrl: "file:///tmp/model",
+      }),
     ).rejects.toThrow("HTTP");
-    await expect(service.configure({ ...request, modelName: "  " })).rejects.toThrow("模型名称");
-    expect(new Configuration(directory).loadConfig(false)).toEqual(original);
+    await expect(
+      service.configure({ ...request, modelName: "  " }),
+    ).rejects.toThrow("模型名称");
+    expect(new Configuration(directory).loadConfig()).toEqual(original);
   });
 
   it("tracks key-only changes without exposing credentials in status", async () => {
     const { service } = createService();
     await service.initialize();
-    const status = await service.configure({ ...request, apiKey: "new-test-key" });
+    const status = await service.configure({
+      ...request,
+      apiKey: "new-test-key",
+    });
     expect(status.restartRequired).toBe(false);
     expect(JSON.stringify(status)).not.toContain("new-test-key");
     expect(process.env.MODEL_API_KEY === environment.MODEL_API_KEY).toBe(true);
@@ -162,11 +189,13 @@ describe("settings configuration lifecycle", () => {
     vi.spyOn(fs, "renameSync").mockImplementation(() => {
       throw new Error("write denied");
     });
-    await expect(service.configure({ ...request, modelName: "next" })).rejects.toThrow(
-      "write denied",
-    );
-    expect(new Configuration(directory).loadConfig(false)).toEqual(original);
-    expect(fs.readdirSync(directory).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    await expect(
+      service.configure({ ...request, modelName: "next" }),
+    ).rejects.toThrow("write denied");
+    expect(new Configuration(directory).loadConfig()).toEqual(original);
+    expect(
+      fs.readdirSync(directory).filter((name) => name.endsWith(".tmp")),
+    ).toEqual([]);
     expect(service.getStatus().restartRequired).toBe(false);
     expect(getClient()).toBe(previousClient);
     expect(process.env.MODEL_NAME === environment.MODEL_NAME).toBe(true);
@@ -179,10 +208,10 @@ describe("settings configuration lifecycle", () => {
     prepare.mockImplementationOnce(() => {
       throw new Error("invalid client");
     });
-    await expect(service.configure({ ...request, modelName: "next" })).rejects.toThrow(
-      "invalid client",
-    );
-    expect(new Configuration(directory).loadConfig(false)).toEqual(original);
+    await expect(
+      service.configure({ ...request, modelName: "next" }),
+    ).rejects.toThrow("invalid client");
+    expect(new Configuration(directory).loadConfig()).toEqual(original);
     expect(getClient()).toBe(previousClient);
   });
 
@@ -194,12 +223,14 @@ describe("settings configuration lifecycle", () => {
     internals.runtimeInitialization = new Promise<void>((resolve) => {
       resolveStartup = resolve;
     });
-    await expect(service.configure({ ...request, apiKey: "first-test-key" })).rejects.toThrow(
-      "稍后重试",
-    );
+    await expect(
+      service.configure({ ...request, apiKey: "first-test-key" }),
+    ).rejects.toThrow("稍后重试");
     resolveStartup();
     internals.runtimeInitialization = null;
-    expect(await service.configure({ ...request, apiKey: "first-test-key" })).toMatchObject({
+    expect(
+      await service.configure({ ...request, apiKey: "first-test-key" }),
+    ).toMatchObject({
       initialized: true,
       configured: true,
       restartRequired: false,

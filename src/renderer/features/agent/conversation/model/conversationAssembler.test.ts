@@ -324,4 +324,39 @@ describe("conversation assembler", () => {
       summary: "任务已完成",
     });
   });
+
+  it("assembles large streaming histories without repeatedly copying the projection", () => {
+    const history: ConversationEvent[] = [
+      {
+        ...common,
+        eventId: "answer-start",
+        sequence: 1,
+        type: "assistant.block.started",
+        stepId: "step-1",
+        blockId: "answer-1",
+        payload: { channel: "answer" },
+      },
+    ];
+    for (let index = 0; index < 10_000; index += 1) {
+      history.push({
+        ...common,
+        eventId: `answer-delta-${index}`,
+        sequence: index + 2,
+        type: "assistant.block.delta",
+        stepId: "step-1",
+        blockId: "answer-1",
+        payload: { channel: "answer", delta: "字" },
+      });
+    }
+
+    const startedAt = performance.now();
+    const projection = assembleConversation(history);
+    const durationMs = performance.now() - startedAt;
+    const node = projection.nodes["assistant:run-1:answer-1"];
+
+    expect(node?.kind === "assistant-text" ? node.content.length : 0).toBe(10_000);
+    expect(projection.order).toEqual(["assistant:run-1:answer-1"]);
+    expect(Object.keys(projection.processedEventIds)).toHaveLength(10_001);
+    expect(durationMs).toBeLessThan(1_000);
+  });
 });

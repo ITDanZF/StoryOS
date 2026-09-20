@@ -210,6 +210,9 @@ export default class ChapterGenerationService {
       const chunks: string[] = [];
       let pendingDelta = "";
       let lastDeltaAt = Date.now();
+      let lastActivityAt = Date.now();
+      let pendingReasoning = "";
+      let lastReasoningAt = Date.now();
       const flushDelta = async (): Promise<void> => {
         if (!pendingDelta) return;
         const text = pendingDelta;
@@ -219,6 +222,20 @@ export default class ChapterGenerationService {
         await this.onEvent({
           ...eventBase,
           type: "chapter_generation_delta",
+          sequence,
+          text,
+          timestamp: new Date().toISOString(),
+        });
+      };
+      const flushReasoning = async (): Promise<void> => {
+        if (!pendingReasoning) return;
+        const text = pendingReasoning;
+        pendingReasoning = "";
+        sequence += 1;
+        lastReasoningAt = Date.now();
+        await this.onEvent({
+          ...eventBase,
+          type: "chapter_generation_reasoning",
           sequence,
           text,
           timestamp: new Date().toISOString(),
@@ -260,14 +277,21 @@ export default class ChapterGenerationService {
               break;
             }
             const chunk = result.value;
-            const text =
-              typeof chunk === "string" ? chunk : chunk.channel === "answer" ? chunk.delta : "";
+            const isText = typeof chunk === "string";
+            const text = isText ? chunk : chunk.channel === "answer" ? chunk.delta : "";
             if (!text) {
-              if (Date.now() - lastDeltaAt >= idleTimeoutMs) {
+              const reasoning = !isText && chunk.channel === "reasoning" ? chunk.delta : "";
+              if (reasoning) {
+                lastActivityAt = Date.now();
+                pendingReasoning += reasoning;
+                if (Date.now() - lastReasoningAt >= 150) await flushReasoning();
+              } else if (Date.now() - lastActivityAt >= idleTimeoutMs) {
                 throw new ChapterGenerationIdleTimeoutError(idleTimeoutMs);
               }
               continue;
             }
+            lastActivityAt = Date.now();
+            await flushReasoning();
             chunks.push(text);
             pendingDelta += text;
             if (Date.now() - lastDeltaAt >= 60) await flushDelta();
@@ -282,6 +306,7 @@ export default class ChapterGenerationService {
             }
           }
         }
+        await flushReasoning();
         await flushDelta();
 
         const generatedText = chunks.join("").trim();
@@ -320,6 +345,14 @@ export default class ChapterGenerationService {
           attempt < maxAttempts &&
           isRetryableGenerationError(error);
         if (canRetry) {
+          await this.onEvent({
+            ...eventBase,
+            type: "chapter_generation_retrying",
+            attempt: attempt + 1,
+            maxAttempts,
+            reason: message(error),
+            timestamp: new Date().toISOString(),
+          });
           await waitForRetry(retryDelayMs(attempt), input.signal);
           continue;
         }

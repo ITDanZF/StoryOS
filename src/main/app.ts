@@ -1,6 +1,10 @@
 import { app, BrowserWindow } from "electron";
 import started from "electron-squirrel-startup";
-import StoryAgentService from "./bootstrap/StoryAgentService";
+import InstanceHost from "./bootstrap/InstanceHost";
+import InstanceRegistry from "./story/instances/InstanceRegistry";
+import InstanceApplication from "./story/instances/InstanceApplication";
+import { registerInstanceIpc } from "./desktop/ipc/InstanceIpcController";
+import path from "node:path";
 import RendererEditorToolBridge from "./desktop/RendererEditorToolBridge";
 import DeveloperDatabaseService from "./developer/DeveloperDatabaseService";
 import ResourceLocator from "./resources/ResourceLocator";
@@ -16,36 +20,65 @@ if (started) {
 }
 
 const resources = new ResourceLocator(app.getAppPath());
-const MainAppWin = new AppWindowManager({ isOpenDev: !app.isPackaged, icon: resources.windowIcon });
-let agentService: StoryAgentService | null = null;
+const MainAppWin = new AppWindowManager({
+  isOpenDev: !app.isPackaged,
+  icon: resources.windowIcon,
+});
+let instanceHost: InstanceHost | null = null;
+let developerService: DeveloperDatabaseService | null = null;
+let developerInstanceId: string | null = null;
+let unregisterInstanceIpc: (() => void) | null = null;
 let unregisterAgentIpc: (() => void) | null = null;
 let unregisterWindowIpc: (() => void) | null = null;
 let unregisterDeveloperIpc: (() => void) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 let shutdownComplete = false;
-const rendererEditorTools = new RendererEditorToolBridge((id) => MainAppWin.ownsWebContents(id));
+const rendererEditorTools = new RendererEditorToolBridge((id) =>
+  MainAppWin.ownsWebContents(id),
+);
 
 app
   .whenReady()
   .then(async () => {
-    agentService = new StoryAgentService({
-      agentHome: getAgentHome(),
-      bundledSkillRoot: resources.bundledSkillRoot,
-      rendererEditorTools,
-    });
-    await agentService.initialize();
-    const host = agentService;
-    unregisterAgentIpc = registerAgentIpc(agentService, rendererEditorTools, (id) =>
+    const defaultRoot = getAgentHome();
+    const registry = new InstanceRegistry(
+      path.join(app.getPath("userData"), "instances.json"),
+      defaultRoot,
+    );
+    instanceHost = new InstanceHost(
+      registry,
+      new InstanceApplication(registry),
+      { bundledSkillRoot: resources.bundledSkillRoot, rendererEditorTools },
+    );
+    const host = instanceHost;
+    await host.openLast();
+    unregisterAgentIpc = registerAgentIpc(host, rendererEditorTools, (id) =>
+      MainAppWin.ownsWebContents(id),
+    );
+    unregisterInstanceIpc = registerInstanceIpc(host, (id) =>
       MainAppWin.ownsWebContents(id),
     );
     unregisterDeveloperIpc = registerDeveloperDatabaseIpc(
-      new DeveloperDatabaseService(getAgentHome(), {
-        pause: () => host.pauseForDeveloper(),
-        resume: () => host.resumeFromDeveloper(),
-      }),
+      () => {
+        const instanceId = host.getSnapshot().activeInstanceId;
+        if (!instanceId) throw new Error("尚未打开实例。");
+        if (developerInstanceId !== instanceId || !developerService) {
+          developerService = new DeveloperDatabaseService(
+            host.registry.get(instanceId).rootPath,
+            {
+              pause: () => host.requireService().pauseForDeveloper(),
+              resume: () => host.requireService().resumeFromDeveloper(),
+            },
+          );
+          developerInstanceId = instanceId;
+        }
+        return developerService;
+      },
       (id) => MainAppWin.ownsWebContents(id),
     );
-    unregisterWindowIpc = registerWindowIpc((id) => MainAppWin.ownsWebContents(id));
+    unregisterWindowIpc = registerWindowIpc((id) =>
+      MainAppWin.ownsWebContents(id),
+    );
     MainAppWin.createMainWindow();
   })
   .catch((error) => {
@@ -62,12 +95,16 @@ app.on("before-quit", (event) => {
     rendererEditorTools.close();
     unregisterAgentIpc?.();
     unregisterAgentIpc = null;
+    unregisterInstanceIpc?.();
+    unregisterInstanceIpc = null;
     unregisterWindowIpc?.();
     unregisterWindowIpc = null;
     unregisterDeveloperIpc?.();
     unregisterDeveloperIpc = null;
-    await agentService?.shutdown();
-    agentService = null;
+    await instanceHost?.shutdown();
+    instanceHost = null;
+    developerService = null;
+    developerInstanceId = null;
   })();
   void shutdownPromise
     .catch((error) => {

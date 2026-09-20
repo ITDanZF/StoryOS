@@ -112,3 +112,4 @@ Desktop.ini
 *.dmp
 *.tmp
 *.bak
+/tests

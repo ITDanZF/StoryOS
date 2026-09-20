@@ -130,6 +130,10 @@ export default function WorkspaceLayout() {
             state: { returnTo: `${location.pathname}${location.search}` },
           });
         }}
+        onSwitchInstance={() => {
+          setSidebarOpen(false);
+          navigate("/instances");
+        }}
       />}
 
       <AnimatedPage transitionKey={location.pathname} disabled={reading}>

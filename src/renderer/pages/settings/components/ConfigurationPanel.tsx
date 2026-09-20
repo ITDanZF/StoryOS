@@ -14,14 +14,24 @@ type Props = {
 };
 
 const providerDefaults = {
-  deepseek: { modelName: "deepseek-chat", baseUrl: "https://api.deepseek.com" },
-  openai: { modelName: "gpt-4.1-mini", baseUrl: "https://api.openai.com/v1" },
-  qwen: { modelName: "qwen-plus", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+  deepseek: { modelName: "deepseek-flash", baseUrl: "" },
 } as const;
 
+const deepseekModels = [
+  { value: "deepseek-flash", label: "DeepSeek Flash" },
+  { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+] as const;
+
 function initialValues(status: AgentServiceStatus | null): AgentConfigurationRequest {
-  const provider = status?.provider === "openai" || status?.provider === "qwen" ? status.provider : "deepseek";
-  return { provider, modelName: status?.modelName ?? providerDefaults[provider].modelName, baseUrl: status?.baseUrl ?? providerDefaults[provider].baseUrl, apiKey: "", workspacePath: status?.workspacePath ?? "" };
+  const provider = "deepseek" as const;
+  return {
+    provider, modelName: status?.modelName ?? providerDefaults[provider].modelName,
+    baseUrl: status?.baseUrl ?? providerDefaults[provider].baseUrl, apiKey: "", workspacePath: status?.workspacePath ?? "",
+    embedding: status?.embedding.enabled ? {
+      enabled: true, modelName: status.embedding.modelName ?? "", endpointUrl: status.embedding.endpointUrl ?? "",
+      apiKey: "", ...(status.embedding.dimensions !== undefined ? { dimensions: status.embedding.dimensions } : {}),
+    } : { enabled: false },
+  };
 }
 
 type FieldErrors = Partial<Record<keyof AgentConfigurationRequest, string>>;
@@ -35,7 +45,7 @@ export function ConfigurationPanel({ status, onConfigure, onDirtyChange, onSavin
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const dirty = (Object.keys(values) as Array<keyof AgentConfigurationRequest>).some((key) => values[key] !== baseline[key]);
+  const dirty = JSON.stringify(values) !== JSON.stringify(baseline);
   const canReuseKey = Boolean(status?.configured && values.provider === status.provider && values.baseUrl.trim() === status.baseUrl);
 
   useEffect(() => {
@@ -51,6 +61,10 @@ export function ConfigurationPanel({ status, onConfigure, onDirtyChange, onSavin
     setErrors({});
     setFormError(null);
     setSaved(false);
+  };
+  const changeEmbedding = (patch: Partial<Extract<AgentConfigurationRequest["embedding"], { enabled: true }>>) => {
+    if (!values.embedding.enabled) return;
+    change({ embedding: { ...values.embedding, ...patch } });
   };
   const reset = () => {
     setValues(baseline);
@@ -70,6 +84,13 @@ export function ConfigurationPanel({ status, onConfigure, onDirtyChange, onSavin
       nextErrors.baseUrl = "请输入以 http:// 或 https:// 开头的完整地址。";
     }
     if (!canReuseKey && !values.apiKey.trim()) nextErrors.apiKey = "请填写此模型服务的 API Key。";
+    if (values.embedding.enabled) {
+      const previous = status?.embedding;
+      if (!values.embedding.modelName.trim()) nextErrors.embedding = "请填写 Embedding 模型名称。";
+      try { const url = new URL(values.embedding.endpointUrl.trim()); if (!["http:", "https:"].includes(url.protocol)) throw new Error(); }
+      catch { nextErrors.embedding = "请填写有效的 Embedding API URL。"; }
+      if (!values.embedding.apiKey.trim() && (!previous?.configured || previous.endpointUrl !== values.embedding.endpointUrl.trim())) nextErrors.embedding = "请填写 Embedding API Key。";
+    }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       const field = Object.keys(nextErrors)[0];
@@ -83,7 +104,7 @@ export function ConfigurationPanel({ status, onConfigure, onDirtyChange, onSavin
     try {
       const request = { ...values, modelName: values.modelName.trim(), baseUrl: values.baseUrl.trim(), apiKey: values.apiKey.trim(), workspacePath: values.workspacePath?.trim() };
       await onConfigure(request);
-      const next = { ...request, apiKey: "" };
+      const next = { ...request, apiKey: "", embedding: request.embedding.enabled ? { ...request.embedding, apiKey: "" } : request.embedding };
       setValues(next);
       setBaseline(next);
       setSaved(true);
@@ -108,13 +129,22 @@ export function ConfigurationPanel({ status, onConfigure, onDirtyChange, onSavin
       </div>
       <fieldset disabled={saving || !status} className="min-w-0 space-y-5 px-5 py-6 sm:px-7">
         {status?.restartRequired && <p className="rounded-lg border border-warning-border bg-warning-surface px-4 py-3 text-[13px] leading-6 text-warning-text" role="status">模型配置已生效。工作区路径将在重启 StoryOS 后生效。</p>}
-        <FormField id="model-provider" label="模型服务">{control => <Select {...control} label="模型服务" size="md" disabled={saving || !status} options={[{ value: "deepseek", label: "DeepSeek" }, { value: "openai", label: "OpenAI" }, { value: "qwen", label: "通义千问" }]} value={values.provider} onChange={value => {
-          const provider = value as AgentConfigurationRequest["provider"];
-          change({ provider, ...providerDefaults[provider], apiKey: "" });
+        <FormField id="model-provider" label="模型服务">{control => <Select {...control} label="模型服务" size="md" disabled={saving || !status} options={[{ value: "deepseek", label: "DeepSeek" }]} value={values.provider} onChange={() => {
+          change({ provider: "deepseek", ...providerDefaults.deepseek, apiKey: "" });
         }} />}</FormField>
-        <FormField id="model-name" label="模型名称" error={errors.modelName} description="填写服务商提供的模型 ID，可根据需要更换模型。">{control => <Input {...control} name="modelName" required value={values.modelName} onChange={event => change({ modelName: event.target.value })} />}</FormField>
+        <FormField id="model-name" label="模型" error={errors.modelName} description="选择 DeepSeek 提供的模型。">{control => <Select {...control} label="模型" size="md" disabled={saving || !status} options={deepseekModels} value={values.modelName} onChange={value => change({ modelName: value })} />}</FormField>
         <FormField id="model-url" label="接口地址 Base URL" error={errors.baseUrl} description="支持 OpenAI 兼容接口；更换地址后需重新填写密钥。">{control => <Input {...control} name="baseUrl" required type="url" spellCheck={false} value={values.baseUrl} onChange={event => change({ baseUrl: event.target.value, apiKey: "" })} />}</FormField>
         <FormField id="model-key" label={canReuseKey ? "API Key（已保存密钥）" : "API Key"} error={errors.apiKey} description="密钥保存在本机，已保存的密钥不会在页面中显示。">{control => <Input {...control} name="apiKey" required={!canReuseKey} type="password" autoComplete="new-password" spellCheck={false} placeholder={canReuseKey ? "留空保持已保存的密钥" : "输入此服务的 API Key"} value={values.apiKey} onChange={event => change({ apiKey: event.target.value })} />}</FormField>
+        <div className="border-t border-border pt-5">
+          <label className="flex items-center gap-3 text-sm font-medium"><input type="checkbox" checked={values.embedding.enabled} onChange={event => change({ embedding: event.target.checked ? { enabled: true, modelName: "", endpointUrl: "", apiKey: "" } : { enabled: false } })} />启用 Text Embedding</label>
+          {values.embedding.enabled && <div className="mt-4 grid gap-4">
+            <FormField label="Embedding 模型" error={errors.embedding}>{control => <Input {...control} value={values.embedding.enabled ? values.embedding.modelName : ""} onChange={event => changeEmbedding({ modelName: event.target.value })} />}</FormField>
+            <FormField label="完整 API URL">{control => <Input {...control} type="url" value={values.embedding.enabled ? values.embedding.endpointUrl : ""} onChange={event => changeEmbedding({ endpointUrl: event.target.value, apiKey: "" })} />}</FormField>
+            <FormField label="Embedding API Key">{control => <Input {...control} type="password" autoComplete="new-password" placeholder={status?.embedding.configured ? "留空保持已保存的密钥" : "输入 API Key"} value={values.embedding.enabled ? values.embedding.apiKey : ""} onChange={event => changeEmbedding({ apiKey: event.target.value })} />}</FormField>
+            <FormField label="维度（可选）">{control => <Input {...control} type="number" min="1" step="1" value={values.embedding.enabled ? values.embedding.dimensions ?? "" : ""} onChange={event => { const dimensions = event.target.value ? Number(event.target.value) : undefined; changeEmbedding({ dimensions }); }} />}</FormField>
+            <Button type="button" onClick={() => void window.storyOSAgent.testEmbedding(values.embedding).then(() => setSaved(true)).catch(cause => setFormError(cause instanceof Error ? cause.message : String(cause)))}>测试连接</Button>
+          </div>}
+        </div>
         <details className="group border-t border-border pt-4">
           <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-medium text-text-secondary focus-visible:outline-2 [&::-webkit-details-marker]:hidden"><ChevronRight size={15} className="transition-transform group-open:rotate-90" />高级设置</summary>
           <div className="mt-4 grid gap-2">

@@ -78,8 +78,10 @@ export default function BookWorkspacePage() {
   } = useBookWorkspaceLayout();
   const [assistantDraft, setAssistantDraft] = useState("");
   const [assistantContextEnabled, setAssistantContextEnabled] = useState(true);
-  const [editorContext, setEditorContext] =
-    useState<ChapterEditorLiveContext | null>(null);
+  // The live editor context is only read when a turn is sent. Keeping it in a
+  // ref prevents caret moves and editor updates from re-rendering the entire
+  // workspace, including the outline and assistant panel.
+  const editorContextRef = useRef<ChapterEditorLiveContext | null>(null);
   const editorBridgeRef = useRef<ChapterEditorBridge | null>(null);
   const settingsBlocker = useBlocker(
     ({ nextLocation }) =>
@@ -166,7 +168,7 @@ export default function BookWorkspacePage() {
 
   useEffect(() => {
     setAssistantContextEnabled(true);
-    setEditorContext(null);
+    editorContextRef.current = null;
   }, [activeChapterId]);
 
   const aiPreviewContent = useChapterGenerationPreview({
@@ -245,7 +247,7 @@ export default function BookWorkspacePage() {
     activeVolumeTitle,
     activeChapterPageNumber,
     editorBridgeRef,
-    editorContext,
+    editorContextRef,
     assistantContextEnabled,
     reloadBookWorkspace,
     loadChapter,
@@ -434,7 +436,9 @@ export default function BookWorkspacePage() {
                 setAssistantDraft(prompt);
                 setAssistantVisible(true);
               }}
-              onEditorContextChange={setEditorContext}
+              onEditorContextChange={(context) => {
+                editorContextRef.current = context;
+              }}
               onEditorBridgeChange={(bridge) => {
                 editorBridgeRef.current = bridge;
               }}

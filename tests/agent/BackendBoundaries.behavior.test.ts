@@ -1,5 +1,11 @@
 import { EventEmitter } from "node:events";
-import { mkdtempSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -17,11 +23,17 @@ vi.mock("electron", () => ({ ipcMain: ipc }));
 describe("backend isolation boundaries", () => {
   it("keeps concurrent application environments independent across awaits", async () => {
     const read = (id: string) =>
-      withApplicationEnvironment({ agentHome: id, bundledSkillRoot: id }, async () => {
-        await Promise.resolve();
-        return currentApplicationEnvironment()?.agentHome;
-      });
-    expect(await Promise.all([read("first"), read("second")])).toEqual(["first", "second"]);
+      withApplicationEnvironment(
+        { agentHome: id, bundledSkillRoot: id },
+        async () => {
+          await Promise.resolve();
+          return currentApplicationEnvironment()?.agentHome;
+        },
+      );
+    expect(await Promise.all([read("first"), read("second")])).toEqual([
+      "first",
+      "second",
+    ]);
     expect(currentApplicationEnvironment()).toBeUndefined();
   });
 
@@ -29,7 +41,10 @@ describe("backend isolation boundaries", () => {
     const sender = Object.assign(new EventEmitter(), { id: 42, mainFrame: {} });
     const closeBookReaders = vi.fn();
     const registrar = new IpcRegistrar(
-      { runBusinessRequest: async (run) => run(), closeBookReaders },
+      () => ({
+        runBusinessRequest: async <T>(run: () => T | Promise<T>) => run(),
+        closeBookReaders,
+      }),
       (id) => id === 42,
     );
     registrar.handle("test:owned", async () => {
@@ -39,7 +54,10 @@ describe("backend isolation boundaries", () => {
     const invoke = ipc.handle.mock.calls.at(-1)[1];
     expect(() => invoke({ sender, senderFrame: {} })).toThrow("Untrusted");
     expect(() =>
-      invoke({ sender: { id: 7, mainFrame: sender.mainFrame }, senderFrame: sender.mainFrame }),
+      invoke({
+        sender: { id: 7, mainFrame: sender.mainFrame },
+        senderFrame: sender.mainFrame,
+      }),
     ).toThrow("Untrusted");
     expect(await invoke({ sender, senderFrame: sender.mainFrame })).toBe(42);
     sender.emit("destroyed");
@@ -47,14 +65,19 @@ describe("backend isolation boundaries", () => {
     registrar.dispose();
     registrar.dispose();
     expect(
-      ipc.removeHandler.mock.calls.filter(([channel]) => channel === "test:owned"),
+      ipc.removeHandler.mock.calls.filter(
+        ([channel]) => channel === "test:owned",
+      ),
     ).toHaveLength(1);
   });
 
   it("recovers marked dead-process previews while preserving live and unknown directories", () => {
     const home = mkdtempSync(path.join(tmpdir(), "storyos-preview-ownership-"));
     try {
-      const staging = new PreviewStagingDirectory(home, (pid) => pid === process.pid);
+      const staging = new PreviewStagingDirectory(
+        home,
+        (pid) => pid === process.pid,
+      );
       const dead = staging.create("book_import_preview_dead");
       writeFileSync(
         path.join(dead, ".preview-owner.json"),

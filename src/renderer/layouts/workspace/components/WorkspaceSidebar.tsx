@@ -45,6 +45,7 @@ type WorkspaceSidebarProps = {
     threadId: string,
   ) => Promise<void>;
   readonly onOpenSettings: (page: SettingsPage) => void;
+  readonly onSwitchInstance: () => void;
 };
 
 export default function WorkspaceSidebar({
@@ -68,6 +69,7 @@ export default function WorkspaceSidebar({
   onSwitchConversation,
   onDeleteConversation,
   onOpenSettings,
+  onSwitchInstance,
 }: WorkspaceSidebarProps) {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectsExpanded, setProjectsExpanded] = useState(true);
@@ -186,7 +188,7 @@ export default function WorkspaceSidebar({
           )}
         </div>
 
-        <SettingsLauncher onSelect={onOpenSettings} />
+        <SettingsLauncher onSelect={onOpenSettings} onSwitchInstance={onSwitchInstance} />
       </aside>
       {createProjectOpen && projects && <CreateProjectDialog allowBookshelfImport defaultParentPath={projects.creationDefaults.parentPath} onClose={() => setCreateProjectOpen(false)} onCreate={createProject} />}
       {renameTarget && <RenameProjectDialog projectName={renameTarget.name} onClose={() => setRenameTarget(null)} onRename={(name) => onRenameProject({ projectPath: renameTarget.path, name })} />}

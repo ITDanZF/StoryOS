@@ -138,19 +138,19 @@ export default function ChapterRichTextEditor({
 
   const getContext = useCallback(
     (current: Editor): ChapterEditorLiveContext => {
+      const { doc } = current.state;
       const { from, to } = current.state.selection;
       const selectionText =
         from === to
           ? ""
-          : current.state.doc.textBetween(from, to, "\n", "\n").trim();
+          : doc.textBetween(from, to, "\n", "\n").trim();
+      let documentText: string | null = null;
       return {
         version: documentVersionRef.current,
-        documentText: current.state.doc.textBetween(
-          0,
-          current.state.doc.content.size,
-          "\n\n",
-          "\n",
-        ),
+        get documentText() {
+          documentText ??= doc.textBetween(0, doc.content.size, "\n\n", "\n");
+          return documentText;
+        },
         selection:
           from !== to && selectionText
             ? { from, to, text: selectionText }

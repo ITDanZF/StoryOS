@@ -12,9 +12,10 @@ import type {
 import BookDatabase, {
   BOOK_DATABASE_APPLICATION_ID,
 } from "../story/storage/book/BookDatabase.ts";
+import Configuration from "../story/config/index.ts";
 import {
-  getSystemWorkspaceRoot,
   getWorkspaceLayout,
+  SYSTEM_WORKSPACE_DIRECTORY,
 } from "../story/workspace/ProjectLayout.ts";
 import { mutate, queryRows, readRow } from "./crud.ts";
 import { describeTable, listTables } from "./schema.ts";
@@ -55,7 +56,9 @@ export default class DeveloperDatabaseService {
       if (!existsSync(file)) return;
       const resolved = path.resolve(file);
       const id = createHash("sha256")
-        .update(process.platform === "win32" ? resolved.toLowerCase() : resolved)
+        .update(
+          process.platform === "win32" ? resolved.toLowerCase() : resolved,
+        )
         .digest("hex");
       found.set(id, { id, name, path: resolved });
     };
@@ -66,23 +69,36 @@ export default class DeveloperDatabaseService {
     };
     const appFile = path.join(this.agentHome, "app.sqlite");
     add(appFile, "全局注册库");
-    workspace(getSystemWorkspaceRoot(), "全局对话");
+    const projectsRoot = new Configuration(this.agentHome).loadConfig()
+      ?.workspace.defaultProjectsRoot;
+    workspace(
+      path.join(
+        projectsRoot || path.join(this.agentHome, "workSpaceRoot"),
+        SYSTEM_WORKSPACE_DIRECTORY,
+      ),
+      "全局对话",
+    );
     if (existsSync(appFile)) {
       const db = this.open(appFile, true);
       try {
         for (const [sql, visit] of [
           [
             "SELECT local_path AS path, name FROM projects",
-            (row: Record<string, string>) => workspace(row.path, `项目 · ${row.name}`),
+            (row: Record<string, string>) =>
+              workspace(row.path, `项目 · ${row.name}`),
           ],
           [
             "SELECT local_path AS storage_path, book_id AS id FROM book_registry",
             (row: Record<string, string>) =>
-              add(path.join(row.storage_path, "book.sqlite"), `书籍 · ${row.id}`),
+              add(
+                path.join(row.storage_path, "book.sqlite"),
+                `书籍 · ${row.id}`,
+              ),
           ],
         ] as const) {
           try {
-            for (const row of db.prepare(sql).all() as Record<string, string>[]) visit(row);
+            for (const row of db.prepare(sql).all() as Record<string, string>[])
+              visit(row);
           } catch (error) {
             this.warnings.push(`数据库发现失败 (${sql})：${String(error)}`);
           }
@@ -96,7 +112,10 @@ export default class DeveloperDatabaseService {
     if (existsSync(library))
       for (const entry of readdirSync(library, { withFileTypes: true })) {
         if (entry.isDirectory())
-          add(path.join(library, entry.name, "book.sqlite"), `书籍 · ${entry.name}`);
+          add(
+            path.join(library, entry.name, "book.sqlite"),
+            `书籍 · ${entry.name}`,
+          );
       }
     for (const [id, item] of found) this.databases.set(id, item);
     return [...this.databases.values()].filter((item) => existsSync(item.path));
@@ -109,19 +128,24 @@ export default class DeveloperDatabaseService {
     return this.withDatabase(id, (db) => describeTable(db, table));
   }
   queryRows(request: QueryRequest) {
-    return this.withDatabase(request.databaseId, (db) => queryRows(db, request));
+    return this.withDatabase(request.databaseId, (db) =>
+      queryRows(db, request),
+    );
   }
   readRow(request: RowRequest) {
     return this.withDatabase(request.databaseId, (db) => readRow(db, request));
   }
   mutate(request: MutationRequest): void {
     if (!this.editing || !this.backedUp.has(request.databaseId))
-      throw new Error("请先开启编辑会话。新增数据库需退出后重新开启，以完成备份。");
+      throw new Error(
+        "请先开启编辑会话。新增数据库需退出后重新开启，以完成备份。",
+      );
     this.withDatabase(request.databaseId, (db) => mutate(db, request), true);
   }
 
   async beginEditSession(): Promise<DeveloperStatus> {
-    if (this.transitioning || this.editing) throw new Error("编辑会话已开启或正在切换。");
+    if (this.transitioning || this.editing)
+      throw new Error("编辑会话已开启或正在切换。");
     const databases = this.listDatabases();
     this.transitioning = true;
     try {
@@ -131,7 +155,11 @@ export default class DeveloperDatabaseService {
       }
       this.backups = [];
       this.backedUp.clear();
-      const root = path.join(this.agentHome, "developer-backups", `${Date.now()}-${randomUUID()}`);
+      const root = path.join(
+        this.agentHome,
+        "developer-backups",
+        `${Date.now()}-${randomUUID()}`,
+      );
       mkdirSync(root, { recursive: true });
       for (const item of databases) {
         const target = path.join(root, `${item.id}.sqlite`);
@@ -167,7 +195,8 @@ export default class DeveloperDatabaseService {
         } finally {
           db.close();
         }
-        if (appId === BOOK_DATABASE_APPLICATION_ID) BookDatabase.validateExisting(item.path);
+        if (appId === BOOK_DATABASE_APPLICATION_ID)
+          BookDatabase.validateExisting(item.path);
       }
       this.editing = false;
       await this.host.resume();
@@ -193,7 +222,11 @@ export default class DeveloperDatabaseService {
       throw error;
     }
   }
-  private withDatabase<T>(id: string, run: (db: Database.Database) => T, write = false): T {
+  private withDatabase<T>(
+    id: string,
+    run: (db: Database.Database) => T,
+    write = false,
+  ): T {
     if (this.transitioning) throw new Error("正在切换编辑会话。");
     const item = this.databases.get(id);
     if (!item) throw new Error("数据库未被发现，请刷新数据库列表。");

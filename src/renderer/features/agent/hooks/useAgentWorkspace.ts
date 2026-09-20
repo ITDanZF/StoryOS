@@ -288,6 +288,7 @@ export function useAgentWorkspace() {
           mode: event.mode,
           initialText: event.initialText,
           generatedText: "",
+          reasoningText: "",
           sequence: 0,
           status: "streaming",
           updatedAt: event.timestamp,
@@ -296,7 +297,7 @@ export function useAgentWorkspace() {
       return;
     }
 
-    if (event.type === "chapter_generation_delta") {
+    if (event.type === "chapter_generation_reasoning") {
       setChapterGenerations((current) => {
         const existing = current[event.chapterId];
         if (
@@ -309,6 +310,52 @@ export function useAgentWorkspace() {
           ...current,
           [event.chapterId]: {
             ...existing,
+            reasoningText: `${existing.reasoningText}${event.text}`,
+            sequence: event.sequence,
+            status: "streaming",
+            updatedAt: event.timestamp,
+          },
+        };
+      });
+      return;
+    }
+
+    if (event.type === "chapter_generation_retrying") {
+      setChapterGenerations((current) => {
+        const existing = current[event.chapterId];
+        if (!existing || existing.generationId !== event.generationId)
+          return current;
+        return {
+          ...current,
+          [event.chapterId]: {
+            ...existing,
+            reasoningText: "",
+            retryAttempt: event.attempt,
+            retryMaxAttempts: event.maxAttempts,
+            status: "streaming",
+            updatedAt: event.timestamp,
+          },
+        };
+      });
+      return;
+    }
+
+    if (event.type === "chapter_generation_delta") {
+      setChapterGenerations((current) => {
+        const existing = current[event.chapterId];
+        if (
+          !existing ||
+          existing.generationId !== event.generationId ||
+          event.sequence <= existing.sequence
+        )
+          return current;
+        const { retryAttempt, retryMaxAttempts, ...rest } = existing;
+        void retryAttempt;
+        void retryMaxAttempts;
+        return {
+          ...current,
+          [event.chapterId]: {
+            ...rest,
             generatedText: `${existing.generatedText}${event.text}`,
             sequence: event.sequence,
             status: "streaming",

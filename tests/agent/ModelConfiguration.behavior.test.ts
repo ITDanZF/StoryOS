@@ -7,9 +7,9 @@ import {
 describe("ModelConfiguration behavior", () => {
   it("normalizes persisted configuration into an immutable model connection", () => {
     const configuration = createModelConnectionConfiguration({
-      MODEL_NAME: "  model-a  ",
-      MODEL_API_KEY: "  secret  ",
-      MODEL_BASE_URL: "  https://example.test/v1  ",
+      modelName: "  model-a  ",
+      apiKey: "  secret  ",
+      baseUrl: "  https://example.test/v1  ",
     });
 
     expect(configuration).toEqual({
@@ -23,11 +23,11 @@ describe("ModelConfiguration behavior", () => {
   it("fails early when a required connection value is missing", () => {
     expect(() =>
       createModelConnectionConfiguration({
-        MODEL_NAME: "model-a",
-        MODEL_API_KEY: "",
-        MODEL_BASE_URL: "https://example.test/v1",
+        modelName: "model-a",
+        apiKey: "",
+        baseUrl: "https://example.test/v1",
       }),
-    ).toThrow("Missing model configuration: MODEL_API_KEY");
+    ).toThrow("Missing model configuration: apiKey");
   });
 
   it("keeps environment loading in the compatibility composition helper", () => {
