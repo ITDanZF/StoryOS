@@ -8,9 +8,9 @@
 
 | 存储 | 权威数据与派生数据 | 实现入口 |
 |---|---|---|
-| `app.sqlite` | 项目、书籍登记、唯一项目绑定、本机身份、阅读状态、归档和存储操作；书架摘要与消费游标 | `src/main/agent/storage/global/applicationSchema.ts` |
-| 每书 `book.sqlite` | 单书身份、卷章、不可变修订、正文、设备草稿、变更日志 | `src/main/agent/storage/book/bookSchema.ts` |
-| 每工作区 `project.sqlite` | 会话、技能绑定、Agent 运行、权威会话事件；可重建消息视图 | `src/main/agent/storage/project/projectSchema.ts` |
+| `app.sqlite` | 项目、书籍登记、唯一项目绑定、本机身份、阅读状态、归档和存储操作；书架摘要与消费游标 | `src/main/story/storage/global/applicationSchema.ts` |
+| 每书 `book.sqlite` | 单书身份、卷章、不可变修订、正文、设备草稿、变更日志 | `src/main/story/storage/book/bookSchema.ts` |
+| 每工作区 `project.sqlite` | 会话、技能绑定、Agent 运行、权威会话事件；可重建消息视图 | `src/main/story/storage/project/projectSchema.ts` |
 
 新业务表使用 STRICT、检查约束和外键；工作区原有全文索引与框架检查点继续使用原协议。三个库分别承担事务，不宣称跨文件提交具有原子性。
 

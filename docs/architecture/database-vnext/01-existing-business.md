@@ -29,7 +29,7 @@
 | 本地项目文本检索 | indexed_files / text_chunks / FTS | 路径、行列位置、标题和版本信息保留，后续并入 RAG 检索层 |
 | 开发者数据库查看 | DeveloperDatabaseService | 按库识别新表与 schema 版本，派生库可单独查看 |
 
-代码依据：[应用库](../../../src/main/agent/storage/global/ApplicationDatabase.ts)、[书库](../../../src/main/agent/storage/book/BookDatabase.ts)、[项目库](../../../src/main/agent/storage/project/ProjectDatabase.ts)、[阅读器](../../../src/main/agent/application/BookReaderApplication.ts)、[导入导出](../../../src/main/agent/application/BookTransferService.ts)、[归档恢复](../../../src/main/agent/application/ProjectArchiveRecoveryService.ts)。
+代码依据：[应用库](../../../src/main/story/storage/global/ApplicationDatabase.ts)、[书库](../../../src/main/story/storage/book/BookDatabase.ts)、[项目库](../../../src/main/story/storage/project/ProjectDatabase.ts)、[阅读器](../../../src/main/story/application/books/BookReaderApplication.ts)、[导入导出](../../../src/main/story/application/transfers/BookTransferService.ts)、[归档恢复](../../../src/main/story/application/projects/ProjectArchiveRecoveryService.ts)。
 
 ## 3. 数据所有权与物理边界
 

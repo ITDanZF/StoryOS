@@ -1,8 +1,8 @@
 # StoryOS 后端重构实施记录
 
-实施日期：2026-09-09。源码基线：`de463b0`。开始时仅分析和执行方案两份文档未跟踪，没有业务代码修改。
+实施日期：2026-09-09。源码基线：`de463b0`。开始时没有业务代码修改。
 
-依据：[分析文档](backend-refactoring-and-resource-organization-analysis.md)、[执行方案](backend-refactoring-execution-plan.md)。原分析中的旧路径说明基线，当前入口以本文为准。
+当前模块入口、资源归属、兼容边界和验证结果以本文为准。引擎与业务目录边界见 [引擎边界调整记录](backend-agent-engine-boundary.md)。
 
 ## 1. 执行包交付
 

@@ -8,8 +8,8 @@
 > 相关文档：
 > - **实施方案（编码基准）：`docs/todo/performance/book-workspace-performance-solution.md`**
 > - **当前执行决策：`docs/todo/performance/book-workspace-performance-execution-plan.md`**（覆盖本文关于 token/delta 流式呈现的早期建议）
-> - 存储边界：`docs/todo/book-storage-architecture-refactor.md`
-> - 阅读器分页/页码：`docs/todo/reader-experience-v2-technical-design.md`
+> - 存储边界：`docs/architecture/database-vnext/README.md`
+> - 阅读器剩余画质验收：`docs/todo/open-items.md`
 > - 大纲（独立模块，不可与目录混用）：`docs/todo/outline-module-design-analysis.md`
 
 ## 1. 结论先行

@@ -6,7 +6,7 @@
 > 关联文档：
 > - `docs/todo/performance/book-workspace-performance-architecture.md`
 > - `docs/todo/performance/book-workspace-performance-solution.md`
-> - `docs/architecture/backend-refactoring-execution-plan.md`
+> - `docs/architecture/backend-refactoring-implementation-log.md`
 
 ## 实施进度（2026-09-20）
 

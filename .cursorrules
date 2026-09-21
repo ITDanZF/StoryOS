@@ -1,0 +1,27 @@
+# Git 提交信息
+
+生成提交信息时必须使用简体中文，并遵循 Conventional Commits：
+
+```text
+<type>(<scope>): <subject>
+
+<body>
+```
+
+- `type` 必填，只用：`feat`、`fix`、`refactor`、`perf`、`docs`、`style`、`test`、`chore`、`build`、`ci`
+- `scope` 可选，小写英文，表示模块，例如 `reader`、`bookshelf`、`docs`
+- `subject` 必填，简体中文，说明为什么改，不超过约 50 个汉字
+- 不要以句号结尾，不要罗列文件名
+- 只有原因不明显时才写 `body`，同样用简体中文，空一行后追加
+
+示例：
+
+```text
+docs: 清理已落地的历史设计文档
+```
+
+```text
+feat(reader): 开书后按书签恢复阅读位置
+
+避免封面和目录浏览覆盖正文书签，重启后仍回到上次正文位置。
+```
