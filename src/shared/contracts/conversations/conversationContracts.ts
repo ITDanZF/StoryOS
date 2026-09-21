@@ -15,10 +15,14 @@ export type ConversationScope =
       readonly projectId: string;
     };
 
+export const CONVERSATION_HISTORY_PAGE_SIZE = 80;
+export const CONVERSATION_HISTORY_LATEST_SEQUENCE = Number.MAX_SAFE_INTEGER;
+
 export type ConversationRef = {
   readonly scope: ConversationScope;
   readonly threadId: string;
   readonly afterSequence?: number;
+  readonly beforeSequence?: number;
   readonly limit?: number;
 };
 

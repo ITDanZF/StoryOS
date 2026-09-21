@@ -3,6 +3,7 @@ import type { ConversationEvent } from "./conversationEvent.ts";
 import {
   applyConversationEvent,
   assembleConversation,
+  prependConversationEvents,
 } from "./conversationAssembler.ts";
 import { createEmptyConversationProjection } from "./conversationNode.ts";
 
@@ -386,5 +387,45 @@ describe("conversation assembler", () => {
     expect(projection.order).toEqual(["assistant:run-1:answer-1"]);
     expect(Object.keys(projection.processedEventIds)).toHaveLength(10_001);
     expect(durationMs).toBeLessThan(1_000);
+  });
+
+  it("prepends an older turn in front of the already assembled latest page", () => {
+    const latest = assembleConversation(events(
+      {
+        ...common,
+        eventId: "run-2-user",
+        runId: "run-2",
+        sequence: 1,
+        threadSequence: 4,
+        type: "user.message.created",
+        payload: { messageId: "message-2", content: "最新一轮" },
+      },
+    ));
+    const projection = prependConversationEvents(latest, events(
+      {
+        ...common,
+        eventId: "run-1-user",
+        sequence: 1,
+        threadSequence: 1,
+        type: "user.message.created",
+        payload: { messageId: "message-1", content: "更早一轮" },
+      },
+      {
+        ...common,
+        eventId: "run-1-answer",
+        sequence: 2,
+        threadSequence: 2,
+        type: "assistant.block.completed",
+        stepId: "step-1",
+        blockId: "answer-1",
+        payload: { channel: "answer", content: "更早回答" },
+      },
+    ));
+
+    expect(projection.order).toEqual([
+      "user:message-1",
+      "assistant:run-1:answer-1",
+      "user:message-2",
+    ]);
   });
 });

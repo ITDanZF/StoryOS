@@ -4,6 +4,7 @@ import type { ConversationEvent } from "../model/conversationEvent.ts";
 import {
   applyConversationEvent,
   assembleConversation,
+  prependConversationEvents,
 } from "../model/conversationAssembler.ts";
 import {
   createEmptyConversationProjection,
@@ -16,6 +17,7 @@ export type ConversationStoreState = ConversationProjection & {
   readonly applyEvent: (event: ConversationEvent) => void;
   readonly applyEvents: (events: readonly ConversationEvent[]) => void;
   readonly hydrate: (events: readonly ConversationEvent[]) => void;
+  readonly prependEvents: (events: readonly ConversationEvent[]) => void;
   readonly reset: () => void;
 };
 
@@ -26,6 +28,7 @@ export function createConversationStore() {
     applyEvents: (events) => set((current) =>
       events.reduce(applyConversationEvent, current)),
     hydrate: (events) => set(assembleConversation(events)),
+    prependEvents: (events) => set((current) => prependConversationEvents(current, events)),
     reset: () => set(createEmptyConversationProjection()),
   }));
 }

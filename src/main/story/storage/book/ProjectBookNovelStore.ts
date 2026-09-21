@@ -128,6 +128,18 @@ export default class ProjectBookNovelStore implements NovelPersistence {
     return this.delegate?.getRevision(revisionId) ?? null;
   }
 
+  getRevisionPlainText(revisionId: string): string | null {
+    return this.requireStore().getRevisionPlainText(revisionId);
+  }
+
+  searchChapterPlainText(
+    novelId: string,
+    query: string,
+    limit: number,
+  ): ReturnType<NovelPersistence["searchChapterPlainText"]> {
+    return this.requireStore().searchChapterPlainText(novelId, query, limit);
+  }
+
   listRevisions(chapterId: string): Omit<ChapterRevisionRecord, "content">[] {
     return this.requireStore().listRevisions(chapterId);
   }

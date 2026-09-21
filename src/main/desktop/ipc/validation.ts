@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { RestoreProjectArchiveDesktopRequest } from "../../../shared/agent/contracts.ts";
-import type { ConversationTurnContext } from "../../../shared/contracts/conversations/conversationTurnContext.ts";
+import {
+  BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS,
+  BOOK_EDITOR_SELECTION_TEXT_MAX_CHARS,
+  type ConversationTurnContext,
+} from "../../../shared/contracts/conversations/conversationTurnContext.ts";
 import type { ToolApprovalDecision } from "../../agent/tools/security/ToolPolicy.ts";
 import type { NovelStatus } from "../../story/application/books/novelPorts.ts";
 import type {
@@ -47,10 +51,16 @@ export function requireText(value: unknown, label: string): string {
 
 export function requireConversationRef(request: ConversationRef): ConversationRef {
   const threadId = requireText(request?.threadId, "Thread id");
+  const afterSequence = z.number().int().nonnegative().optional().parse(request.afterSequence);
+  const beforeSequence = z.number().int().positive().optional().parse(request.beforeSequence);
+  if (afterSequence !== undefined && beforeSequence !== undefined) {
+    throw new Error("Invalid event page.");
+  }
   return Object.freeze({
     scope: requireConversationScope(request.scope),
     threadId,
-    afterSequence: z.number().int().nonnegative().optional().parse(request.afterSequence),
+    afterSequence,
+    beforeSequence,
     limit: z.number().int().min(1).max(1000).optional().parse(request.limit),
   });
 }
@@ -88,6 +98,10 @@ export function requireConversationTurnContext(
           title: requireText(value.chapter?.title, "Chapter title"),
           number: requirePositiveInteger(value.chapter?.number, "Chapter number"),
           volumeTitle: requireText(value.chapter?.volumeTitle, "Volume title"),
+          revisionId:
+            value.chapter?.revisionId === null
+              ? null
+              : requireText(value.chapter?.revisionId, "Revision id"),
           revisionNumber:
             value.chapter?.revisionNumber === null
               ? null
@@ -96,7 +110,14 @@ export function requireConversationTurnContext(
             value.chapter?.pageNumber === null
               ? null
               : requirePositiveInteger(value.chapter?.pageNumber, "Page number"),
-          documentText: requireString(value.chapter?.documentText, "Chapter text"),
+          pageExcerpt:
+            value.chapter?.pageExcerpt === null
+              ? null
+              : requireBoundedString(
+                  value.chapter?.pageExcerpt,
+                  "Current page excerpt",
+                  BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS,
+                ),
           selection:
             value.chapter?.selection === null
               ? null
@@ -106,7 +127,14 @@ export function requireConversationTurnContext(
                     "Selection start",
                   ),
                   to: requireNonNegativeInteger(value.chapter?.selection?.to, "Selection end"),
-                  text: requireText(value.chapter?.selection?.text, "Selection text"),
+                  text:
+                    value.chapter?.selection?.text === null
+                      ? null
+                      : requireBoundedString(
+                          requireText(value.chapter?.selection?.text, "Selection text"),
+                          "Selection text",
+                          BOOK_EDITOR_SELECTION_TEXT_MAX_CHARS,
+                        ),
                 }),
         });
   if (chapter?.selection && chapter.selection.to <= chapter.selection.from) {

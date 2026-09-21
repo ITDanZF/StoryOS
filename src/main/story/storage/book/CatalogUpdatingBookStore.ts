@@ -134,6 +134,16 @@ export default class CatalogUpdatingBookStore implements NovelPersistence {
     const result = this.source.getRevision(...args);
     return result;
   }
+  getRevisionPlainText(
+    ...args: Parameters<NovelPersistence["getRevisionPlainText"]>
+  ): ReturnType<NovelPersistence["getRevisionPlainText"]> {
+    return this.source.getRevisionPlainText(...args);
+  }
+  searchChapterPlainText(
+    ...args: Parameters<NovelPersistence["searchChapterPlainText"]>
+  ): ReturnType<NovelPersistence["searchChapterPlainText"]> {
+    return this.source.searchChapterPlainText(...args);
+  }
   listRevisions(
     ...args: Parameters<NovelPersistence["listRevisions"]>
   ): ReturnType<NovelPersistence["listRevisions"]> {

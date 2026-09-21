@@ -22,6 +22,21 @@ function isConversationEvent(event: ApplicationEvent): event is ConversationEven
   return "eventId" in event && "sequence" in event;
 }
 
+function toConversationEvent(row: ConversationEventRow): ConversationEvent {
+  return Object.freeze({
+    eventId: row.event_id,
+    threadSequence: row.thread_sequence,
+    threadId: row.thread_id,
+    runId: row.run_id,
+    sequence: row.run_sequence,
+    type: row.type,
+    timestamp: new Date(row.created_at).toISOString(),
+    payload: JSON.parse(row.payload) as unknown,
+    ...(row.step_id === null ? {} : { stepId: row.step_id }),
+    ...(row.block_id === null ? {} : { blockId: row.block_id }),
+  }) as ConversationEvent;
+}
+
 export default class SqliteConversationEventStore implements ApplicationEventRecorder {
   constructor(private readonly database: BetterSqliteDatabase) {}
 
@@ -48,6 +63,7 @@ export default class SqliteConversationEventStore implements ApplicationEventRec
     threadId: string,
     afterSequence = 0,
     limit = 500,
+    beforeSequence?: number,
   ): Promise<readonly ConversationEvent[]> {
     if (
       !Number.isSafeInteger(afterSequence) ||
@@ -57,6 +73,26 @@ export default class SqliteConversationEventStore implements ApplicationEventRec
       limit > 1000
     )
       throw new Error("Invalid event page.");
+    if (beforeSequence !== undefined) {
+      if (
+        afterSequence !== 0 ||
+        !Number.isSafeInteger(beforeSequence) ||
+        beforeSequence < 1
+      ) {
+        throw new Error("Invalid event page.");
+      }
+      const rows = this.database
+        .prepare(
+          `
+        SELECT * FROM conversation_events
+        WHERE thread_id = ? AND thread_sequence < ?
+        ORDER BY thread_sequence DESC LIMIT ?
+      `,
+        )
+        .all(threadId, beforeSequence, limit) as ConversationEventRow[];
+      rows.reverse();
+      return Object.freeze(rows.map(toConversationEvent));
+    }
     const rows = this.database
       .prepare(
         `
@@ -66,23 +102,6 @@ export default class SqliteConversationEventStore implements ApplicationEventRec
     `,
       )
       .all(threadId, afterSequence, limit) as ConversationEventRow[];
-
-    return Object.freeze(
-      rows.map(
-        (row) =>
-          Object.freeze({
-            eventId: row.event_id,
-            threadSequence: row.thread_sequence,
-            threadId: row.thread_id,
-            runId: row.run_id,
-            sequence: row.run_sequence,
-            type: row.type,
-            timestamp: new Date(row.created_at).toISOString(),
-            payload: JSON.parse(row.payload) as unknown,
-            ...(row.step_id === null ? {} : { stepId: row.step_id }),
-            ...(row.block_id === null ? {} : { blockId: row.block_id }),
-          }) as ConversationEvent,
-      ),
-    );
+    return Object.freeze(rows.map(toConversationEvent));
   }
 }

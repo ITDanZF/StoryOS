@@ -303,6 +303,16 @@ export type AgentDesktopApi = import("../book/reader.ts").BookReaderApi & {
   ): () => void;
 };
 
+export {
+  BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS,
+  BOOK_EDITOR_SELECTION_TEXT_MAX_CHARS,
+  clipBookEditorExcerpt,
+} from "../contracts/conversations/conversationTurnContext.ts";
+export {
+  CONVERSATION_HISTORY_LATEST_SEQUENCE,
+  CONVERSATION_HISTORY_PAGE_SIZE,
+} from "../contracts/conversations/conversationContracts.ts";
+
 export type {
   AgentConfigurationRequest,
   AgentServiceStatus,

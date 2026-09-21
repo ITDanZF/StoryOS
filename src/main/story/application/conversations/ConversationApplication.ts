@@ -72,6 +72,7 @@ export default class ConversationApplication {
       request.threadId,
       request.afterSequence,
       request.limit,
+      request.beforeSequence,
     );
   }
 

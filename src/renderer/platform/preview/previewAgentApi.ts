@@ -409,13 +409,23 @@ if (previewEnabled && !window.storyOSAgent) {
       messages.get(threadId) ?? [],
     listConversationEvents: async ({
       threadId,
-      afterSequence = 0,
+      afterSequence,
+      beforeSequence,
       limit = 500,
-    }) =>
-      (conversationEvents.get(threadId) ?? [])
-        .map((event, i) => ({ ...event, threadSequence: i + 1 }))
-        .filter((event) => event.threadSequence > afterSequence)
-        .slice(0, limit),
+    }) => {
+      const events = (conversationEvents.get(threadId) ?? []).map((event, i) => ({
+        ...event,
+        threadSequence: i + 1,
+      }));
+      if (beforeSequence !== undefined) {
+        return events
+          .filter((event) => event.threadSequence < beforeSequence)
+          .slice(-limit);
+      }
+      return events
+        .filter((event) => event.threadSequence > (afterSequence ?? 0))
+        .slice(0, limit);
+    },
     createThread: async (title) => {
       const thread: ThreadDto = {
         id: crypto.randomUUID(),

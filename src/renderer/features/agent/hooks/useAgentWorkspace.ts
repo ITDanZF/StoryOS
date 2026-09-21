@@ -22,6 +22,10 @@ import type {
   ChapterGenerationView,
 } from "../types.ts";
 import { ConversationEventBatcher } from "../conversation/store/conversationEventBatcher.ts";
+import {
+  loadLatestConversationHistory,
+  loadOlderConversationHistory,
+} from "../conversation/store/conversationHistory.ts";
 import { conversationStore } from "../conversation/store/conversationStore.ts";
 
 const conversationEventBatcher = new ConversationEventBatcher({
@@ -76,13 +80,20 @@ export function useAgentWorkspace() {
     Readonly<Record<string, ChapterGenerationView>>
   >({});
   const [error, setError] = useState<string | null>(null);
+  const [hasOlderConversationHistory, setHasOlderConversationHistory] =
+    useState(false);
+  const [loadingOlderConversationHistory, setLoadingOlderConversationHistory] =
+    useState(false);
   const activeThreadIdRef = useRef("");
   const activeScopeRef = useRef<ConversationScope>({ kind: "global" });
   const runThreadIdsRef = useRef(new Map<string, string>());
   const conversationTransitionRef = useRef(0);
   const messageLoadRef = useRef(0);
+  const olderLoadRef = useRef(0);
+  const oldestHistorySequenceRef = useRef<number | null>(null);
   const beginConversationTransition = useCallback(() => {
     messageLoadRef.current += 1;
+    olderLoadRef.current += 1;
     conversationTransitionRef.current += 1;
     return conversationTransitionRef.current;
   }, []);
@@ -90,25 +101,15 @@ export function useAgentWorkspace() {
   const loadMessages = useCallback(
     async (scope: ConversationScope, threadId: string) => {
       const requestId = ++messageLoadRef.current;
-      const conversationEvents: Awaited<
-        ReturnType<typeof window.storyOSAgent.listConversationEvents>
-      >[number][] = [];
-      let afterSequence = 0;
-      while (true) {
-        const page = await window.storyOSAgent.listConversationEvents({
-          scope,
-          threadId,
-          afterSequence,
-          limit: 500,
-        });
-        if (requestId !== messageLoadRef.current) return;
-        conversationEvents.push(...page);
-        if (page.length < 500) break;
-        const next = page.at(-1)?.threadSequence;
-        if (next === undefined || next <= afterSequence)
-          throw new Error("Conversation page cursor did not advance.");
-        afterSequence = next;
-      }
+      olderLoadRef.current += 1;
+      oldestHistorySequenceRef.current = null;
+      setHasOlderConversationHistory(false);
+      setLoadingOlderConversationHistory(false);
+      const page = await loadLatestConversationHistory(
+        (request) => window.storyOSAgent.listConversationEvents(request),
+        scope,
+        threadId,
+      );
       if (
         requestId !== messageLoadRef.current ||
         !sameScope(scope, activeScopeRef.current) ||
@@ -116,10 +117,43 @@ export function useAgentWorkspace() {
       )
         return;
       conversationEventBatcher.flush();
-      conversationStore.getState().hydrate(conversationEvents);
+      conversationStore.getState().hydrate(page.events);
+      oldestHistorySequenceRef.current = page.oldestSequence;
+      setHasOlderConversationHistory(page.hasOlder);
     },
     [],
   );
+
+  const loadOlderConversationHistoryPage = useCallback(async () => {
+    const scope = activeScopeRef.current;
+    const threadId = activeThreadIdRef.current;
+    const beforeSequence = oldestHistorySequenceRef.current;
+    if (!threadId || beforeSequence === null) return;
+    const requestId = ++olderLoadRef.current;
+    setLoadingOlderConversationHistory(true);
+    try {
+      const page = await loadOlderConversationHistory(
+        (request) => window.storyOSAgent.listConversationEvents(request),
+        scope,
+        threadId,
+        beforeSequence,
+      );
+      if (
+        requestId !== olderLoadRef.current ||
+        threadId !== activeThreadIdRef.current
+      )
+        return;
+      if (page.events.length > 0) {
+        conversationStore.getState().prependEvents(page.events);
+        oldestHistorySequenceRef.current = page.oldestSequence;
+      }
+      setHasOlderConversationHistory(page.hasOlder);
+    } finally {
+      if (requestId === olderLoadRef.current) {
+        setLoadingOlderConversationHistory(false);
+      }
+    }
+  }, []);
 
   const applyWorkspaceSnapshot = useCallback(
     async (snapshot: WorkspaceSnapshot, transitionId: number) => {
@@ -137,6 +171,9 @@ export function useAgentWorkspace() {
         await loadMessages(scope, snapshot.threads.activeThreadId);
       } else {
         messageLoadRef.current += 1;
+        olderLoadRef.current += 1;
+        oldestHistorySequenceRef.current = null;
+        setHasOlderConversationHistory(false);
         conversationStore.getState().reset();
       }
       return true;
@@ -181,6 +218,9 @@ export function useAgentWorkspace() {
         await loadMessages(scope, snapshot.activeThreadId);
       } else {
         messageLoadRef.current += 1;
+        olderLoadRef.current += 1;
+        oldestHistorySequenceRef.current = null;
+        setHasOlderConversationHistory(false);
         conversationStore.getState().reset();
       }
       return true;
@@ -797,6 +837,9 @@ export function useAgentWorkspace() {
     sendMessage,
     cancelRun,
     resolveApproval,
+    hasOlderConversationHistory,
+    loadingOlderConversationHistory,
+    loadOlderConversationHistory: loadOlderConversationHistoryPage,
     clearError: () => setError(null),
   };
 }

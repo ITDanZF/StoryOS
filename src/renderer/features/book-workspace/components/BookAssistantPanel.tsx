@@ -17,6 +17,7 @@ import type {
   PendingToolApprovalView,
   ResolveToolApproval,
 } from "../../agent/types.ts";
+import { useWorkspaceOutlet } from "../../../layouts/workspace/context.ts";
 import ProjectConversationSwitcher from "./ProjectConversationSwitcher.tsx";
 
 const MAX_TEXTAREA_HEIGHT = 156;
@@ -70,6 +71,11 @@ export default function BookAssistantPanel({
   onDeleteConversation,
   onToggleFocus,
 }: BookAssistantPanelProps) {
+  const {
+    hasOlderConversationHistory,
+    loadingOlderConversationHistory,
+    loadOlderConversationHistory,
+  } = useWorkspaceOutlet();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -154,6 +160,8 @@ export default function BookAssistantPanel({
       <ConversationViewport
         bottomPaddingClassName="pb-4"
         compact
+        hasOlder={hasOlderConversationHistory}
+        loadingOlder={loadingOlderConversationHistory}
         emptyDescription={chapterNumber === null
           ? "这是属于当前书籍的项目对话，适合做设定梳理、结构规划和整体节奏讨论。"
           : "当前章节会作为本次项目对话的上下文，适合续写、润色、检查冲突和提取伏笔。"}
@@ -161,6 +169,7 @@ export default function BookAssistantPanel({
         suggestions={chapterNumber === null
           ? ["梳理整本书的主线冲突", "检查人物动机是否成立", "规划下一卷的节奏"]
           : ["检查本章节奏和冲突", "续写下一段并保持风格", "提取本章伏笔和回收点"]}
+        onLoadOlder={loadOlderConversationHistory}
         onPickSuggestion={onDraftChange}
       />
 

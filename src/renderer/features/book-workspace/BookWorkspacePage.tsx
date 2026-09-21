@@ -246,8 +246,7 @@ export default function BookWorkspacePage() {
     editorBridgeRef,
     editorContextRef,
     assistantContextEnabled,
-    reloadBookWorkspace,
-    loadChapter,
+    livePagination,
     setAssistantDraft,
     setAssistantVisible,
   });

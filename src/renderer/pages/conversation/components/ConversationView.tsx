@@ -1,4 +1,5 @@
 import ConversationViewport from "../../../features/agent/conversation/components/ConversationViewport.tsx";
+import { useWorkspaceOutlet } from "../../../layouts/workspace/context.ts";
 
 type ConversationViewProps = {
   readonly loading: boolean;
@@ -13,12 +14,20 @@ const globalSuggestions = [
 export default function ConversationView({
   loading,
 }: ConversationViewProps) {
+  const {
+    hasOlderConversationHistory,
+    loadingOlderConversationHistory,
+    loadOlderConversationHistory,
+  } = useWorkspaceOutlet();
   return (
     <ConversationViewport
       emptyDescription="这里适合做全局问题拆解、项目规划和跨上下文讨论。"
       emptyTitle="开始一段新对话"
+      hasOlder={hasOlderConversationHistory}
       loading={loading}
+      loadingOlder={loadingOlderConversationHistory}
       suggestions={globalSuggestions}
+      onLoadOlder={loadOlderConversationHistory}
     />
   );
 }

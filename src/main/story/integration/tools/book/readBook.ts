@@ -1,9 +1,5 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import {
-  decodeStoredChapterContent,
-  extractTiptapText,
-} from "../../../../../shared/book/richText.ts";
 import type BookToolContext from "./BookToolContext.ts";
 
 function stringify(value: unknown): string {
@@ -40,19 +36,28 @@ export function createBookReadTools(context: BookToolContext) {
       if (chapter.novelId !== book.id) {
         throw new Error(`Chapter does not belong to the current book: ${chapter_id}`);
       }
-      const revision = context.novels.getCurrentRevision(chapter.id);
+      const metadata = context.novels.getCurrentRevisionMetadata(chapter.id);
+      if (!metadata) {
+        return stringify({
+          chapter,
+          revision: null,
+          text: "",
+        });
+      }
+      const text = context.novels.getCurrentRevisionPlainText(chapter.id);
+      if (text === null) {
+        throw new Error(`Current chapter revision text is missing: ${chapter.id}`);
+      }
       return stringify({
         chapter,
-        revision: revision
-          ? {
-              id: revision.id,
-              revisionNumber: revision.revisionNumber,
-              characterCount: revision.characterCount,
-              changeSummary: revision.changeSummary,
-              createdAt: revision.createdAt,
-            }
-          : null,
-        text: revision ? extractTiptapText(decodeStoredChapterContent(revision.content)) : "",
+        revision: {
+          id: metadata.id,
+          revisionNumber: metadata.revisionNumber,
+          characterCount: metadata.characterCount,
+          changeSummary: metadata.changeSummary,
+          createdAt: metadata.createdAt,
+        },
+        text,
       });
     },
     {
@@ -67,32 +72,7 @@ export function createBookReadTools(context: BookToolContext) {
   const searchChapters = tool(
     async ({ query, limit = 20 }) => {
       const book = context.requireBook();
-      const normalizedQuery = query.trim().toLocaleLowerCase();
-      const matches: Array<{
-        chapterId: string;
-        chapterTitle: string;
-        occurrence: number;
-        snippet: string;
-      }> = [];
-      for (const chapter of context.novels.listChapters(book.id)) {
-        const revision = context.novels.getCurrentRevision(chapter.id);
-        if (!revision) continue;
-        const text = extractTiptapText(decodeStoredChapterContent(revision.content));
-        const normalizedText = text.toLocaleLowerCase();
-        let from = 0;
-        while (matches.length < limit) {
-          const index = normalizedText.indexOf(normalizedQuery, from);
-          if (index < 0) break;
-          matches.push({
-            chapterId: chapter.id,
-            chapterTitle: chapter.title,
-            occurrence: index,
-            snippet: text.slice(Math.max(0, index - 60), index + query.length + 60),
-          });
-          from = index + Math.max(1, normalizedQuery.length);
-        }
-        if (matches.length >= limit) break;
-      }
+      const matches = context.novels.searchChapterPlainText(book.id, query.trim(), limit);
       return stringify({ query, matches, truncated: matches.length >= limit });
     },
     {
@@ -108,26 +88,19 @@ export function createBookReadTools(context: BookToolContext) {
   const getStatistics = tool(
     async () => {
       const book = context.requireBook();
-      const chapters = context.novels.listChapters(book.id);
-      const chapterStatistics = chapters.map((chapter) => {
-        const revision = context.novels.getCurrentRevision(chapter.id);
-        return {
-          chapterId: chapter.id,
-          title: chapter.title,
-          status: chapter.status,
-          characterCount: revision?.characterCount ?? 0,
-          revisionNumber: revision?.revisionNumber ?? null,
-        };
-      });
+      const chapters = context.novels.listChapterSummaries(book.id);
       return stringify({
         bookId: book.id,
         volumeCount: context.novels.listVolumes(book.id).length,
         chapterCount: chapters.length,
-        characterCount: chapterStatistics.reduce(
-          (total, chapter) => total + chapter.characterCount,
-          0,
-        ),
-        chapters: chapterStatistics,
+        characterCount: chapters.reduce((total, chapter) => total + chapter.characterCount, 0),
+        chapters: chapters.map((chapter) => ({
+          chapterId: chapter.id,
+          title: chapter.title,
+          status: chapter.status,
+          characterCount: chapter.characterCount,
+          revisionNumber: chapter.revisionNumber,
+        })),
       });
     },
     {

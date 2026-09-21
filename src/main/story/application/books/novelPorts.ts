@@ -77,10 +77,23 @@ export interface ChapterRevisionWriter {
     },
   ): ChapterRevisionRecord;
 }
+export type ChapterPlainTextSearchHit = {
+  readonly chapterId: string;
+  readonly chapterTitle: string;
+  readonly occurrence: number;
+  readonly snippet: string;
+};
+
 export interface ChapterRevisionReader {
   getRevisionMetadata(revisionId: string): Omit<ChapterRevisionRecord, "content"> | null;
   getRevision(revisionId: string): ChapterRevisionRecord | null;
+  getRevisionPlainText(revisionId: string): string | null;
   listRevisions(chapterId: string): Omit<ChapterRevisionRecord, "content">[];
+  searchChapterPlainText(
+    novelId: string,
+    query: string,
+    limit: number,
+  ): ChapterPlainTextSearchHit[];
 }
 export interface BookStructureReader {
   getNovel(novelId: string): NovelRecord | null;

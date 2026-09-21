@@ -364,6 +364,18 @@ export default class SqliteNovelStore implements NovelPersistence {
     return this.revisions.getRevision(...args);
   }
 
+  getRevisionPlainText(
+    ...args: Parameters<ChapterRevisionQueries["getRevisionPlainText"]>
+  ): ReturnType<ChapterRevisionQueries["getRevisionPlainText"]> {
+    return this.revisions.getRevisionPlainText(...args);
+  }
+
+  searchChapterPlainText(
+    ...args: Parameters<ChapterRevisionQueries["searchChapterPlainText"]>
+  ): ReturnType<ChapterRevisionQueries["searchChapterPlainText"]> {
+    return this.revisions.searchChapterPlainText(...args);
+  }
+
   listRevisions(
     ...args: Parameters<ChapterRevisionQueries["listRevisions"]>
   ): ReturnType<ChapterRevisionQueries["listRevisions"]> {

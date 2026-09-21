@@ -135,6 +135,61 @@ export default class ChapterRevisionQueries {
     return row ? this.toRevision(row) : null;
   }
 
+  getRevisionPlainText(revisionId: string): string | null {
+    const row = this.database
+      .prepare("SELECT plain_text FROM revision_documents WHERE revision_id = ?")
+      .get(revisionId) as { plain_text: string } | undefined;
+    return row ? row.plain_text : null;
+  }
+
+  searchChapterPlainText(
+    novelId: string,
+    query: string,
+    limit: number,
+  ): Array<{
+    readonly chapterId: string;
+    readonly chapterTitle: string;
+    readonly occurrence: number;
+    readonly snippet: string;
+  }> {
+    const rows = this.database
+      .prepare(
+        `
+      SELECT c.id, c.title, d.plain_text
+      FROM chapters c
+      JOIN revision_documents d ON d.revision_id = c.current_revision_id
+      WHERE c.book_id = ? AND c.deleted_at IS NULL
+        AND (instr(d.plain_text, ?) > 0 OR instr(lower(d.plain_text), lower(?)) > 0)
+      ORDER BY c.position, c.id
+    `,
+      )
+      .all(novelId, query, query) as Array<{ id: string; title: string; plain_text: string }>;
+    const normalizedQuery = query.toLocaleLowerCase();
+    const matches: Array<{
+      readonly chapterId: string;
+      readonly chapterTitle: string;
+      readonly occurrence: number;
+      readonly snippet: string;
+    }> = [];
+    for (const row of rows) {
+      const normalizedText = row.plain_text.toLocaleLowerCase();
+      let from = 0;
+      while (matches.length < limit) {
+        const index = normalizedText.indexOf(normalizedQuery, from);
+        if (index < 0) break;
+        matches.push({
+          chapterId: row.id,
+          chapterTitle: row.title,
+          occurrence: index,
+          snippet: row.plain_text.slice(Math.max(0, index - 60), index + query.length + 60),
+        });
+        from = index + Math.max(1, normalizedQuery.length);
+      }
+      if (matches.length >= limit) break;
+    }
+    return matches;
+  }
+
   listRevisions(chapterId: string): Omit<ChapterRevisionRecord, "content">[] {
     return (
       this.database

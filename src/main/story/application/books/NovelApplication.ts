@@ -271,6 +271,17 @@ export default class NovelApplication {
     return this.toRevisionDto(revision);
   }
 
+  getCurrentRevisionPlainText(chapterId: string): string | null {
+    const chapter = this.requireChapter(chapterId);
+    if (!chapter.currentRevisionId) return null;
+    return this.persistence.getRevisionPlainText(chapter.currentRevisionId);
+  }
+
+  searchChapterPlainText(novelId: string, query: string, limit: number) {
+    this.requireNovel(novelId);
+    return this.persistence.searchChapterPlainText(novelId, query, limit);
+  }
+
   saveRevision(input: {
     readonly chapterId: string;
     readonly content: string;

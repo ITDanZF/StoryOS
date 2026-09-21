@@ -5,23 +5,22 @@ import {
   type SetStateAction,
 } from "react";
 import { useSearchParams } from "react-router-dom";
-import type {
-  ProjectDto,
-  BookWorkspaceChapterDto,
-  ReadyBookWorkspaceSnapshot,
-  ConversationTurnContext,
-  ToolApprovalDecision,
-} from "../../../shared/agent/contracts.ts";
 import {
-  decodeStoredChapterContent,
-  extractTiptapText,
-} from "../../../shared/book/richText.ts";
+  BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS,
+  BOOK_EDITOR_SELECTION_TEXT_MAX_CHARS,
+  clipBookEditorExcerpt,
+  type ProjectDto,
+  type BookWorkspaceChapterDto,
+  type ReadyBookWorkspaceSnapshot,
+  type ConversationTurnContext,
+  type ToolApprovalDecision,
+} from "../../../shared/agent/contracts.ts";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
+import type { LiveChapterPagination } from "../book-content/paginationModel.ts";
 import type {
   ChapterEditorBridge,
   ChapterEditorLiveContext,
 } from "./editor/chapterEditorContext.ts";
-import type useBookWorkspace from "./useBookWorkspace.ts";
 
 type Input = {
   projectId: string | undefined;
@@ -31,11 +30,10 @@ type Input = {
   chapterNumber: number | null;
   activeVolumeTitle: string;
   activeChapterPageNumber: number | null;
+  livePagination: LiveChapterPagination | null;
   editorBridgeRef: RefObject<ChapterEditorBridge | null>;
   editorContextRef: RefObject<ChapterEditorLiveContext | null>;
   assistantContextEnabled: boolean;
-  reloadBookWorkspace: ReturnType<typeof useBookWorkspace>["load"];
-  loadChapter: ReturnType<typeof useBookWorkspace>["loadChapter"];
   setAssistantDraft: Dispatch<SetStateAction<string>>;
   setAssistantVisible: Dispatch<SetStateAction<boolean>>;
 };
@@ -48,11 +46,10 @@ export default function useBookConversations({
   chapterNumber,
   activeVolumeTitle,
   activeChapterPageNumber,
+  livePagination,
   editorBridgeRef,
   editorContextRef,
   assistantContextEnabled,
-  reloadBookWorkspace,
-  loadChapter,
   setAssistantDraft,
   setAssistantVisible,
 }: Input) {
@@ -154,14 +151,19 @@ export default function useBookConversations({
   };
 
   const sendAssistantMessage = async (content: string) => {
+    if (!projectId || !project) throw new Error("Project id is required.");
     await ensureProjectConversation();
     await editorBridgeRef.current?.flushPending();
-    if (activeChapter) await reloadBookWorkspace();
-    const refreshedChapter = activeChapter
-      ? await loadChapter(activeChapter.id)
-      : null;
     const liveEditorContext =
       editorBridgeRef.current?.getContext() ?? editorContextRef.current;
+    const livePage =
+      assistantContextEnabled &&
+      activeChapter &&
+      livePagination?.chapterId === activeChapter.id &&
+      activeChapterPageNumber !== null
+        ? livePagination.pages[activeChapterPageNumber - 1]
+        : undefined;
+    const selection = liveEditorContext?.selection ?? null;
     const context: ConversationTurnContext = {
       kind: "book_editor",
       projectId,
@@ -170,20 +172,31 @@ export default function useBookConversations({
         ? { id: readyWorkspace.book.id, title: readyWorkspace.book.title }
         : null,
       chapter:
-        assistantContextEnabled && refreshedChapter && chapterNumber !== null
+        assistantContextEnabled && activeChapter && chapterNumber !== null
           ? {
-              id: refreshedChapter.id,
-              title: refreshedChapter.title,
+              id: activeChapter.id,
+              title: activeChapter.title,
               number: chapterNumber,
               volumeTitle: activeVolumeTitle,
-              revisionNumber: refreshedChapter.revisionNumber,
+              revisionId: activeChapter.currentRevisionId,
+              revisionNumber: activeChapter.revisionNumber,
               pageNumber: activeChapterPageNumber,
-              documentText:
-                liveEditorContext?.documentText ??
-                extractTiptapText(
-                  decodeStoredChapterContent(refreshedChapter.content),
-                ),
-              selection: liveEditorContext?.selection ?? null,
+              pageExcerpt: livePage
+                ? clipBookEditorExcerpt(
+                    livePage.previewText,
+                    BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS,
+                  )
+                : null,
+              selection: selection
+                ? {
+                    from: selection.from,
+                    to: selection.to,
+                    text:
+                      selection.text.length <= BOOK_EDITOR_SELECTION_TEXT_MAX_CHARS
+                        ? selection.text
+                        : null,
+                  }
+                : null,
             }
           : null,
     };

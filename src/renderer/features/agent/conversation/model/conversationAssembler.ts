@@ -451,3 +451,22 @@ export function assembleConversation(
   for (const event of events) applyConversationEventToDraft(draft, event);
   return draft;
 }
+
+export function prependConversationEvents(
+  projection: ConversationProjection,
+  olderEvents: readonly ConversationEvent[],
+): ConversationProjection {
+  if (olderEvents.length === 0) return projection;
+  const older = assembleConversation(olderEvents);
+  const order = [...older.order];
+  for (const key of projection.order) {
+    if (older.nodes[key]) continue;
+    order.push(key);
+  }
+  return {
+    order,
+    nodes: { ...older.nodes, ...projection.nodes },
+    turns: { ...older.turns, ...projection.turns },
+    processedEventIds: { ...older.processedEventIds, ...projection.processedEventIds },
+  };
+}

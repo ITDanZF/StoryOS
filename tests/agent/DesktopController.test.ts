@@ -419,9 +419,10 @@ describe("DesktopController", () => {
           title: "雨夜",
           number: 1,
           volumeTitle: "第一卷",
+          revisionId: "rev-2",
           revisionNumber: 2,
           pageNumber: 3,
-          documentText: "雨落在旧城。",
+          pageExcerpt: "雨落在旧城。",
           selection: { from: 1, to: 7, text: "雨落在旧城" },
         },
       },
@@ -437,7 +438,7 @@ describe("DesktopController", () => {
       context: expect.objectContaining({
         kind: "book_editor",
         chapter: expect.objectContaining({
-          documentText: "雨落在旧城。",
+          pageExcerpt: "雨落在旧城。",
           selection: expect.objectContaining({ text: "雨落在旧城" }),
         }),
       }),

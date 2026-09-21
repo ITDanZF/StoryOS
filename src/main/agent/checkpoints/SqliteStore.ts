@@ -3,8 +3,20 @@ import Database, { type Database as BetterSqliteDatabase } from "better-sqlite3"
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { getAgentHome } from "../environment/paths.ts";
-import type { CheckpointRow, ThreadCheckpointSnapshot, WriteRow } from "./CheckpointRecovery.ts";
+import type {
+  CheckpointPointer,
+  ThreadCheckpointSnapshot,
+  WritePointer,
+} from "./CheckpointRecovery.ts";
 export type { ThreadCheckpointSnapshot } from "./CheckpointRecovery.ts";
+
+function checkpointKey(row: CheckpointPointer): string {
+  return `${row.thread_id}\0${row.checkpoint_ns}\0${row.checkpoint_id}`;
+}
+
+function writeKey(row: WritePointer): string {
+  return `${row.thread_id}\0${row.checkpoint_ns}\0${row.checkpoint_id}\0${row.task_id}\0${row.idx}`;
+}
 
 export default class SqliteStore {
   private readonly db: BetterSqliteDatabase;
@@ -57,11 +69,15 @@ export default class SqliteStore {
     try {
       const threadPattern = `${threadId}/%`;
       const checkpoints = db
-        .prepare("SELECT * FROM checkpoints WHERE thread_id = ? OR thread_id LIKE ?")
-        .all(threadId, threadPattern) as CheckpointRow[];
+        .prepare(
+          "SELECT thread_id, checkpoint_ns, checkpoint_id FROM checkpoints WHERE thread_id = ? OR thread_id LIKE ?",
+        )
+        .all(threadId, threadPattern) as CheckpointPointer[];
       const writes = db
-        .prepare("SELECT * FROM writes WHERE thread_id = ? OR thread_id LIKE ?")
-        .all(threadId, threadPattern) as WriteRow[];
+        .prepare(
+          "SELECT thread_id, checkpoint_ns, checkpoint_id, task_id, idx FROM writes WHERE thread_id = ? OR thread_id LIKE ?",
+        )
+        .all(threadId, threadPattern) as WritePointer[];
       return Object.freeze({
         threadId,
         checkpoints: Object.freeze(checkpoints),
@@ -79,47 +95,42 @@ export default class SqliteStore {
     const db = new Database(dbPath);
     try {
       const threadPattern = `${snapshot.threadId}/%`;
-      const deleteWrites = db.prepare("DELETE FROM writes WHERE thread_id = ? OR thread_id LIKE ?");
-      const deleteCheckpoints = db.prepare(
-        "DELETE FROM checkpoints WHERE thread_id = ? OR thread_id LIKE ?",
+      const keptCheckpoints = new Set(snapshot.checkpoints.map(checkpointKey));
+      const keptWrites = new Set(snapshot.writes.map(writeKey));
+      const deleteCheckpoint = db.prepare(
+        "DELETE FROM checkpoints WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id = ?",
       );
-      const insertCheckpoint = db.prepare(`
-        INSERT INTO checkpoints (
-          thread_id, checkpoint_ns, checkpoint_id, parent_checkpoint_id,
-          type, checkpoint, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-      const insertWrite = db.prepare(`
-        INSERT INTO writes (
-          thread_id, checkpoint_ns, checkpoint_id, task_id,
-          idx, channel, type, value
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+      const deleteWrite = db.prepare(
+        "DELETE FROM writes WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id = ? AND task_id = ? AND idx = ?",
+      );
       return db.transaction(() => {
-        let changes = deleteWrites.run(snapshot.threadId, threadPattern).changes;
-        changes += deleteCheckpoints.run(snapshot.threadId, threadPattern).changes;
-
-        for (const row of snapshot.checkpoints) {
-          changes += insertCheckpoint.run(
-            row.thread_id,
-            row.checkpoint_ns,
-            row.checkpoint_id,
-            row.parent_checkpoint_id,
-            row.type,
-            row.checkpoint,
-            row.metadata,
-          ).changes;
-        }
-        for (const row of snapshot.writes) {
-          changes += insertWrite.run(
+        const currentWrites = db
+          .prepare(
+            "SELECT thread_id, checkpoint_ns, checkpoint_id, task_id, idx FROM writes WHERE thread_id = ? OR thread_id LIKE ?",
+          )
+          .all(snapshot.threadId, threadPattern) as WritePointer[];
+        const currentCheckpoints = db
+          .prepare(
+            "SELECT thread_id, checkpoint_ns, checkpoint_id FROM checkpoints WHERE thread_id = ? OR thread_id LIKE ?",
+          )
+          .all(snapshot.threadId, threadPattern) as CheckpointPointer[];
+        let changes = 0;
+        for (const row of currentWrites) {
+          if (keptWrites.has(writeKey(row))) continue;
+          changes += deleteWrite.run(
             row.thread_id,
             row.checkpoint_ns,
             row.checkpoint_id,
             row.task_id,
             row.idx,
-            row.channel,
-            row.type,
-            row.value,
+          ).changes;
+        }
+        for (const row of currentCheckpoints) {
+          if (keptCheckpoints.has(checkpointKey(row))) continue;
+          changes += deleteCheckpoint.run(
+            row.thread_id,
+            row.checkpoint_ns,
+            row.checkpoint_id,
           ).changes;
         }
         return changes;
