@@ -14,6 +14,8 @@ export const WINDOW_IPC_CHANNELS = Object.freeze({
   stateChanged: "window:state-changed",
 } as const);
 
+export type WindowPlatform = "darwin" | "win32" | "linux";
+
 export type WindowState = {
   readonly maximized: boolean;
   readonly fullScreen: boolean;
@@ -82,6 +84,7 @@ export type FileBrowserTarget = {
 };
 
 export type WindowDesktopApi = {
+  readonly platform: WindowPlatform;
   getState(): Promise<WindowState>;
   pickDirectory(request?: PickDirectoryRequest): Promise<string | null>;
   pickFile(request: PickFileRequest): Promise<string | null>;

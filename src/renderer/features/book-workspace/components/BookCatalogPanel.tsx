@@ -290,7 +290,7 @@ export default function BookCatalogPanel({
 
                 <div className="motion-collapse" data-open={expanded && visibleChapters.length > 0}>
                   <div className="motion-collapse-inner">
-                    <div className="ml-8 mt-1 space-y-1.5 border-l border-border pl-3">
+                    <div className="ml-8 mt-1 space-y-1.5 border-l border-border py-px pr-px pl-3">
                     {visibleChapters.map((chapter) => {
                       const active = chapter.id === activeChapterId;
                       return (
@@ -300,8 +300,8 @@ export default function BookCatalogPanel({
                         >
                           <button
                             className={cn(
-                              "flex min-h-12 w-full items-center gap-2 rounded-xl border-0 bg-transparent px-2.5 py-2 pr-9 text-left text-text-secondary transition-colors hover:bg-card hover:text-foreground",
-                              active && "bg-card text-foreground ring-1 ring-accent-border hover:bg-card",
+                              "flex min-h-12 w-full items-center gap-2 rounded-xl border border-transparent bg-transparent px-2.5 py-2 pr-9 text-left text-text-secondary transition-colors hover:bg-card hover:text-foreground",
+                              active && "border-accent-border bg-card text-foreground hover:bg-card",
                             )}
                             type="button"
                             title={chapter.title}

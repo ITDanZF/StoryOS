@@ -1,8 +1,18 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { WindowDesktopApi, WindowState } from "../shared/window/contracts.ts";
+import type {
+  WindowDesktopApi,
+  WindowPlatform,
+  WindowState,
+} from "../shared/window/contracts.ts";
 import { WINDOW_IPC_CHANNELS } from "../shared/window/contracts.ts";
 
+const platform: WindowPlatform = process.platform === "darwin" ||
+    process.platform === "win32"
+  ? process.platform
+  : "linux";
+
 const windowApi: WindowDesktopApi = {
+  platform,
   getState: () => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.getState),
   pickDirectory: (request) => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.pickDirectory, request),
   pickFile: (request) => ipcRenderer.invoke(WINDOW_IPC_CHANNELS.pickFile, request),

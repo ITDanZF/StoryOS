@@ -118,7 +118,6 @@ export default function ChapterRichTextEditor({
   );
   const [findOpen, setFindOpen] = useState(false);
   const [replaceMode, setReplaceMode] = useState(false);
-  const [linkRequestId, setLinkRequestId] = useState(0);
   const pendingPageNumber = useRef<number | null>(null);
   const publishedLayoutKey = useRef<string | null>(null);
   const appliedRevisionIdRef = useRef(currentRevisionId);
@@ -193,7 +192,7 @@ export default function ChapterRichTextEditor({
         paginationController,
         shortcuts: {
           onFind: openFind,
-          onLink: () => setLinkRequestId((current) => current + 1),
+          onLink: () => undefined,
           onSave: () => {
             void flush().catch((): void => undefined);
           },
@@ -367,7 +366,6 @@ export default function ChapterRichTextEditor({
         )}
       <ChapterEditorToolbar
         editor={editor}
-        linkRequestId={linkRequestId}
         onAskAi={askAi}
         onOpenFind={() => openFind(false)}
       />

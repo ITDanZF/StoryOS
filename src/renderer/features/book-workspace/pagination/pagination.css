@@ -1,5 +1,5 @@
 .chapter-pagination-viewport {
-  background: #f5f5f2;
+  background: var(--app-surface-canvas);
   overscroll-behavior: contain;
   scroll-behavior: auto !important;
   scrollbar-width: none;
@@ -24,15 +24,19 @@
   box-sizing: border-box;
   width: var(--chapter-page-width, 720px);
   height: var(--chapter-page-height, 960px);
-  border: 1px solid #e4e2dd;
+  border: 1px solid var(--app-border);
   border-radius: 6px;
-  background: #fff;
-  box-shadow: 0 18px 48px rgb(43 38 30 / 7%);
+  background: var(--app-card);
+  box-shadow: 0 18px 48px color-mix(in srgb, #000 8%, transparent);
+}
+
+:root[data-appearance="dark"] .chapter-pagination-sheet {
+  box-shadow: 0 18px 48px rgb(0 0 0 / 38%);
 }
 
 .chapter-pagination-footer {
-  border-color: #eeece7;
-  color: #9a978f;
+  border-color: var(--app-border);
+  color: var(--app-text-subtle);
 }
 
 .chapter-pagination-editor .chapter-rich-text {
@@ -62,21 +66,21 @@
   height: 34px;
   place-items: center;
   transform: translateY(-50%);
-  border: 1px solid #e4e2dd;
+  border: 1px solid var(--app-border);
   border-radius: 999px;
-  background: rgb(255 255 255 / 94%);
-  color: #737373;
-  box-shadow: 0 6px 20px rgb(43 38 30 / 9%);
+  background: color-mix(in srgb, var(--app-card) 94%, transparent);
+  color: var(--app-muted-foreground);
+  box-shadow: 0 6px 20px color-mix(in srgb, #000 10%, transparent);
   transition: border-color 150ms ease, color 150ms ease, opacity 150ms ease;
 }
 
 .chapter-pagination-page-arrow:hover:not(:disabled) {
-  border-color: #c4b5fd;
-  color: #6d28d9;
+  border-color: var(--app-accent-border);
+  color: var(--app-accent-foreground);
 }
 
 .chapter-pagination-page-arrow:focus-visible {
-  outline: 2px solid #c4b5fd;
+  outline: 2px solid var(--app-accent-border);
   outline-offset: 2px;
 }
 
