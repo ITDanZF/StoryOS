@@ -7,6 +7,8 @@ import {
   createBookChapterGroups,
   findBookChapterLocation,
   flattenBookChapterGroups,
+  neighborChapterIds,
+  resolveDisplayedChapter,
 } from "./bookWorkspaceModel.ts";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -98,5 +100,31 @@ describe("book workspace chapter groups", () => {
       [],
       [chapter("orphan", "missing-volume", 0)],
     )).toThrow("references unknown volume");
+  });
+});
+
+describe("chapter switching display", () => {
+  it("keeps the previous loaded chapter visible until the next chapter is ready", () => {
+    const active = { ...chapter("chapter-11", "volume-1", 1), contentLoaded: false };
+    const held = { ...chapter("chapter-10", "volume-1", 0), contentLoaded: true };
+    expect(resolveDisplayedChapter(active, held)?.id).toBe("chapter-10");
+  });
+
+  it("switches as soon as the selected chapter is loaded", () => {
+    const active = { ...chapter("chapter-11", "volume-1", 1), contentLoaded: true };
+    const held = { ...chapter("chapter-10", "volume-1", 0), contentLoaded: true };
+    expect(resolveDisplayedChapter(active, held)?.id).toBe("chapter-11");
+  });
+
+  it("shows no editor when opening the first chapter from overview", () => {
+    const active = { ...chapter("chapter-10", "volume-1", 0), contentLoaded: false };
+    expect(resolveDisplayedChapter(active, null)).toBeNull();
+  });
+
+  it("returns neighboring chapter ids for prefetch", () => {
+    expect(neighborChapterIds(["a", "b", "c"], "b")).toEqual(["a", "c"]);
+    expect(neighborChapterIds(["a", "b", "c"], "a")).toEqual(["b"]);
+    expect(neighborChapterIds(["a", "b", "c"], "c")).toEqual(["b"]);
+    expect(neighborChapterIds(["a", "b", "c"], "missing")).toEqual([]);
   });
 });

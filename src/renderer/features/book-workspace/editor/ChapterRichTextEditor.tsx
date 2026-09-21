@@ -49,6 +49,7 @@ type ChapterRichTextEditorProps = {
   ) => Promise<void>;
   readonly chapterNumber: number;
   readonly aiPreviewActive: boolean;
+  readonly readOnly?: boolean;
   readonly content: string;
   readonly previewContent: string | null;
   readonly currentRevisionId: string | null;
@@ -93,6 +94,7 @@ export default function ChapterRichTextEditor({
   initialDraft,
   onSaveDraft,
   aiPreviewActive,
+  readOnly = false,
   content,
   previewContent,
   currentRevisionId,
@@ -200,7 +202,7 @@ export default function ChapterRichTextEditor({
       content: decodeStoredChapterContent(
         previewContent ?? persistence.recoveredContent ?? content,
       ) as unknown as Content,
-      editable: !aiPreviewActive && !draftConflict,
+      editable: !aiPreviewActive && !readOnly && !draftConflict,
       editorProps: {
         attributes: {
           class: "chapter-rich-text chapter-pagination-layout-root",
@@ -241,8 +243,8 @@ export default function ChapterRichTextEditor({
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    synchronizeEditorEditable(editor, !aiPreviewActive && !draftConflict);
-  }, [aiPreviewActive, draftConflict, editor]);
+    synchronizeEditorEditable(editor, !aiPreviewActive && !readOnly && !draftConflict);
+  }, [aiPreviewActive, draftConflict, editor, readOnly]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;

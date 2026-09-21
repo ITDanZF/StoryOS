@@ -18,7 +18,10 @@ import ChapterEditorPanel from "./components/ChapterEditorPanel.tsx";
 import {
   createBookChapterGroups,
   findBookChapterLocation,
+  flattenBookChapterGroups,
   formatChineseOrdinal,
+  neighborChapterIds,
+  resolveDisplayedChapter,
 } from "./bookWorkspaceModel.ts";
 import useBookWorkspace from "./useBookWorkspace.ts";
 import type {
@@ -47,6 +50,7 @@ export default function BookWorkspacePage() {
     saveChapterContent,
     saveChapterDraft,
     loadChapter,
+    prefetchChapter,
   } = useBookWorkspace(projectId);
   const project =
     state.projects?.projects.find((item) => item.id === projectId) ?? null;
@@ -110,8 +114,41 @@ export default function BookWorkspacePage() {
     activeChapterId,
   );
   const activeChapter = activeChapterLocation?.chapter ?? null;
+  const [heldChapterId, setHeldChapterId] = useState<string | null>(null);
+  const previousActiveChapterIdRef = useRef<string | null>(null);
+  const prefetchStartedRef = useRef(new Set<string>());
   const chapterLoading = useRef<string | null>(null);
   const loadedContentRevision = useRef(new Map<string, string | null>());
+  useEffect(() => {
+    prefetchStartedRef.current = new Set();
+    loadedContentRevision.current = new Map();
+    setHeldChapterId(null);
+  }, [projectId]);
+  useEffect(() => {
+    const previous = previousActiveChapterIdRef.current;
+    previousActiveChapterIdRef.current = activeChapterId;
+    if (previous && previous !== activeChapterId) {
+      void editorBridgeRef.current?.flushPending().catch((): void => undefined);
+    }
+  }, [activeChapterId]);
+  useEffect(() => {
+    if (!activeChapterId) {
+      setHeldChapterId(null);
+      return;
+    }
+    if (activeChapter?.contentLoaded) setHeldChapterId(activeChapter.id);
+  }, [activeChapterId, activeChapter?.id, activeChapter?.contentLoaded]);
+  const heldChapter =
+    heldChapterId && readyWorkspace
+      ? readyWorkspace.chapters.find(
+          (chapter) => chapter.id === heldChapterId && chapter.contentLoaded,
+        ) ?? null
+      : null;
+  const displayedChapter = resolveDisplayedChapter(activeChapter, heldChapter);
+  const displayedLocation =
+    displayedChapter?.id === activeChapterId
+      ? activeChapterLocation
+      : findBookChapterLocation(chapterGroups, displayedChapter?.id ?? null);
   useEffect(() => {
     if (!activeChapter) return;
     const loadedRevision = loadedContentRevision.current.get(activeChapter.id);
@@ -136,6 +173,22 @@ export default function BookWorkspacePage() {
     activeChapter?.contentLoaded,
     loadChapter,
   ]);
+  useEffect(() => {
+    if (!readyWorkspace || !activeChapterId) return;
+    const neighborIds = neighborChapterIds(
+      flattenBookChapterGroups(chapterGroups).map((chapter) => chapter.id),
+      activeChapterId,
+    );
+    for (const chapterId of neighborIds) {
+      const chapter = readyWorkspace.chapters.find((item) => item.id === chapterId);
+      if (!chapter || chapter.contentLoaded) continue;
+      if (prefetchStartedRef.current.has(chapterId)) continue;
+      prefetchStartedRef.current.add(chapterId);
+      void prefetchChapter(chapterId).catch(() => {
+        prefetchStartedRef.current.delete(chapterId);
+      });
+    }
+  }, [activeChapterId, chapterGroups, prefetchChapter, readyWorkspace]);
   const activeVolume = activeChapterLocation?.group.volume ?? null;
   const chapterNumber = activeChapterLocation?.chapterNumber ?? null;
   const activeVolumeNumber = activeVolume
@@ -149,6 +202,21 @@ export default function BookWorkspacePage() {
         ? `第${activeVolumeNumber}卷`
         : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
       : "未分卷";
+  const editorChapterNumber = displayedLocation?.chapterNumber ?? null;
+  const editorVolume = displayedLocation?.group.volume ?? null;
+  const editorVolumeNumber = editorVolume
+    ? chapterGroups
+        .filter((group) => group.kind === "volume")
+        .findIndex((group) => group.volume?.id === editorVolume.id) + 1
+    : null;
+  const editorVolumeTitle =
+    displayedChapter?.id === activeChapter?.id
+      ? activeVolumeTitle
+      : editorVolume && editorVolumeNumber !== null
+        ? editorVolume.title === `第${editorVolumeNumber}卷`
+          ? `第${editorVolumeNumber}卷`
+          : `第${editorVolumeNumber}卷 · ${editorVolume.title}`
+        : "未分卷";
 
   useBookGenerationEvents(projectId, revealChapter);
 
@@ -376,7 +444,7 @@ export default function BookWorkspacePage() {
           />
         )}
 
-        {!assistantFocused && activeChapter && !activeChapter.contentLoaded && (
+        {!assistantFocused && activeChapter && !displayedChapter && (
           <div
             role="status"
             className="motion-reveal grid flex-1 place-items-center text-sm text-muted-foreground"
@@ -386,33 +454,33 @@ export default function BookWorkspacePage() {
         )}
         {!assistantFocused &&
           readyWorkspace &&
-          activeChapter &&
-          activeChapter.contentLoaded &&
-          chapterNumber !== null && (
+          displayedChapter &&
+          editorChapterNumber !== null && (
             <ChapterEditorPanel
-              chapter={activeChapter}
-              chapterNumber={chapterNumber}
-              volumeTitle={activeVolumeTitle}
+              chapter={displayedChapter}
+              chapterNumber={editorChapterNumber}
+              volumeTitle={editorVolumeTitle}
+              readOnly={displayedChapter.id !== activeChapter?.id}
               pageTarget={
-                pageTarget?.chapterId === activeChapter.id ? pageTarget : null
+                pageTarget?.chapterId === displayedChapter.id ? pageTarget : null
               }
               onPageChange={setActiveChapterPageNumber}
               onPaginationChange={(layoutKey, pages) => {
                 setLivePagination({
-                  chapterId: activeChapter.id,
+                  chapterId: displayedChapter.id,
                   layoutKey,
                   pages,
                 });
               }}
               onSaveTitle={(title) =>
-                updateChapterTitle(activeChapter.id, title)
+                updateChapterTitle(displayedChapter.id, title)
               }
               onSaveDraft={(content, base) =>
-                saveChapterDraft(activeChapter.id, content, base)
+                saveChapterDraft(displayedChapter.id, content, base)
               }
               onSaveContent={(content, expectedCurrentRevisionId) =>
                 saveChapterContent(
-                  activeChapter.id,
+                  displayedChapter.id,
                   content,
                   expectedCurrentRevisionId,
                 )

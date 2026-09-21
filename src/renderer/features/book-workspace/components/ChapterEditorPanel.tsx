@@ -32,6 +32,7 @@ type ChapterEditorPanelProps = {
   readonly chapterNumber: number;
   readonly volumeTitle: string;
   readonly pageTarget: BookPageNavigationTarget | null;
+  readonly readOnly?: boolean;
   readonly onPageChange: (chapterPageNumber: number) => void;
   readonly onPaginationChange: (
     layoutKey: string,
@@ -56,6 +57,7 @@ export default function ChapterEditorPanel({
   chapterNumber,
   volumeTitle,
   pageTarget,
+  readOnly = false,
   onPageChange,
   onPaginationChange,
   onSaveTitle,
@@ -72,6 +74,7 @@ export default function ChapterEditorPanel({
     displayedContent: chapter.content,
   });
   const aiPreviewActive = aiPreviewContent !== null;
+  const editorLocked = aiPreviewActive || readOnly;
   const [title, setTitle] = useState(chapter.title);
   const [saveState, setSaveState] = useState<BookSaveState>("saved");
   const [characterCount, setCharacterCount] = useState(() =>
@@ -126,7 +129,7 @@ export default function ChapterEditorPanel({
             className="min-w-0 max-w-[420px] border-0 bg-transparent p-0 text-xl font-bold tracking-tight text-foreground outline-none sm:text-[22px] 2xl:text-2xl"
             value={title}
             aria-label="章节标题"
-            disabled={aiPreviewActive}
+            disabled={editorLocked}
             onChange={(event) => setTitle(event.target.value)}
             onBlur={() => void saveTitle()}
             onKeyDown={(event) => {
@@ -185,6 +188,7 @@ export default function ChapterEditorPanel({
           key={chapter.id}
           chapterNumber={chapterNumber}
           aiPreviewActive={aiPreviewActive}
+          readOnly={readOnly}
           content={chapter.content}
           previewContent={aiPreviewContent}
           currentRevisionId={chapter.currentRevisionId}

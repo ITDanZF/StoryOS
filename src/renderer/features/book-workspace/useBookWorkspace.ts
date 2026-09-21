@@ -101,6 +101,27 @@ export default function useBookWorkspace(projectId: string | undefined) {
         : snapshot,
     );
   }, []);
+  const applyLoadedChapter = useCallback(
+    (chapter: ReadyBookWorkspaceSnapshot["chapters"][number]) => {
+      setWorkspace((current) =>
+        current?.state === "ready"
+          ? {
+              ...current,
+              chapters: current.chapters.map((c) =>
+                c.id === chapter.id &&
+                current.book.id === chapter.novelId &&
+                chapter.rowVersion !== undefined &&
+                c.rowVersion !== undefined &&
+                chapter.rowVersion >= c.rowVersion
+                  ? chapter
+                  : c,
+              ),
+            }
+          : current,
+      );
+    },
+    [],
+  );
   const loadChapter = useCallback(
     async (chapterId: string) => {
       if (!projectId) throw new Error("Project id is required.");
@@ -109,27 +130,29 @@ export default function useBookWorkspace(projectId: string | undefined) {
           projectId,
           chapterId,
         });
-        setWorkspace((current) =>
-          current?.state === "ready"
-            ? {
-                ...current,
-                chapters: current.chapters.map((c) =>
-                  c.id === chapter.id &&
-                  current.book.id === chapter.novelId &&
-                  chapter.rowVersion >= c.rowVersion
-                    ? chapter
-                    : c,
-                ),
-              }
-            : current,
-        );
+        applyLoadedChapter(chapter);
         return chapter;
       } catch (cause) {
         setError(getErrorMessage(cause));
         throw cause;
       }
     },
-    [projectId],
+    [applyLoadedChapter, projectId],
+  );
+  const prefetchChapter = useCallback(
+    async (chapterId: string) => {
+      if (!projectId) return;
+      try {
+        const chapter = await window.storyOSAgent.getBookChapterContent({
+          projectId,
+          chapterId,
+        });
+        applyLoadedChapter(chapter);
+      } catch {
+        return;
+      }
+    },
+    [applyLoadedChapter, projectId],
   );
 
   const load = useCallback(async () => {
@@ -396,5 +419,6 @@ export default function useBookWorkspace(projectId: string | undefined) {
     saveChapterContent,
     saveChapterDraft,
     loadChapter,
+    prefetchChapter,
   };
 }

@@ -79,6 +79,29 @@ export function flattenBookChapterGroups(
   return Object.freeze(groups.flatMap((group) => group.chapters));
 }
 
+export function neighborChapterIds(
+  orderedIds: readonly string[],
+  currentId: string | null,
+): readonly string[] {
+  if (!currentId) return [];
+  const index = orderedIds.indexOf(currentId);
+  if (index < 0) return [];
+  return [orderedIds[index - 1], orderedIds[index + 1]].filter(
+    (id): id is string => typeof id === "string",
+  );
+}
+
+export function resolveDisplayedChapter<
+  T extends { readonly id: string; readonly contentLoaded?: boolean },
+>(activeChapter: T | null, heldChapter: T | null): T | null {
+  if (!activeChapter) return null;
+  if (activeChapter.contentLoaded) return activeChapter;
+  if (heldChapter?.contentLoaded && heldChapter.id !== activeChapter.id) {
+    return heldChapter;
+  }
+  return null;
+}
+
 export function findBookChapterLocation(
   groups: readonly BookChapterGroup[],
   chapterId: string | null,
