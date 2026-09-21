@@ -90,7 +90,7 @@ export default function ProjectConversationSwitcher({
             size={13}
           />
         </span>
-        <small className="flex items-center gap-1.5 text-[10px] text-text-subtle">
+        <small className="flex items-center gap-1.5 text-xs text-text-subtle">
           <i
             className={cn(
               "size-[5px] rounded-full",
@@ -114,13 +114,13 @@ export default function ProjectConversationSwitcher({
       >
         <header className="flex min-h-14 items-center justify-between border-b border-border px-3">
           <span className="grid gap-0.5">
-            <strong className="text-[11px] text-foreground">项目对话</strong>
-            <small className="text-[9px] text-text-subtle">
+            <strong className="text-xs text-foreground">项目对话</strong>
+            <small className="text-xs text-text-subtle">
               {snapshot ? `${snapshot.threads.length} 个对话` : "正在载入…"}
             </small>
           </span>
           <button
-            className="inline-flex h-8 items-center gap-1 rounded-lg border-0 bg-accent px-2.5 text-[10px] font-medium text-accent-foreground transition hover:bg-accent"
+            className="inline-flex h-8 items-center gap-1 rounded-lg border-0 bg-accent px-2.5 text-xs font-medium text-accent-foreground transition hover:bg-accent"
             type="button"
             onClick={async () => {
               setOpen(false);
@@ -138,16 +138,16 @@ export default function ProjectConversationSwitcher({
           aria-label="项目对话列表"
         >
           {!snapshot && (
-            <div className="px-3 py-8 text-center text-[10px] text-text-subtle">
+            <div className="px-3 py-8 text-center text-xs text-text-subtle">
               正在载入项目对话…
             </div>
           )}
           {snapshot?.threads.length === 0 && (
             <div className="px-3 py-8 text-center">
-              <strong className="block text-[11px] font-medium text-muted-foreground">
+              <strong className="block text-xs font-medium text-muted-foreground">
                 暂无项目对话
               </strong>
-              <span className="mt-1 block text-[9px] text-text-subtle">
+              <span className="mt-1 block text-xs text-text-subtle">
                 新建对话或直接在下方输入消息
               </span>
             </div>
@@ -189,13 +189,13 @@ export default function ProjectConversationSwitcher({
                 >
                   <strong
                     className={cn(
-                      "truncate text-[11px] font-medium",
+                      "truncate text-xs font-medium",
                       active ? "text-accent-foreground" : "text-text-secondary",
                     )}
                   >
                     {thread.title}
                   </strong>
-                  <small className="text-[9px] text-text-subtle">
+                  <small className="text-xs text-text-subtle">
                     {running ? "正在生成" : formatUpdatedAt(thread.updatedAt)}
                   </small>
                 </button>

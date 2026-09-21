@@ -132,10 +132,10 @@ export default function ConversationViewport({
         {hasOlder && (
           <div className="mb-4 flex justify-center">
             {loadingOlder ? (
-              <p className="text-[11px] text-text-subtle">正在加载更早的对话…</p>
+              <p className="text-xs text-text-subtle">正在加载更早的对话…</p>
             ) : (
               <button
-                className="rounded-full border-0 bg-transparent px-2 py-1 text-[11px] text-text-subtle hover:text-text-secondary"
+                className="rounded-full border-0 bg-transparent px-2 py-1 text-xs text-text-subtle hover:text-text-secondary"
                 type="button"
                 onClick={requestOlder}
               >

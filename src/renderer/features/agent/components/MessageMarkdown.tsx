@@ -40,13 +40,13 @@ function CodeBlock({ children }: ComponentPropsWithoutRef<"pre">) {
 
   return (
     <figure className="my-3 overflow-hidden rounded-xl border border-primary bg-primary">
-      <figcaption className="flex h-8 items-center justify-between border-b border-border/10 px-3 text-[10px] text-text-subtle">
+      <figcaption className="flex h-8 items-center justify-between border-b border-border/10 px-3 text-xs text-text-subtle">
         <span className="font-medium uppercase tracking-[0.12em]">{language ?? "code"}</span>
         <button className="rounded-md px-2 py-1 text-text-subtle hover:bg-card/10 hover:text-primary-foreground" type="button" onClick={() => void copy()}>
           复制
         </button>
       </figcaption>
-      <pre className="m-0 overflow-auto p-3 font-mono text-[11px] leading-relaxed text-primary-foreground">
+      <pre className="m-0 overflow-auto p-3 font-mono text-xs leading-relaxed text-primary-foreground">
         {children}
       </pre>
     </figure>
@@ -58,7 +58,7 @@ const components: Components = {
   h2: ({ children }) => <h3 className="mb-2 mt-5 text-[15px] font-semibold tracking-tight text-foreground first:mt-0">{children}</h3>,
   h3: ({ children }) => <h4 className="mb-2 mt-4 text-sm font-semibold tracking-tight text-foreground first:mt-0">{children}</h4>,
   h4: ({ children }) => <h5 className="mb-1.5 mt-4 text-sm font-medium text-foreground first:mt-0">{children}</h5>,
-  p: ({ children }) => <p className="my-2 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
+  p: ({ children }) => <p className="my-3 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
   ul: ({ children }) => <ul className="my-3 list-disc space-y-1.5 pl-5 marker:text-text-subtle">{children}</ul>,
   ol: ({ children }) => <ol className="my-3 list-decimal space-y-1.5 pl-5 marker:text-muted-foreground">{children}</ol>,
   li: ({ children }) => <li className="pl-0.5">{children}</li>,
@@ -69,7 +69,7 @@ const components: Components = {
   ),
   hr: () => <hr className="my-4 border-border" />,
   a: ({ children, href }) => (
-    <a className="font-medium text-accent-foreground underline decoration-violet-200 underline-offset-2 hover:decoration-violet-500" href={href} rel="noreferrer" target="_blank">
+    <a className="font-medium text-accent-foreground underline decoration-accent-border underline-offset-2 hover:decoration-accent-foreground" href={href} rel="noreferrer" target="_blank">
       {children}
     </a>
   ),
@@ -90,7 +90,7 @@ export default function MessageMarkdown({ content, compact = false }: MessageMar
   return (
     <div className={cn(
       "min-w-0 break-words text-foreground",
-      compact ? "text-sm leading-6" : "text-sm leading-[1.75]",
+      compact ? "text-sm leading-7" : "text-sm leading-[1.75]",
     )}>
       <ReactMarkdown
         components={components}

@@ -119,10 +119,10 @@ export default function ChapterEditorPanel({
   };
 
   return (
-    <article className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
+    <article className="motion-reveal flex min-h-0 min-w-0 flex-1 flex-col bg-card">
       <header className="flex min-h-20 shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-5 lg:px-7 2xl:min-h-[84px] 2xl:px-8">
         <div className="grid min-w-0 gap-0.5">
-          <span className="text-[10px] font-medium tracking-[0.03em] text-text-subtle">
+          <span className="text-xs font-medium tracking-[0.03em] text-text-subtle">
             {volumeTitle} · 第 {chapterNumber} 章
           </span>
           <input
@@ -141,7 +141,7 @@ export default function ChapterEditorPanel({
             }}
           />
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-text-subtle sm:gap-2.5">
+        <div className="flex shrink-0 items-center gap-1.5 text-xs text-text-subtle sm:gap-2.5">
           <span className="hidden items-center gap-1 sm:inline-flex">
             {aiPreviewActive ? (
               <Sparkles className="text-accent-foreground" size={12} />

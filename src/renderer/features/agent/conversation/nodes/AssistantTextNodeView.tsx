@@ -24,13 +24,13 @@ export default function AssistantTextNodeView({
 
   return (
     <article className={cn("group/answer min-w-0 px-1 text-foreground", final && "pt-1")}>
-      <div className={cn(!final && "text-[13px] text-text-secondary [&>div]:text-[13px] [&>div]:leading-[22px]")}>
+      <div className={cn(!final && "text-sm text-text-secondary [&>div]:text-sm [&>div]:leading-7")}>
         <MessageMarkdown compact content={node.content} />
       </div>
       {final && node.state !== "running" && node.content.trim() && (
         <div className="mt-2 flex min-h-7 items-center opacity-0 transition-opacity group-hover/answer:opacity-100 focus-within:opacity-100">
           <button
-            className="inline-flex h-7 items-center gap-1 rounded-md border-0 bg-transparent px-2 text-[11px] text-text-subtle hover:bg-muted hover:text-text-secondary"
+            className="inline-flex h-7 items-center gap-1 rounded-md border-0 bg-transparent px-2 text-xs text-text-subtle hover:bg-muted hover:text-text-secondary"
             type="button"
             onClick={() => void copy()}
           >

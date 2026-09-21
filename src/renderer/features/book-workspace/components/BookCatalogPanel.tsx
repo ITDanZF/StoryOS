@@ -26,6 +26,7 @@ import DeleteBookItemDialog, {
   type DeleteBookItemTarget,
 } from "./DeleteBookItemDialog.tsx";
 import "./bookCatalog.css";
+import "../../../components/motion/motion.css";
 
 type CatalogDeleteTarget = Extract<
   DeleteBookItemTarget,
@@ -33,6 +34,7 @@ type CatalogDeleteTarget = Extract<
 >;
 
 type BookCatalogPanelProps = {
+  readonly visible: boolean;
   readonly resize: ReturnType<typeof useResizablePanel>;
   readonly bookTitle: string | null;
   readonly groups: readonly BookChapterGroup[];
@@ -56,6 +58,7 @@ type BookCatalogPanelProps = {
 };
 
 export default function BookCatalogPanel({
+  visible,
   resize,
   bookTitle,
   groups,
@@ -98,9 +101,17 @@ export default function BookCatalogPanel({
   return (
     <>
       <aside
-        className="relative flex h-full w-[min(272px,86vw)] shrink-0 flex-col border-r border-border bg-surface-subtle/95 lg:w-[var(--book-catalog-width)] max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:shadow-2xl"
+        className={cn(
+          "motion-sidebar relative flex h-full shrink-0 flex-col border-r border-border bg-surface-subtle/95",
+          "max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30",
+          visible && "max-lg:shadow-2xl",
+        )}
+        data-open={visible}
+        inert={!visible}
+        aria-hidden={!visible}
         style={{
           "--book-catalog-width": `${resize.width}px`,
+          width: visible ? `min(${resize.width}px, 86vw)` : 0,
         } as CSSProperties}
       >
         <div className="shrink-0 px-5 pb-3 pt-5">
@@ -134,7 +145,7 @@ export default function BookCatalogPanel({
               className={cn(
                 "flex h-full items-center gap-1.5 border-0 border-b-2 bg-transparent px-2 text-xs font-medium transition",
                 view === "chapters"
-                  ? "border-primary font-semibold text-foreground"
+                  ? "border-accent-border font-semibold text-accent-foreground"
                   : "border-transparent text-text-subtle hover:text-text-secondary",
               )}
               type="button"
@@ -193,12 +204,13 @@ export default function BookCatalogPanel({
 
         {view === "chapters" ? (
           <nav
-            className="book-catalog-scroll min-h-0 flex-1 overflow-y-auto px-2.5 pb-5 pt-3"
+            className="book-catalog-scroll motion-fade min-h-0 flex-1 overflow-y-auto px-2.5 pb-5 pt-3"
             aria-label="章节目录"
+            key="chapters"
           >
           {groups.length === 0 && (
             <div className="px-3 py-8 text-center">
-              <strong className="block text-[11px] font-medium text-text-subtle">
+              <strong className="block text-xs font-medium text-text-subtle">
                 暂无分卷
               </strong>
             </div>
@@ -226,19 +238,19 @@ export default function BookCatalogPanel({
                   >
                     <ChevronRight
                       className={cn(
-                        "shrink-0 text-text-subtle transition-transform",
+                        "shrink-0 text-text-subtle transition-transform duration-[var(--motion-content)] ease-[var(--motion-ease)]",
                         expanded && "rotate-90",
                       )}
                       size={12}
                     />
-                    <span className="grid size-5 shrink-0 place-items-center rounded-md bg-primary text-[9px] font-semibold text-primary-foreground">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-accent text-xs font-semibold text-accent-foreground">
                       {group.kind === "volume" ? "卷" : "未"}
                     </span>
-                    <strong className="truncate text-[12px] font-semibold">
+                    <strong className="truncate text-[13px] font-semibold">
                       {group.title}
                     </strong>
                   </button>
-                  <span className="shrink-0 px-1 text-[10px] tabular-nums text-text-subtle">
+                  <span className="shrink-0 px-1 text-xs tabular-nums text-text-subtle">
                     {group.chapters.length} 章
                   </span>
                   {group.volume && (
@@ -271,13 +283,14 @@ export default function BookCatalogPanel({
                 </header>
 
                 {expanded && visibleChapters.length === 0 && !normalizedQuery && (
-                  <div className="ml-8 border-l border-dashed border-border py-2 pl-4 text-[10px] text-text-subtle">
+                  <div className="ml-8 border-l border-dashed border-border py-2 pl-4 text-xs text-text-subtle">
                     暂无章节
                   </div>
                 )}
 
-                {expanded && visibleChapters.length > 0 && (
-                  <div className="ml-8 mt-1 space-y-1.5 border-l border-border pl-3">
+                <div className="motion-collapse" data-open={expanded && visibleChapters.length > 0}>
+                  <div className="motion-collapse-inner">
+                    <div className="ml-8 mt-1 space-y-1.5 border-l border-border pl-3">
                     {visibleChapters.map((chapter) => {
                       const active = chapter.id === activeChapterId;
                       return (
@@ -287,8 +300,8 @@ export default function BookCatalogPanel({
                         >
                           <button
                             className={cn(
-                              "flex min-h-12 w-full items-center gap-2 rounded-xl border-0 bg-transparent px-2.5 py-2 pr-9 text-left text-text-secondary transition hover:bg-card hover:text-foreground",
-                              active && "bg-card text-foreground shadow-sm shadow-violet-100 ring-1 ring-accent-border hover:bg-card",
+                              "flex min-h-12 w-full items-center gap-2 rounded-xl border-0 bg-transparent px-2.5 py-2 pr-9 text-left text-text-secondary transition-colors hover:bg-card hover:text-foreground",
+                              active && "bg-card text-foreground ring-1 ring-accent-border hover:bg-card",
                             )}
                             type="button"
                             title={chapter.title}
@@ -305,7 +318,7 @@ export default function BookCatalogPanel({
                               <FileText size={13} />
                             </span>
                             <strong
-                              className="min-w-0 overflow-hidden text-[12px] font-medium leading-[17px]"
+                              className="min-w-0 overflow-hidden text-[13px] font-medium leading-5"
                               style={{
                                 display: "-webkit-box",
                                 WebkitBoxOrient: "vertical",
@@ -335,8 +348,9 @@ export default function BookCatalogPanel({
                         </div>
                       );
                     })}
+                    </div>
                   </div>
-                )}
+                </div>
               </section>
             );
           })}
@@ -344,23 +358,25 @@ export default function BookCatalogPanel({
           {normalizedQuery && groups.every((group) =>
             group.chapters.every((chapter) =>
               !chapter.title.toLocaleLowerCase("zh-CN").includes(normalizedQuery))) && (
-            <div className="px-3 py-8 text-center text-[10px] text-text-subtle">
+            <div className="px-3 py-8 text-center text-xs text-text-subtle">
               没有匹配的章节
             </div>
           )}
           </nav>
         ) : (
-          <BookPageGrid
-            groups={groups}
-            activeChapterId={activeChapterId}
-            activeChapterPageNumber={activeChapterPageNumber}
-            livePagination={livePagination}
-            onSelectPage={onSelectPage}
-            onCreatePage={onCreatePage}
-            onMovePage={onMovePage}
-            onDeletePage={onDeletePage}
-            onClose={onClose}
-          />
+          <div className="motion-fade flex min-h-0 flex-1 flex-col" key="pages">
+            <BookPageGrid
+              groups={groups}
+              activeChapterId={activeChapterId}
+              activeChapterPageNumber={activeChapterPageNumber}
+              livePagination={livePagination}
+              onSelectPage={onSelectPage}
+              onCreatePage={onCreatePage}
+              onMovePage={onMovePage}
+              onDeletePage={onDeletePage}
+              onClose={onClose}
+            />
+          </div>
         )}
 
         <div

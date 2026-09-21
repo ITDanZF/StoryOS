@@ -122,7 +122,7 @@ export default function DeleteBookItemDialog({
 
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning-border bg-warning-surface/70 px-3 py-2.5 text-warning-text">
             <AlertTriangle className="mt-0.5 shrink-0" size={14} />
-            <span className="text-[11px] leading-[18px]">{warning}</span>
+            <span className="text-xs leading-[18px]">{warning}</span>
           </div>
 
           {error && (
@@ -132,10 +132,10 @@ export default function DeleteBookItemDialog({
             >
               <AlertCircle className="mt-0.5 shrink-0" size={15} />
               <span className="min-w-0">
-                <strong className="block text-[11px] font-semibold leading-[18px]">
+                <strong className="block text-xs font-semibold leading-[18px]">
                   删除失败
                 </strong>
-                <span className="block break-words text-[11px] leading-[18px] text-danger-text">
+                <span className="block break-words text-xs leading-[18px] text-danger-text">
                   {error}
                 </span>
               </span>

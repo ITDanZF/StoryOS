@@ -50,10 +50,7 @@ export default function BookWorkspaceHeader({
             title={`项目名称：${projectName}`}
           >
             <Folder className="shrink-0" size={12} />
-            <span className="hidden text-[9px] text-text-subtle sm:inline">
-              项目
-            </span>
-            <strong className="truncate text-[11px] font-semibold text-text-secondary">
+            <strong className="truncate text-xs font-semibold text-text-secondary">
               {projectName}
             </strong>
           </span>
@@ -95,7 +92,7 @@ export default function BookWorkspaceHeader({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className="mr-1 hidden h-7 items-center gap-1.5 rounded-full bg-muted px-2.5 text-[10px] text-muted-foreground sm:flex">
+        <span className="mr-1 hidden h-7 items-center gap-1.5 rounded-full bg-muted px-2.5 text-xs text-muted-foreground sm:flex">
           <i
             className={cn(
               "size-1.5 rounded-full",

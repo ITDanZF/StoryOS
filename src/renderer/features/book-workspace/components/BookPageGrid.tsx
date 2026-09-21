@@ -95,7 +95,7 @@ function NewPageButton({
         <span className="mx-auto grid size-7 place-items-center rounded-full border border-current transition group-hover:bg-card">
           {generating ? <Sparkles size={14} /> : <Plus size={14} />}
         </span>
-        <span className="mt-2 block text-[9px] font-medium">
+        <span className="mt-2 block text-xs font-medium">
           {generating
             ? `AI 生成中 · ${generation.publishedPageCount} 页已更新`
             : "新建页面"}
@@ -103,13 +103,13 @@ function NewPageButton({
       </span>
       {generating && (
         <span className="pointer-events-none absolute inset-1 flex flex-col rounded bg-card/95 p-2 text-left opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
-          <span className="mb-1 inline-flex items-center gap-1 text-[8px] font-semibold text-accent-foreground">
+          <span className="mb-1 inline-flex items-center gap-1 text-xs font-semibold text-accent-foreground">
             <Sparkles size={9} /> AI 思考过程
           </span>
-          <span className="min-h-0 flex-1 overflow-hidden whitespace-pre-wrap text-[7px] leading-[1.45] text-text-secondary">
+          <span className="min-h-0 flex-1 overflow-hidden whitespace-pre-wrap text-xs leading-4 text-text-secondary">
             {generation.thinkingText || "正在分析章节上下文并组织下一页内容…"}
           </span>
-          <span className="mt-1 text-[7px] tabular-nums text-text-subtle">
+          <span className="mt-1 text-xs tabular-nums text-text-subtle">
             已生成 {generation.generatedCharacterCount.toLocaleString("zh-CN")} 字
           </span>
         </span>
@@ -157,7 +157,7 @@ export default function BookPageGrid({
   }, [pagination.pages]);
   if (orderedChapters.length === 0) {
     return (
-      <div className="grid min-h-0 flex-1 place-items-center px-6 text-center text-[11px] text-text-subtle">
+      <div className="grid min-h-0 flex-1 place-items-center px-6 text-center text-xs text-text-subtle">
         新建章节并开始写作后，页面会显示在这里。
       </div>
     );
@@ -176,14 +176,14 @@ export default function BookPageGrid({
           <section className="mb-5" key={chapter.id}>
             <header className="mb-2 flex items-start justify-between gap-2 px-1">
               <div className="min-w-0">
-                <strong className="block truncate text-[11px] font-semibold text-text-secondary">
+                <strong className="block truncate text-xs font-semibold text-text-secondary">
                   {chapter.title}
                 </strong>
-                <span className="block truncate text-[9px] text-text-subtle">
+                <span className="block truncate text-xs text-text-subtle">
                   {group.title}
                 </span>
               </div>
-              <span className="shrink-0 text-[9px] tabular-nums text-text-subtle">
+              <span className="shrink-0 text-xs tabular-nums text-text-subtle">
                 {measured
                   ? `${pages.length} 页`
                   : unloaded
@@ -193,7 +193,7 @@ export default function BookPageGrid({
             </header>
 
             {failed && (
-              <div className="flex items-center gap-1.5 rounded-lg border border-warning-border bg-warning-surface px-2.5 py-2 text-[10px] text-warning-text">
+              <div className="flex items-center gap-1.5 rounded-lg border border-warning-border bg-warning-surface px-2.5 py-2 text-xs text-warning-text">
                 <TriangleAlert size={12} />
                 当前章节分页失败
               </div>
@@ -212,7 +212,7 @@ export default function BookPageGrid({
                 />
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-border bg-surface-subtle/70 px-2.5 py-3 text-center text-[10px] text-text-subtle">
+              <div className="rounded-lg border border-dashed border-border bg-surface-subtle/70 px-2.5 py-3 text-center text-xs text-text-subtle">
                 打开章节后生成页面预览
               </div>
             ))}
@@ -291,7 +291,7 @@ export default function BookPageGrid({
                         <span className="absolute inset-x-2 top-2 bottom-6 overflow-hidden whitespace-pre-wrap font-serif text-[4px] leading-[1.75] text-muted-foreground">
                           {page.previewText || "本页暂无正文"}
                         </span>
-                        <span className="absolute inset-x-0 bottom-0 flex h-5 items-center justify-between border-t border-border px-1.5 text-[8px] text-text-subtle">
+                        <span className="absolute inset-x-0 bottom-0 flex h-5 items-center justify-between border-t border-border px-1.5 text-xs text-text-subtle">
                           <span className="inline-flex items-center gap-0.5">
                             <FileText size={7} /> {page.chapterPageNumber}
                           </span>
@@ -334,7 +334,7 @@ export default function BookPageGrid({
       }))}
 
       {pagination.running && (
-        <div className="flex items-center justify-center gap-1.5 py-2 text-[10px] text-text-subtle">
+        <div className="flex items-center justify-center gap-1.5 py-2 text-xs text-text-subtle">
           <LoaderCircle className="animate-spin" size={12} />
           正在排版剩余章节…
         </div>

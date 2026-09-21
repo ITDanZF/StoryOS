@@ -65,7 +65,7 @@ export default function ChapterFindReplacePanel({
             else editor.commands.findNextChapterMatch();
           }}
         />
-        <span className="min-w-12 text-center text-[10px] tabular-nums text-text-subtle">
+        <span className="min-w-12 text-center text-xs tabular-nums text-text-subtle">
           {search && search.matches.length > 0
             ? `${search.activeIndex + 1}/${search.matches.length}`
             : "0/0"}
@@ -84,8 +84,8 @@ export default function ChapterFindReplacePanel({
             aria-label="替换为"
             onChange={(event) => setReplacement(event.target.value)}
           />
-          <button className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-card px-2 text-[10px] text-text-secondary hover:border-accent-border hover:text-accent-foreground disabled:opacity-40" type="button" disabled={!search || search.activeIndex < 0} onClick={() => editor.commands.replaceCurrentChapterMatch(replacement)}><Replace size={12} />替换</button>
-          <button className="h-8 rounded-lg border border-border bg-card px-2 text-[10px] text-text-secondary hover:border-accent-border hover:text-accent-foreground disabled:opacity-40" type="button" disabled={!search || search.matches.length === 0} onClick={() => editor.commands.replaceAllChapterMatches(replacement)}>全部替换</button>
+          <button className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-card px-2 text-xs text-text-secondary hover:border-accent-border hover:text-accent-foreground disabled:opacity-40" type="button" disabled={!search || search.activeIndex < 0} onClick={() => editor.commands.replaceCurrentChapterMatch(replacement)}><Replace size={12} />替换</button>
+          <button className="h-8 rounded-lg border border-border bg-card px-2 text-xs text-text-secondary hover:border-accent-border hover:text-accent-foreground disabled:opacity-40" type="button" disabled={!search || search.matches.length === 0} onClick={() => editor.commands.replaceAllChapterMatches(replacement)}>全部替换</button>
         </div>
       )}
     </div>

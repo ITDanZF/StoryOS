@@ -85,7 +85,7 @@ function ColorPalette({ colors, onSelect, onClear }: ColorPaletteProps) {
           onClick={() => onSelect(color)}
         />
       ))}
-      <button className="col-span-6 mt-1 flex h-7 items-center justify-center gap-1 rounded-lg text-[10px] text-muted-foreground hover:bg-muted" type="button" onMouseDown={(event) => event.preventDefault()} onClick={onClear}><RemoveFormatting size={11} />清除颜色</button>
+      <button className="col-span-6 mt-1 flex h-7 items-center justify-center gap-1 rounded-lg text-xs text-muted-foreground hover:bg-muted" type="button" onMouseDown={(event) => event.preventDefault()} onClick={onClear}><RemoveFormatting size={11} />清除颜色</button>
     </div>
   );
 }
@@ -177,11 +177,11 @@ export default function EditorFormattingControls({
       <Popover label="段落格式" icon={<Pilcrow size={15} />}>
         {(close) => (
           <div className="w-40 space-y-1">
-            <span className="block px-2 pb-1 text-[9px] font-medium text-text-subtle">行距</span>
+            <span className="block px-2 pb-1 text-xs font-medium text-text-subtle">行距</span>
             {LINE_HEIGHTS.map((option) => (
               <button
                 className={cn(
-                  "flex h-7 w-full items-center rounded-lg px-2 text-left text-[10px] text-text-secondary hover:bg-muted",
+                  "flex h-7 w-full items-center rounded-lg px-2 text-left text-xs text-text-secondary hover:bg-muted",
                   blockState?.lineHeight === option.value && "bg-accent text-accent-foreground",
                 )}
                 type="button"
@@ -195,7 +195,7 @@ export default function EditorFormattingControls({
                 {option.label}
               </button>
             ))}
-            <button className="mt-1 flex h-8 w-full items-center rounded-lg border-t border-border px-2 text-left text-[10px] text-text-secondary hover:bg-muted" type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => {
+            <button className="mt-1 flex h-8 w-full items-center rounded-lg border-t border-border px-2 text-left text-xs text-text-secondary hover:bg-muted" type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => {
               editor.commands.setParagraphFormat({
                 firstLineIndent: blockState?.firstLineIndent === "2em" ? null : "2em",
               });
@@ -213,11 +213,11 @@ export default function EditorFormattingControls({
         {linkOpen && (
           <div className="absolute right-0 top-[calc(100%+6px)] z-50 w-72 rounded-xl border border-border bg-card p-2 shadow-[0_12px_32px_rgba(30,28,20,0.16)]">
             <div className="flex gap-1.5">
-              <input ref={linkInputRef} className="h-8 min-w-0 flex-1 rounded-lg border border-border px-2 text-[11px] outline-none focus:border-accent-border focus:ring-2 focus:ring-accent-border" value={href} aria-label="链接地址" onChange={(event) => setHref(event.target.value)} onKeyDown={(event) => {
+              <input ref={linkInputRef} className="h-8 min-w-0 flex-1 rounded-lg border border-border px-2 text-xs outline-none focus:border-accent-border focus:ring-2 focus:ring-accent-border" value={href} aria-label="链接地址" onChange={(event) => setHref(event.target.value)} onKeyDown={(event) => {
                 if (event.key === "Enter") applyLink();
                 if (event.key === "Escape") setLinkOpen(false);
               }} />
-              <button className="h-8 rounded-lg bg-accent px-2.5 text-[10px] text-accent-foreground disabled:opacity-40" type="button" disabled={!isSafeLink(href)} onClick={applyLink}>应用</button>
+              <button className="h-8 rounded-lg bg-accent px-2.5 text-xs text-accent-foreground disabled:opacity-40" type="button" disabled={!isSafeLink(href)} onClick={applyLink}>应用</button>
               {blockState?.linkActive && (
                 <button className="grid size-8 place-items-center rounded-lg text-text-subtle hover:bg-danger-surface hover:text-danger-text" type="button" title="移除链接" onClick={() => {
                   editor.chain().focus().unsetLink().run();

@@ -8,7 +8,7 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useEffect, useRef, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, type FormEvent } from "react";
 import { cn } from "../../../../lib/utils.ts";
 import type { ThreadSnapshot } from "../../../../shared/agent/contracts.ts";
 import ConversationViewport from "../../agent/conversation/components/ConversationViewport.tsx";
@@ -32,7 +32,6 @@ type BookAssistantPanelProps = {
   readonly connected: boolean;
   readonly running: boolean;
   readonly focused: boolean;
-  readonly width: number;
   readonly draft: string;
   readonly contextEnabled: boolean;
   readonly pendingApproval: PendingToolApprovalView | null;
@@ -57,7 +56,6 @@ export default function BookAssistantPanel({
   connected,
   running,
   focused,
-  width,
   draft,
   contextEnabled,
   pendingApproval,
@@ -99,15 +97,7 @@ export default function BookAssistantPanel({
 
   return (
     <aside
-      className={cn(
-        "flex h-full shrink-0 flex-col border-l border-border bg-surface-subtle",
-        focused
-          ? "min-w-0 flex-1"
-          : "max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-30 max-xl:shadow-2xl",
-      )}
-      style={focused
-        ? undefined
-        : { width: `min(${width}px, 94vw)` } as CSSProperties}
+      className="flex h-full min-w-0 flex-1 flex-col border-l border-border bg-surface-subtle"
       aria-label="AI 对话"
     >
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4">
@@ -125,26 +115,26 @@ export default function BookAssistantPanel({
           <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-text-subtle hover:bg-muted hover:text-foreground" type="button" aria-label="新建项目对话" onClick={() => void onCreateConversation()}>
             <Plus size={16} />
           </button>
-          <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-text-subtle hover:bg-muted hover:text-foreground" type="button" aria-label="展开对话" onClick={onToggleFocus}>
+          <button className="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-text-subtle hover:bg-muted hover:text-foreground" type="button" aria-label={focused ? "收起对话" : "展开对话"} onClick={onToggleFocus}>
             <Expand size={15} />
           </button>
         </div>
       </header>
 
       <div className="flex h-10 shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-muted px-2 text-[10px] font-medium text-muted-foreground">
+        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-muted px-2.5 text-xs font-medium text-muted-foreground">
           <Layers3 size={12} />上下文
         </span>
-        <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-2 text-[10px] text-muted-foreground" title={`当前项目：${projectName}`}>
+        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs text-muted-foreground" title={`当前项目：${projectName}`}>
           <Folder size={12} />
           <span className="max-w-28 truncate">{projectName}</span>
         </span>
-        <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-2 text-[10px] text-muted-foreground" title={bookTitle ? `当前书籍：${bookTitle}` : "当前书籍待命名"}>
+        <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs text-muted-foreground" title={bookTitle ? `当前书籍：${bookTitle}` : "当前书籍待命名"}>
           <BookOpen size={12} />
           <span className="max-w-28 truncate">{bookTitle ?? "待命名书籍"}</span>
         </span>
         {contextEnabled && chapterNumber !== null && chapterTitle && (
-          <button className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-accent-border bg-accent px-2 text-[10px] text-accent-foreground" type="button" title="移除章节上下文" onClick={() => onContextEnabledChange(false)}>
+          <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-accent-border bg-accent px-2.5 text-xs text-accent-foreground" type="button" title="移除章节上下文" onClick={() => onContextEnabledChange(false)}>
             <BookOpen size={12} />
             <span>第{chapterNumber}章 · {chapterTitle}</span>
             <X size={10} />
@@ -187,7 +177,7 @@ export default function BookAssistantPanel({
       )} onSubmit={(event) => void submit(event)}>
         <textarea
           ref={textareaRef}
-          className="block max-h-[156px] min-h-12 w-full resize-none overflow-y-auto border-0 bg-transparent text-[13px] leading-[22px] text-foreground outline-none placeholder:text-text-subtle"
+          className="block max-h-[156px] min-h-12 w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-text-subtle"
           rows={2}
           value={draft}
           placeholder={chapterNumber === null
@@ -203,13 +193,13 @@ export default function BookAssistantPanel({
           }}
         />
         <footer className="flex items-center justify-between">
-          <span className="flex min-w-0 items-center gap-1.5 truncate text-[10px] text-text-subtle">
+          <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-text-subtle">
             {contextEnabled && chapterNumber !== null
               ? <><BookOpen size={11} />已引用第{chapterNumber}章</>
               : "Enter 发送 · Shift + Enter 换行"}
           </span>
           <button
-            className="grid size-[30px] place-items-center rounded-full border-0 bg-[#5b3fd6] text-inverse transition hover:bg-[#4d32c4] disabled:bg-muted disabled:text-text-subtle"
+            className="grid size-[30px] place-items-center rounded-full border-0 bg-accent-foreground text-inverse transition-colors hover:opacity-90 disabled:bg-muted disabled:text-text-subtle disabled:opacity-100"
             type={running ? "button" : "submit"}
             disabled={!connected || (!running && !draft.trim())}
             aria-label={running ? "停止生成" : "发送"}

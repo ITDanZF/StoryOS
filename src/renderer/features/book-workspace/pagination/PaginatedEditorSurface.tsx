@@ -358,7 +358,7 @@ export default function PaginatedEditorSurface({
                 key={pageIndex}
                 style={{ top: pageIndex * pageStride }}
               >
-                <footer className="chapter-pagination-footer absolute inset-x-[72px] bottom-0 flex h-[54px] items-center justify-between border-t text-[10px]">
+                <footer className="chapter-pagination-footer absolute inset-x-[72px] bottom-0 flex h-[54px] items-center justify-between border-t text-xs">
                   <span>第 {chapterNumber} 章</span>
                   <strong className="font-medium tabular-nums text-muted-foreground">
                     第 {pageIndex + 1} / {renderPageCount} 页
@@ -379,7 +379,7 @@ export default function PaginatedEditorSurface({
 
       <div
         className={cn(
-          "z-30 mx-auto w-fit rounded-full border border-border bg-card/95 px-3 py-1 text-[10px] tabular-nums text-muted-foreground shadow-sm backdrop-blur",
+          "z-30 mx-auto w-fit rounded-full border border-border bg-card/95 px-3 py-1 text-xs tabular-nums text-muted-foreground shadow-sm backdrop-blur",
           layoutMode === "horizontal"
             ? "absolute bottom-2 left-1/2 -translate-x-1/2"
             : "sticky bottom-2 mt-2",

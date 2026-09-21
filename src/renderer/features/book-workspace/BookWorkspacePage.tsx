@@ -8,6 +8,7 @@ import { PageSurface } from "../../components/layout/PageSurface.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useParams } from "react-router-dom";
 import { cn } from "../../../lib/utils.ts";
+import "../../components/motion/motion.css";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
 import BookAssistantPanel from "./components/BookAssistantPanel.tsx";
 import BookCatalogPanel from "./components/BookCatalogPanel.tsx";
@@ -412,34 +413,35 @@ export default function BookWorkspacePage() {
         ref={containerRef}
         className="relative flex min-h-0 flex-1 overflow-hidden bg-surface-canvas"
       >
-        {catalogVisible && !assistantFocused && (
-          <BookCatalogPanel
-            resize={catalog}
-            bookTitle={readyWorkspace?.book.title ?? null}
-            groups={chapterGroups}
-            activeChapterId={activeChapter?.id ?? null}
-            activeChapterPageNumber={activeChapterPageNumber}
-            livePagination={livePagination}
-            onSelectChapter={selectChapter}
-            onSelectPage={selectBookPage}
-            onCreatePage={createBookPage}
-            onMovePage={moveBookPage}
-            onDeletePage={deleteBookPage}
-            onCreateVolume={readyWorkspace ? addVolume : null}
-            onCreateChapter={addChapter}
-            onShowOverview={showBookOverview}
-            onDeleteVolume={removeVolume}
-            onDeleteChapter={removeChapter}
-            onClose={() => setCatalogVisible(false)}
-          />
-        )}
+        <BookCatalogPanel
+          visible={catalogVisible && !assistantFocused}
+          resize={catalog}
+          bookTitle={readyWorkspace?.book.title ?? null}
+          groups={chapterGroups}
+          activeChapterId={activeChapter?.id ?? null}
+          activeChapterPageNumber={activeChapterPageNumber}
+          livePagination={livePagination}
+          onSelectChapter={selectChapter}
+          onSelectPage={selectBookPage}
+          onCreatePage={createBookPage}
+          onMovePage={moveBookPage}
+          onDeletePage={deleteBookPage}
+          onCreateVolume={readyWorkspace ? addVolume : null}
+          onCreateChapter={addChapter}
+          onShowOverview={showBookOverview}
+          onDeleteVolume={removeVolume}
+          onDeleteChapter={removeChapter}
+          onClose={() => setCatalogVisible(false)}
+        />
 
         {!assistantFocused && workspace.state === "uninitialized" && (
           <BookProfilePanel
             book={null}
+            chapters={[]}
             volumeCount={0}
             chapterCount={0}
             characterCount={0}
+            onSelectChapter={null}
             onSave={saveBookProfile}
           />
         )}
@@ -501,66 +503,80 @@ export default function BookWorkspacePage() {
         {!assistantFocused && readyWorkspace && !activeChapter && (
           <BookProfilePanel
             book={readyWorkspace.book}
+            chapters={flattenBookChapterGroups(chapterGroups)}
             volumeCount={readyWorkspace.volumes.length}
             chapterCount={readyWorkspace.chapters.length}
             characterCount={readyWorkspace.chapters.reduce(
               (total, chapter) => total + chapter.characterCount,
               0,
             )}
+            onSelectChapter={selectChapter}
             onSave={saveBookProfile}
           />
         )}
 
-        {assistantVisible && (
-          <>
-            {!assistantFocused && (
-              <div
+        <div
+          className={cn(
+            "flex h-full min-h-0",
+            assistantFocused
+              ? "min-w-0 flex-1"
+              : cn(
+                  "motion-sidebar relative z-20 shrink-0",
+                  "max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-30",
+                  assistantVisible && "max-xl:shadow-2xl",
+                ),
+          )}
+          data-open={assistantFocused || assistantVisible}
+          style={assistantFocused
+            ? undefined
+            : { width: assistantVisible ? `min(${assistant.width}px, 94vw)` : 0 }}
+        >
+          {!assistantFocused && (
+            <div
+              className={cn(
+                "group relative z-20 hidden w-1.5 shrink-0 cursor-col-resize touch-none bg-transparent xl:block",
+                assistant.resizing && "bg-accent",
+              )}
+              {...assistant.handleProps}
+              aria-label="调整 AI 对话宽度"
+            >
+              <span
                 className={cn(
-                  "group relative z-20 hidden w-1.5 shrink-0 cursor-col-resize touch-none bg-transparent xl:block",
-                  assistant.resizing && "bg-accent",
+                  "absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:bg-accent group-focus-visible:bg-accent",
+                  assistant.resizing && "w-0.5 bg-accent",
                 )}
-                {...assistant.handleProps}
-                aria-label="调整 AI 对话宽度"
-              >
-                <span
-                  className={cn(
-                    "absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:bg-accent group-focus-visible:bg-accent",
-                    assistant.resizing && "w-0.5 bg-accent",
-                  )}
-                />
-              </div>
-            )}
-            <BookAssistantPanel
-              projectName={project.name}
-              bookTitle={readyWorkspace?.book.title ?? null}
-              chapterNumber={chapterNumber}
-              chapterTitle={activeChapter?.title ?? null}
-              conversationSnapshot={projectConversationSnapshot}
-              runningThreadIds={runningThreadIds}
-              connected={Boolean(state.status?.initialized)}
-              running={projectConversationActive && Boolean(activeRun)}
-              focused={assistantFocused}
-              width={assistant.width}
-              draft={assistantDraft}
-              contextEnabled={assistantContextEnabled}
-              pendingApproval={pendingApprovals[0] ?? null}
-              onDraftChange={setAssistantDraft}
-              onContextEnabledChange={setAssistantContextEnabled}
-              onSend={sendAssistantMessage}
-              onCancel={async () => {
-                if (activeRun) await cancelRun(activeRun.runId);
-              }}
-              onResolveApproval={resolveBookApproval}
-              onCreateConversation={createProjectConversation}
-              onSwitchConversation={switchProjectConversation}
-              onDeleteConversation={deleteProjectConversation}
-              onToggleFocus={() => {
-                setAssistantFocused((value) => !value);
-                setAssistantVisible(true);
-              }}
-            />
-          </>
-        )}
+              />
+            </div>
+          )}
+          <BookAssistantPanel
+            projectName={project.name}
+            bookTitle={readyWorkspace?.book.title ?? null}
+            chapterNumber={chapterNumber}
+            chapterTitle={activeChapter?.title ?? null}
+            conversationSnapshot={projectConversationSnapshot}
+            runningThreadIds={runningThreadIds}
+            connected={Boolean(state.status?.initialized)}
+            running={projectConversationActive && Boolean(activeRun)}
+            focused={assistantFocused}
+            draft={assistantDraft}
+            contextEnabled={assistantContextEnabled}
+            pendingApproval={pendingApprovals[0] ?? null}
+            onDraftChange={setAssistantDraft}
+            onContextEnabledChange={setAssistantContextEnabled}
+            onSend={sendAssistantMessage}
+            onCancel={async () => {
+              if (activeRun) await cancelRun(activeRun.runId);
+            }}
+            onResolveApproval={resolveBookApproval}
+            onCreateConversation={createProjectConversation}
+            onSwitchConversation={switchProjectConversation}
+            onDeleteConversation={deleteProjectConversation}
+            onToggleFocus={() => {
+              setAssistantFocused((value) => !value);
+              setAssistantVisible(true);
+            }}
+          />
+        </div>
 
         {bookError && <Toast tone="danger">{bookError}</Toast>}
       </div>

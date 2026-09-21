@@ -4,11 +4,14 @@ import type {
   VolumeDto,
 } from "../../../shared/agent/contracts.ts";
 import {
+  countCompletedChapters,
   createBookChapterGroups,
   findBookChapterLocation,
   flattenBookChapterGroups,
   neighborChapterIds,
   resolveDisplayedChapter,
+  selectContinueChapter,
+  selectRecentBookChapters,
 } from "./bookWorkspaceModel.ts";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -126,5 +129,32 @@ describe("chapter switching display", () => {
     expect(neighborChapterIds(["a", "b", "c"], "a")).toEqual(["b"]);
     expect(neighborChapterIds(["a", "b", "c"], "c")).toEqual(["b"]);
     expect(neighborChapterIds(["a", "b", "c"], "missing")).toEqual([]);
+  });
+});
+
+describe("book overview helpers", () => {
+  it("counts completed chapters without inventing a writing target", () => {
+    expect(countCompletedChapters([
+      chapter("a", "volume-1", 0),
+      { ...chapter("b", "volume-1", 1), status: "completed" },
+      { ...chapter("c", "volume-1", 2), status: "draft" },
+    ])).toBe(1);
+  });
+
+  it("lists the most recently updated chapters first", () => {
+    const recent = selectRecentBookChapters([
+      { ...chapter("old", "volume-1", 0), updatedAt: "2026-01-01T00:00:00.000Z" },
+      { ...chapter("new", "volume-1", 1), updatedAt: "2026-03-01T00:00:00.000Z" },
+      { ...chapter("mid", "volume-1", 2), updatedAt: "2026-02-01T00:00:00.000Z" },
+    ], 2);
+    expect(recent.map((item) => item.id)).toEqual(["new", "mid"]);
+  });
+
+  it("continues from the first unfinished chapter in reading order", () => {
+    expect(selectContinueChapter([
+      { ...chapter("done", "volume-1", 0), status: "completed" },
+      { ...chapter("draft", "volume-1", 1), status: "draft" },
+      chapter("later", "volume-1", 2),
+    ])?.id).toBe("draft");
   });
 });

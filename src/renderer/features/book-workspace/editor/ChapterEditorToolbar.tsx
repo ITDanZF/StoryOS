@@ -144,7 +144,7 @@ function ToolbarButton({
 }
 
 function ToolbarMenu({ ariaLabel, disabled, options, value, widthClassName, onSelect }: ToolbarMenuProps) {
-  return <Select label={ariaLabel} disabled={disabled} options={options} value={value} onChange={onSelect} preserveSelection triggerClassName={cn("h-8 text-[11px]", widthClassName)} />;
+  return <Select label={ariaLabel} disabled={disabled} options={options} value={value} onChange={onSelect} preserveSelection triggerClassName={cn("h-8 text-xs", widthClassName)} />;
 }
 
 function ToolbarDivider() {
@@ -295,7 +295,7 @@ export default function ChapterEditorToolbar({
 
       <span className="mx-2 h-5 w-px shrink-0 bg-border" />
       <button
-        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-2 text-[11px] font-medium text-accent-foreground transition-colors hover:bg-accent disabled:opacity-40"
+        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-transparent px-2 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent disabled:opacity-40"
         type="button"
         disabled={!activeEditor}
         onMouseDown={(event) => event.preventDefault()}

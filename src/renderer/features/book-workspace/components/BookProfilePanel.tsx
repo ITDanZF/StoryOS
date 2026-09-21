@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   BookOpen,
   Check,
   CircleAlert,
@@ -14,15 +15,33 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import type { NovelDto } from "../../../../shared/agent/contracts.ts";
+import type {
+  BookWorkspaceChapterDto,
+  NovelDto,
+} from "../../../../shared/agent/contracts.ts";
+import { cn } from "../../../../lib/utils.ts";
+import {
+  getBookshelfTheme,
+  selectDefaultBookshelfTheme,
+} from "../../book-presentation/coverThemes.ts";
+import { BOOK_STATUS_LABELS } from "../../bookshelf/bookshelfModel.ts";
+import {
+  chapterStatusLabel,
+  countCompletedChapters,
+  selectContinueChapter,
+  selectRecentBookChapters,
+} from "../bookWorkspaceModel.ts";
+import "./bookWorkspace.css";
 
 export type BookProfileInput = Pick<NovelDto, "title" | "synopsis">;
 
 type BookProfilePanelProps = {
   readonly book: NovelDto | null;
+  readonly chapters: readonly BookWorkspaceChapterDto[];
   readonly volumeCount: number;
   readonly chapterCount: number;
   readonly characterCount: number;
+  readonly onSelectChapter: ((chapterId: string) => void) | null;
   readonly onSave: (input: BookProfileInput) => Promise<void>;
 };
 
@@ -33,9 +52,11 @@ const SAVE_SUCCESS_VISIBLE_MS = 1800;
 
 export default function BookProfilePanel({
   book,
+  chapters,
   volumeCount,
   chapterCount,
   characterCount,
+  onSelectChapter,
   onSave,
 }: BookProfilePanelProps) {
   const [title, setTitle] = useState(book?.title ?? "");
@@ -128,25 +149,37 @@ export default function BookProfilePanel({
     }
   };
 
+  const completedCount = countCompletedChapters(chapters);
+  const recentChapters = selectRecentBookChapters(chapters);
+  const continueChapter = selectContinueChapter(chapters);
+  const completionPercent = chapterCount === 0
+    ? 0
+    : Math.round((completedCount / chapterCount) * 100);
+  const coverTheme = getBookshelfTheme(
+    selectDefaultBookshelfTheme(book?.id ?? "uninitialized"),
+  );
+
   return (
-    <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface-canvas px-6 py-10 sm:px-10 lg:px-14 lg:py-12">
+    <main className="motion-reveal min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface-canvas px-6 py-10 sm:px-10 lg:px-14 lg:py-12">
       <form
         className="mx-auto w-full max-w-[760px]"
         onSubmit={submit}
         onKeyDown={handleKeyDown}
       >
-        <header className="mb-6 flex min-h-11 items-center justify-between gap-4">
+        <header className="mb-5 flex min-h-10 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground ring-1 ring-inset ring-accent-border">
-              <BookOpen size={19} strokeWidth={1.8} />
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground ring-1 ring-inset ring-accent-border">
+              <BookOpen size={18} strokeWidth={1.8} />
             </span>
             <div className="min-w-0">
-              <h1 className="m-0 text-lg font-semibold tracking-[-0.02em] text-foreground">
-                书籍概览
-              </h1>
-              <p className="mb-0 mt-0.5 text-xs text-text-subtle">
-                管理书名与故事简介
+              <p className="mb-0 text-xs text-text-subtle">
+                书名与简介
               </p>
+              {book && (
+                <p className="mb-0 mt-0.5 text-xs font-medium text-accent-foreground">
+                  {BOOK_STATUS_LABELS[book.status]}
+                </p>
+              )}
             </div>
           </div>
           <SaveIndicator
@@ -156,16 +189,28 @@ export default function BookProfilePanel({
         </header>
 
         <section
-          className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+          className="overflow-hidden rounded-2xl border border-border bg-card"
           aria-label="书籍基本信息"
         >
-          <label className="block bg-[linear-gradient(145deg,#393531_0%,#4b4038_58%,#9a6640_100%)] px-6 py-6 sm:px-7 sm:py-7">
-            <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-[#d8a47b]">
+          <label
+            className={cn(
+              "block px-6 py-6 sm:px-7 sm:py-7",
+              coverTheme.coverClassName,
+              coverTheme.textClassName,
+            )}
+            data-cover-theme={coverTheme.id}
+          >
+            <span
+              className={cn(
+                "block text-xs font-medium tracking-[0.14em]",
+                coverTheme.mutedTextClassName,
+              )}
+            >
               书名
             </span>
             <input
               autoFocus={!book}
-              className="mt-3 w-full border-0 bg-transparent p-0 font-serif text-[28px] font-semibold leading-10 tracking-[0.04em] text-[#fff9f2] caret-[#e4b48e] outline-none selection:bg-[#c78658]/45 placeholder:font-normal placeholder:tracking-normal placeholder:text-inverse/35"
+              className="mt-3 w-full border-0 bg-transparent p-0 font-serif text-[28px] font-semibold leading-10 tracking-[0.04em] text-inherit caret-current outline-none placeholder:font-normal placeholder:tracking-normal placeholder:opacity-55 selection:bg-current/25"
               maxLength={200}
               placeholder="输入书籍名称"
               value={title}
@@ -178,13 +223,13 @@ export default function BookProfilePanel({
           </label>
 
           <label className="block border-t border-border px-6 py-5 sm:px-7">
-            <span className="block text-[11px] font-medium text-text-subtle">
+            <span className="block text-xs font-medium text-text-subtle">
               书籍简介
             </span>
             <textarea
               className="mt-2 min-h-28 w-full resize-none border-0 bg-transparent p-0 text-sm leading-7 text-text-secondary outline-none placeholder:text-text-subtle"
               maxLength={4000}
-              placeholder="概括故事背景、主要冲突或创作方向"
+              placeholder="写下这本书想讲的故事：时代、人物，以及他们必须面对的冲突。"
               value={synopsis}
               aria-label="书籍简介"
               onChange={(event) => {
@@ -195,18 +240,84 @@ export default function BookProfilePanel({
           </label>
 
           <div
-            className="flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-border bg-surface-subtle/70 px-6 py-4 sm:px-7"
+            className="grid gap-4 border-t border-border bg-surface-subtle/70 px-6 py-4 sm:px-7"
             aria-label="创作统计"
           >
-            <Statistic
-              icon={FileText}
-              label="总字数"
-              value={characterCount.toLocaleString("zh-CN")}
-            />
-            <Statistic icon={Layers3} label="分卷" value={volumeCount.toString()} />
-            <Statistic icon={BookOpen} label="章节" value={chapterCount.toString()} />
+            <div className="flex flex-wrap items-center gap-x-7 gap-y-3">
+              <Statistic
+                icon={FileText}
+                label="总字数"
+                value={characterCount.toLocaleString("zh-CN")}
+              />
+              <Statistic icon={Layers3} label="分卷" value={volumeCount.toString()} />
+              <Statistic icon={BookOpen} label="章节" value={chapterCount.toString()} />
+            </div>
+            {chapterCount > 0 && (
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>已完成章节</span>
+                  <strong className="font-semibold tabular-nums text-foreground">
+                    {completedCount} / {chapterCount} · {completionPercent}%
+                  </strong>
+                </div>
+                <div
+                  className="book-chapter-progress"
+                  role="progressbar"
+                  aria-label="已完成章节进度"
+                  aria-valuemin={0}
+                  aria-valuemax={chapterCount}
+                  aria-valuenow={completedCount}
+                >
+                  <span style={{ width: `${completionPercent}%` }} />
+                </div>
+              </div>
+            )}
           </div>
         </section>
+
+        {onSelectChapter && continueChapter && (
+          <button
+            className="mt-5 flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-accent-border bg-accent px-4 text-left text-sm font-medium text-accent-foreground transition-colors hover:bg-accent"
+            type="button"
+            onClick={() => onSelectChapter(continueChapter.id)}
+          >
+            <span className="min-w-0 truncate">
+              继续写作 · {continueChapter.title}
+            </span>
+            <ArrowRight size={16} />
+          </button>
+        )}
+
+        {onSelectChapter && recentChapters.length > 0 && (
+          <section className="mt-8" aria-label="最近章节">
+            <h2 className="mb-3 text-xs font-medium text-text-subtle">
+              最近章节
+            </h2>
+            <ul className="grid gap-2">
+              {recentChapters.map((chapter) => (
+                <li key={chapter.id}>
+                  <button
+                    className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors hover:border-accent-border hover:bg-accent/60"
+                    type="button"
+                    onClick={() => onSelectChapter(chapter.id)}
+                  >
+                    <span className="min-w-0">
+                      <strong className="block truncate text-[13px] font-medium text-foreground">
+                        {chapter.title}
+                      </strong>
+                      <span className="mt-0.5 block text-xs text-text-subtle">
+                        {chapterStatusLabel(chapter)}
+                        {" · "}
+                        {chapter.characterCount.toLocaleString("zh-CN")} 字
+                      </span>
+                    </span>
+                    <ArrowRight className="shrink-0 text-text-subtle" size={15} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </form>
     </main>
   );
@@ -241,7 +352,7 @@ function SaveIndicator({
   if (state === "error") {
     return (
       <button
-        className="mt-1 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-danger-surface px-2.5 text-[11px] text-danger-text transition hover:bg-danger-surface"
+        className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border-0 bg-danger-surface px-2.5 text-xs text-danger-text transition-colors hover:bg-danger-surface"
         type="button"
         onClick={onRetry}
       >
@@ -251,7 +362,7 @@ function SaveIndicator({
     );
   }
   return (
-    <span className="mt-1 flex h-7 shrink-0 items-center gap-1.5 px-1 text-[11px] text-text-subtle">
+    <span className="flex h-7 shrink-0 items-center gap-1.5 px-1 text-xs text-text-subtle">
       {state === "saving"
         ? <LoaderCircle className="animate-spin" size={12} />
         : <Check className="text-success-text" size={12} />}

@@ -137,6 +137,38 @@ export function chapterStatusLabel(
   return STATUS_LABELS[chapter.status];
 }
 
+export function countCompletedChapters(
+  chapters: readonly BookWorkspaceChapterDto[],
+): number {
+  return chapters.reduce(
+    (total, chapter) => total + (chapter.status === "completed" ? 1 : 0),
+    0,
+  );
+}
+
+export function selectRecentBookChapters(
+  chapters: readonly BookWorkspaceChapterDto[],
+  limit = 3,
+): readonly BookWorkspaceChapterDto[] {
+  if (limit < 1 || chapters.length === 0) return [];
+  return Object.freeze(
+    [...chapters]
+      .sort((left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt) ||
+        left.id.localeCompare(right.id))
+      .slice(0, limit),
+  );
+}
+
+export function selectContinueChapter(
+  chapters: readonly BookWorkspaceChapterDto[],
+): BookWorkspaceChapterDto | null {
+  if (chapters.length === 0) return null;
+  return chapters.find((chapter) => chapter.status !== "completed") ??
+    selectRecentBookChapters(chapters, 1)[0] ??
+    null;
+}
+
 const CHINESE_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"] as const;
 
 export function formatChineseOrdinal(value: number, unit: "卷" | "章"): string {

@@ -22,9 +22,37 @@
 .motion-stagger > :nth-child(4) { --motion-delay:calc(3 * var(--motion-stagger)); }
 .motion-stagger > :nth-child(5) { --motion-delay:calc(4 * var(--motion-stagger)); }
 .motion-stagger > :nth-child(n+6) { --motion-delay:calc(5 * var(--motion-stagger)); }
+.motion-sidebar {
+  transition:
+    width var(--motion-enter) var(--motion-ease),
+    min-width var(--motion-enter) var(--motion-ease),
+    opacity var(--motion-fade) var(--motion-ease),
+    border-color var(--motion-fade) var(--motion-ease);
+}
+.motion-sidebar[data-open="false"] {
+  overflow: hidden;
+  width: 0 !important;
+  min-width: 0 !important;
+  opacity: 0;
+  border-color: transparent;
+  pointer-events: none;
+  transition-duration: var(--motion-exit);
+}
+.motion-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-content) var(--motion-ease);
+}
+.motion-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+.motion-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
 @keyframes motion-reveal { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes motion-fade { from { opacity:0; } to { opacity:1; } }
 @media(prefers-reduced-motion:reduce) {
-  .motion-dialog,.motion-dialog *,.motion-reveal,.motion-fade,.motion-stagger > * { animation:none!important; transition:none!important; }
+  .motion-dialog,.motion-dialog *,.motion-reveal,.motion-fade,.motion-stagger > *,.motion-sidebar,.motion-collapse { animation:none!important; transition:none!important; }
   .motion-dialog button:hover,.motion-dialog button:active:not(:disabled) { transform:none; }
 }
