@@ -26,6 +26,7 @@ import BookPageGrid from "./BookPageGrid.tsx";
 import DeleteBookItemDialog, {
   type DeleteBookItemTarget,
 } from "./DeleteBookItemDialog.tsx";
+import "./bookCatalog.css";
 
 type CatalogDeleteTarget = Extract<
   DeleteBookItemTarget,
@@ -195,7 +196,7 @@ export default function BookCatalogPanel({
 
         {view === "chapters" ? (
           <nav
-            className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-5 pt-3"
+            className="book-catalog-scroll min-h-0 flex-1 overflow-y-auto px-2.5 pb-5 pt-3"
             aria-label="章节目录"
           >
           {groups.length === 0 && (
