@@ -1,32 +1,38 @@
-import type { BookWorkspaceSnapshot } from "../../../../shared/agent/contracts.ts";
 import type { ChapterGenerationView } from "../../agent/types.ts";
 
 type UseChapterGenerationPreviewOptions = {
   readonly generation: ChapterGenerationView | null;
-  readonly workspace: BookWorkspaceSnapshot | null;
+  readonly canonicalRevisionNumber: number | null;
+  readonly displayedContent?: string;
 };
 
 export function resolveChapterGenerationPreviewContent(
   generation: ChapterGenerationView | null,
-  workspace: BookWorkspaceSnapshot | null,
+  canonicalRevisionNumber: number | null,
+  displayedContent?: string,
 ): string | null {
   if (
     !generation ||
     generation.status === "failed" ||
     generation.status === "cancelled"
   ) return null;
-  if (generation.status === "completed") {
-    const canonical = workspace?.state === "ready"
-      ? workspace.chapters.find((chapter) => chapter.id === generation.chapterId)
-      : null;
-    if (canonical?.revisionNumber === generation.revisionNumber) return null;
-  }
+  if (
+    generation.status === "completed" &&
+    canonicalRevisionNumber === generation.revisionNumber &&
+    (displayedContent === undefined ||
+      displayedContent === generation.previewContent)
+  ) return null;
   return generation.previewContent ?? null;
 }
 
 export default function useChapterGenerationPreview({
   generation,
-  workspace,
+  canonicalRevisionNumber,
+  displayedContent,
 }: UseChapterGenerationPreviewOptions): string | null {
-  return resolveChapterGenerationPreviewContent(generation, workspace);
+  return resolveChapterGenerationPreviewContent(
+    generation,
+    canonicalRevisionNumber,
+    displayedContent,
+  );
 }

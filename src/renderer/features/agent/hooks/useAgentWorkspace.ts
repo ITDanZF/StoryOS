@@ -19,8 +19,8 @@ import type {
 import type {
   ChatWorkspaceState,
   PendingToolApprovalView,
-  ChapterGenerationView,
 } from "../types.ts";
+import type { NovelMutation } from "../../../../shared/contracts/books/novelEvents.ts";
 import { ConversationEventBatcher } from "../conversation/store/conversationEventBatcher.ts";
 import {
   loadLatestConversationHistory,
@@ -76,8 +76,8 @@ export function useAgentWorkspace() {
   const [bookChangeVersions, setBookChangeVersions] = useState<
     Readonly<Record<string, number>>
   >({});
-  const [chapterGenerations, setChapterGenerations] = useState<
-    Readonly<Record<string, ChapterGenerationView>>
+  const [lastBookMutations, setLastBookMutations] = useState<
+    Readonly<Record<string, NovelMutation>>
   >({});
   const [error, setError] = useState<string | null>(null);
   const [hasOlderConversationHistory, setHasOlderConversationHistory] =
@@ -315,136 +315,10 @@ export function useAgentWorkspace() {
         ...current,
         [event.projectId]: (current[event.projectId] ?? 0) + 1,
       }));
-      return;
-    }
-
-    if (event.type === "chapter_generation_started") {
-      setChapterGenerations((current) => ({
+      setLastBookMutations((current) => ({
         ...current,
-        [event.chapterId]: {
-          generationId: event.generationId,
-          projectId: event.projectId,
-          chapterId: event.chapterId,
-          mode: event.mode,
-          status: "generating",
-          thinkingText: "",
-          publishedPageCount: 0,
-          generatedCharacterCount: 0,
-          updatedAt: event.timestamp,
-        },
+        [event.projectId]: event.mutation,
       }));
-      return;
-    }
-
-    if (event.type === "chapter_generation_thinking") {
-      setChapterGenerations((current) => {
-        const existing = current[event.chapterId];
-        if (!existing || existing.generationId !== event.generationId)
-          return current;
-        return {
-          ...current,
-          [event.chapterId]: {
-            ...existing,
-            thinkingText: event.text,
-            updatedAt: event.timestamp,
-          },
-        };
-      });
-      return;
-    }
-
-    if (event.type === "chapter_generation_page_ready") {
-      setChapterGenerations((current) => {
-        const existing = current[event.chapterId];
-        if (!existing || existing.generationId !== event.generationId)
-          return current;
-        return {
-          ...current,
-          [event.chapterId]: {
-            ...existing,
-            previewContent: event.content,
-            publishedPageCount: event.pageNumber,
-            generatedCharacterCount: event.generatedCharacterCount,
-            status: "generating",
-            updatedAt: event.timestamp,
-          },
-        };
-      });
-      return;
-    }
-
-    if (event.type === "chapter_generation_retrying") {
-      setChapterGenerations((current) => {
-        const existing = current[event.chapterId];
-        if (!existing || existing.generationId !== event.generationId)
-          return current;
-        return {
-          ...current,
-          [event.chapterId]: {
-            ...existing,
-            thinkingText: "",
-            retryAttempt: event.attempt,
-            retryMaxAttempts: event.maxAttempts,
-            status: "generating",
-            updatedAt: event.timestamp,
-          },
-        };
-      });
-      return;
-    }
-
-    if (event.type === "chapter_generation_completed") {
-      setChapterGenerations((current) => {
-        const existing = current[event.chapterId];
-        if (!existing || existing.generationId !== event.generationId)
-          return current;
-        return {
-          ...current,
-          [event.chapterId]: {
-            ...existing,
-            status: "completed",
-            previewContent: event.content,
-            revisionNumber: event.revisionNumber,
-            characterCount: event.characterCount,
-            updatedAt: event.timestamp,
-          },
-        };
-      });
-      return;
-    }
-
-    if (event.type === "chapter_generation_cancelled") {
-      setChapterGenerations((current) => {
-        const existing = current[event.chapterId];
-        if (!existing || existing.generationId !== event.generationId)
-          return current;
-        return {
-          ...current,
-          [event.chapterId]: {
-            ...existing,
-            status: "cancelled",
-            updatedAt: event.timestamp,
-          },
-        };
-      });
-      return;
-    }
-
-    if (event.type === "chapter_generation_failed") {
-      setChapterGenerations((current) => {
-        const existing = current[event.chapterId];
-        if (!existing || existing.generationId !== event.generationId)
-          return current;
-        return {
-          ...current,
-          [event.chapterId]: {
-            ...existing,
-            status: "failed",
-            error: event.error,
-            updatedAt: event.timestamp,
-          },
-        };
-      });
       return;
     }
 
@@ -814,7 +688,7 @@ export function useAgentWorkspace() {
     runs,
     pendingApprovals,
     bookChangeVersions,
-    chapterGenerations,
+    lastBookMutations,
     error,
   };
 

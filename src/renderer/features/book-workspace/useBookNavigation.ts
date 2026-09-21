@@ -17,6 +17,8 @@ export default function useBookNavigation() {
   );
   const [livePagination, setLivePagination] =
     useState<LiveChapterPagination | null>(null);
+  const activeChapterIdRef = useRef(activeChapterId);
+  activeChapterIdRef.current = activeChapterId;
   const openChapterFromTool = useCallback(
     (chapterId: string, pageNumber: number) => {
       pageRequestId.current += 1;
@@ -32,6 +34,13 @@ export default function useBookNavigation() {
       });
     },
     [],
+  );
+  const revealChapter = useCallback(
+    (chapterId: string, pageNumber = 1) => {
+      if (activeChapterIdRef.current === chapterId) return;
+      openChapterFromTool(chapterId, pageNumber);
+    },
+    [openChapterFromTool],
   );
 
   const selectChapter = (chapterId: string) => {
@@ -112,6 +121,7 @@ export default function useBookNavigation() {
     livePagination,
     setLivePagination,
     openChapterFromTool,
+    revealChapter,
     selectChapter,
     showBookOverview,
     selectBookPage,

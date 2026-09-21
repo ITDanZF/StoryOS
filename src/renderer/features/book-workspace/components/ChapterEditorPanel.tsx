@@ -20,6 +20,8 @@ import type {
   BookPageNavigationTarget,
   LiveChapterPage,
 } from "../../book-content/paginationModel.ts";
+import useChapterGenerationPreview from "../ai/useChapterGenerationPreview.ts";
+import { useGenerationJob } from "../store/generationStore.ts";
 
 const ChapterRichTextEditor = lazy(
   () => import("../editor/ChapterRichTextEditor.tsx"),
@@ -27,8 +29,6 @@ const ChapterRichTextEditor = lazy(
 
 type ChapterEditorPanelProps = {
   readonly chapter: BookWorkspaceChapterDto;
-  readonly aiPreviewActive: boolean;
-  readonly aiPreviewContent: string | null;
   readonly chapterNumber: number;
   readonly volumeTitle: string;
   readonly pageTarget: BookPageNavigationTarget | null;
@@ -53,8 +53,6 @@ type ChapterEditorPanelProps = {
 
 export default function ChapterEditorPanel({
   chapter,
-  aiPreviewActive,
-  aiPreviewContent,
   chapterNumber,
   volumeTitle,
   pageTarget,
@@ -67,6 +65,13 @@ export default function ChapterEditorPanel({
   onEditorContextChange,
   onEditorBridgeChange,
 }: ChapterEditorPanelProps) {
+  const generation = useGenerationJob(chapter.id);
+  const aiPreviewContent = useChapterGenerationPreview({
+    generation,
+    canonicalRevisionNumber: chapter.revisionNumber,
+    displayedContent: chapter.content,
+  });
+  const aiPreviewActive = aiPreviewContent !== null;
   const [title, setTitle] = useState(chapter.title);
   const [saveState, setSaveState] = useState<BookSaveState>("saved");
   const [characterCount, setCharacterCount] = useState(() =>

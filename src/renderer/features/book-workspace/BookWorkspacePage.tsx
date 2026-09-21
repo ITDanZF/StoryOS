@@ -26,8 +26,8 @@ import type {
   ChapterEditorLiveContext,
 } from "./editor/chapterEditorContext.ts";
 import useBookEditorToolHandler from "./ai/useBookEditorToolHandler.ts";
+import useBookGenerationEvents from "./ai/useBookGenerationEvents.ts";
 import useBookMutationSync from "./ai/useBookMutationSync.ts";
-import useChapterGenerationPreview from "./ai/useChapterGenerationPreview.ts";
 
 export default function BookWorkspacePage() {
   const { projectId } = useParams();
@@ -58,6 +58,7 @@ export default function BookWorkspacePage() {
     livePagination,
     setLivePagination,
     openChapterFromTool,
+    revealChapter,
     selectChapter,
     showBookOverview,
     selectBookPage,
@@ -110,18 +111,24 @@ export default function BookWorkspacePage() {
   );
   const activeChapter = activeChapterLocation?.chapter ?? null;
   const chapterLoading = useRef<string | null>(null);
+  const loadedContentRevision = useRef(new Map<string, string | null>());
   useEffect(() => {
+    if (!activeChapter) return;
+    const loadedRevision = loadedContentRevision.current.get(activeChapter.id);
     if (
-      !activeChapter ||
-      activeChapter.contentLoaded ||
-      chapterLoading.current === activeChapter.id
-    )
-      return;
-    chapterLoading.current = activeChapter.id;
+      activeChapter.contentLoaded &&
+      loadedRevision === activeChapter.currentRevisionId
+    ) return;
+    const loadKey = `${activeChapter.id}:${activeChapter.currentRevisionId ?? "none"}`;
+    if (chapterLoading.current === loadKey) return;
+    chapterLoading.current = loadKey;
     void loadChapter(activeChapter.id)
+      .then((chapter) => {
+        loadedContentRevision.current.set(chapter.id, chapter.currentRevisionId);
+      })
       .catch((): void => undefined)
       .finally(() => {
-        chapterLoading.current = null;
+        if (chapterLoading.current === loadKey) chapterLoading.current = null;
       });
   }, [
     activeChapter?.id,
@@ -143,13 +150,7 @@ export default function BookWorkspacePage() {
         : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
       : "未分卷";
 
-  const activeChapterGeneration = activeChapterId
-    ? state.chapterGenerations[activeChapterId] ?? null
-    : null;
-  const currentChapterGeneration =
-    activeChapterGeneration?.projectId === projectId
-      ? activeChapterGeneration
-      : null;
+  useBookGenerationEvents(projectId, revealChapter);
 
   useEffect(() => {
     if (!workspace) return;
@@ -170,11 +171,6 @@ export default function BookWorkspacePage() {
     editorContextRef.current = null;
   }, [activeChapterId]);
 
-  const aiPreviewContent = useChapterGenerationPreview({
-    generation: currentChapterGeneration,
-    workspace,
-  });
-
   useBookEditorToolHandler({
     projectId,
     projectName: project?.name ?? null,
@@ -190,8 +186,10 @@ export default function BookWorkspacePage() {
   useBookMutationSync({
     projectId,
     changeVersion: projectId ? (state.bookChangeVersions[projectId] ?? 0) : 0,
+    lastMutation: projectId ? (state.lastBookMutations[projectId] ?? null) : null,
     reloadWorkspace: reloadBookWorkspace,
     reloadNavigation: loadProjectNavigation,
+    onRevealChapter: revealChapter,
   });
 
   useEffect(() => {
@@ -354,7 +352,6 @@ export default function BookWorkspacePage() {
             activeChapterId={activeChapter?.id ?? null}
             activeChapterPageNumber={activeChapterPageNumber}
             livePagination={livePagination}
-            chapterGenerations={state.chapterGenerations}
             onSelectChapter={selectChapter}
             onSelectPage={selectBookPage}
             onCreatePage={createBookPage}
@@ -394,12 +391,6 @@ export default function BookWorkspacePage() {
           chapterNumber !== null && (
             <ChapterEditorPanel
               chapter={activeChapter}
-              aiPreviewActive={aiPreviewContent !== null}
-              aiPreviewContent={
-                currentChapterGeneration?.chapterId === activeChapter.id
-                  ? aiPreviewContent
-                  : null
-              }
               chapterNumber={chapterNumber}
               volumeTitle={activeVolumeTitle}
               pageTarget={

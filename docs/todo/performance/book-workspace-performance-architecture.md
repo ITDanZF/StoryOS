@@ -157,7 +157,7 @@ WorkspaceLayout
 - `BookWorkspacePage` 用 ref 保存编辑器上下文，避免光标移动刷新目录和助手。
 - 分页控制器是独立的 external store。
 - 对话事件有 `ConversationEventBatcher`，视觉 delta 合并到同一帧。
-- `applySnapshot` 在 revision 未变时保留已加载正文，避免 mutation reload 后重复拉章。
+- `applySnapshot` 保留已加载正文，避免 mutation reload 卸载当前编辑器；revision 变化时沿用缓存正文并再 `loadChapter`，草稿只在 revision 未变时沿用缓存。
 
 这些局部优化证明团队已经意识到热路径问题，但没有把同一原则推广到 Agent state、生成预览和 livePagination。
 

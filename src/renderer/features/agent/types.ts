@@ -8,6 +8,7 @@ import type {
   ThreadSnapshot,
   ToolApprovalDecision,
 } from "../../../shared/agent/contracts.ts";
+import type { NovelMutation } from "../../../shared/contracts/books/novelEvents.ts";
 
 export type PendingToolApprovalView = {
   readonly approvalId: string;
@@ -54,6 +55,6 @@ export type ChatWorkspaceState = {
   readonly runs: readonly RunSnapshot[];
   readonly pendingApprovals: readonly PendingToolApprovalView[];
   readonly bookChangeVersions: Readonly<Record<string, number>>;
-  readonly chapterGenerations: Readonly<Record<string, ChapterGenerationView>>;
+  readonly lastBookMutations: Readonly<Record<string, NovelMutation>>;
   readonly error: string | null;
 };

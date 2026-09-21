@@ -85,19 +85,17 @@ export default function useBookWorkspace(projectId: string | undefined) {
             ...snapshot,
             chapters: snapshot.chapters.map((chapter) => {
               const cached = previous.chapters.find(
-                (c) =>
-                  c.id === chapter.id &&
-                  c.currentRevisionId === chapter.currentRevisionId &&
-                  c.contentLoaded,
+                (c) => c.id === chapter.id && c.contentLoaded,
               );
-              return cached
-                ? {
-                    ...chapter,
-                    content: cached.content,
-                    draft: cached.draft,
-                    contentLoaded: true,
-                  }
-                : chapter;
+              if (!cached) return chapter;
+              const sameRevision =
+                cached.currentRevisionId === chapter.currentRevisionId;
+              return {
+                ...chapter,
+                content: cached.content,
+                draft: sameRevision ? cached.draft : chapter.draft,
+                contentLoaded: true,
+              };
             }),
           }
         : snapshot,

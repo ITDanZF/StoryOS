@@ -20,13 +20,13 @@ import type {
 import DeleteBookItemDialog from "./DeleteBookItemDialog.tsx";
 import type { ChapterGenerationView } from "../../agent/types.ts";
 import { applyChapterGenerationPreviews } from "./bookPageGridModel.ts";
+import { useGenerationJobs } from "../store/generationStore.ts";
 
 type BookPageGridProps = {
   readonly groups: readonly BookChapterGroup[];
   readonly activeChapterId: string | null;
   readonly activeChapterPageNumber: number | null;
   readonly livePagination: LiveChapterPagination | null;
-  readonly chapterGenerations: Readonly<Record<string, ChapterGenerationView>>;
   readonly onSelectPage: (page: BookPageSlice) => void;
   readonly onCreatePage: (
     chapterId: string,
@@ -124,13 +124,13 @@ export default function BookPageGrid({
   activeChapterId,
   activeChapterPageNumber,
   livePagination,
-  chapterGenerations,
   onSelectPage,
   onCreatePage,
   onMovePage,
   onDeletePage,
   onClose,
 }: BookPageGridProps) {
+  const chapterGenerations = useGenerationJobs();
   const [draggedPage, setDraggedPage] = useState<BookPageSlice | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [deletePage, setDeletePage] = useState<{

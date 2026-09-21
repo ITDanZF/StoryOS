@@ -119,6 +119,7 @@ export default function ChapterRichTextEditor({
   const [linkRequestId, setLinkRequestId] = useState(0);
   const pendingPageNumber = useRef<number | null>(null);
   const publishedLayoutKey = useRef<string | null>(null);
+  const appliedRevisionIdRef = useRef(currentRevisionId);
   const persistence = useChapterPersistence(content, currentRevisionId, initialDraft, {
     save: onSave, saveDraft: onSaveDraft, onState: onSaveStateChange,
   });
@@ -247,21 +248,31 @@ export default function ChapterRichTextEditor({
     if (!editor || editor.isDestroyed) return;
     const displayedContent = previewContent ?? content;
     const editorContent = serializeTiptapDocument(editor.getJSON());
+    if (previewContent !== null) {
+      if (displayedContent === editorContent) return;
+      persistence.cancelScheduledSave();
+      applyExternalContent(editor, displayedContent);
+      documentVersionRef.current += 1;
+      onCharacterCountChangeRef.current(countTiptapCharacters(editor.getJSON()));
+      onSaveStateChangeRef.current("saved");
+      publishContext(editor);
+      return;
+    }
     if (displayedContent === editorContent) {
-      if (previewContent === null) {
-        persistence.acceptExternal(content, currentRevisionId);
-      }
+      persistence.acceptExternal(content, currentRevisionId);
+      persistence.pendingContent = null;
+      appliedRevisionIdRef.current = currentRevisionId;
       return;
     }
     const hasUnsavedLocalChange = persistence.hasUnsavedChanges;
-    if (hasUnsavedLocalChange) return;
+    const revisionChanged = appliedRevisionIdRef.current !== currentRevisionId;
+    if (hasUnsavedLocalChange && !revisionChanged) return;
 
     persistence.cancelScheduledSave();
     applyExternalContent(editor, displayedContent);
-    if (previewContent === null) {
-      persistence.acceptExternal(content, currentRevisionId);
-      persistence.pendingContent = null;
-    }
+    persistence.acceptExternal(content, currentRevisionId);
+    persistence.pendingContent = null;
+    appliedRevisionIdRef.current = currentRevisionId;
     documentVersionRef.current += 1;
     onCharacterCountChangeRef.current(countTiptapCharacters(editor.getJSON()));
     onSaveStateChangeRef.current("saved");
