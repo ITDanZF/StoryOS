@@ -1,0 +1,19 @@
+StoryOS
+Copyright (c) 2026 jinyuhe
+
+This product is licensed under the MIT License. See `LICENSE`.
+
+Third-party software
+--------------------
+
+StoryOS redistributes open-source components. Each dependency retains its own
+license and copyright. The complete install-time inventory is `package-lock.json`.
+
+Reader-specific notices for Three.js and @react-three/fiber are kept next to
+the bundled assets:
+
+- `assets/licenses/reader-notices.md`
+- `assets/licenses/three-MIT.txt`
+- `assets/licenses/react-three-fiber-MIT.txt`
+
+Do not treat this file as a substitute for those original license texts.

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 报告安全漏洞
+    url: https://github.com/ITDanZF/StoryOS/security/advisories/new
+    about: 请不要在公开 Issue 中提交可利用的安全问题。
+  - name: 参与开发说明
+    url: https://github.com/ITDanZF/StoryOS/blob/main/CONTRIBUTING.md
+    about: 提交代码前请先阅读贡献指南。

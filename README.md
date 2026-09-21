@@ -5,9 +5,9 @@
   [![Electron](https://img.shields.io/badge/Electron-42-47848F?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
   [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111)](https://react.dev/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-  [![License](https://img.shields.io/badge/license-MIT-2B2730?style=flat-square)](#license)
+  [![License](https://img.shields.io/badge/license-MIT-2B2730?style=flat-square)](LICENSE)
 
-  [功能概览](#功能概览) · [快速开始](#快速开始) · [项目状态](#项目状态) · [参与开发](#参与开发)
+  [功能概览](#功能概览) · [快速开始](#快速开始) · [项目状态](#项目状态) · [参与开发](#参与开发) · [隐私](PRIVACY.md) · [安全](SECURITY.md)
 </div>
 
 ---
@@ -41,7 +41,7 @@ StoryOS 是一个面向小说与长篇故事创作的开源桌面应用。它以
 
 - 在全局、项目或章节上下文中与 AI 对话
 - 生成、续写、改写和编辑章节正文
-- 展示流式回复、工具调用过程与任务进度
+- 展示助手完整回复、工具调用过程与任务进度
 - 对高影响操作提供预览和审批状态
 
 ### 🤖 可扩展的 Agent 工作流
@@ -124,9 +124,11 @@ npm run make
 
 ## 数据与隐私
 
-StoryOS 默认将项目内容、对话记录和相关运行数据保存在本地。
+StoryOS 默认将项目内容、对话记录和相关运行数据保存在本地。完整说明见 [PRIVACY.md](PRIVACY.md)。
 
 当你主动使用 AI 功能时，为完成请求所需的内容会发送给你配置的模型服务。请妥善保管 API Key，并在使用前了解相应服务商的数据处理与隐私政策。对于重要稿件，建议定期备份项目目录，或从书架导出 StoryOS 完整备份；外部稿件格式不保留修订历史。
+
+安全漏洞请按 [SECURITY.md](SECURITY.md) 私密报告。Windows 正式发布的签名规则见 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)。安装包发布后会放在 [Releases](https://github.com/ITDanZF/StoryOS/releases)。
 
 ## 项目状态
 
@@ -151,14 +153,16 @@ StoryOS 目前处于持续开发阶段：
 
 ## 参与开发
 
-StoryOS 仍处于早期阶段，代码贡献、问题反馈和产品建议都很有价值。
+StoryOS 仍处于早期阶段，代码贡献、问题反馈和产品建议都很有价值。流程、检查命令和行为准则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 1. Fork 本仓库并创建功能分支。
-2. 完成修改并运行 `npm run check`。
+2. 完成修改并运行与改动范围匹配的检查（跨层改动使用 `npm run check`）。
 3. 提交 Pull Request，说明修改动机、实现方式和验证结果。
 
 如果你暂时不准备贡献代码，也欢迎为项目点一个 Star，帮助更多创作者发现 StoryOS。
 
 ## License
 
-StoryOS 基于 MIT License 开源。
+StoryOS 基于 [MIT License](LICENSE) 开源。版权所有 (c) 2026 jinyuhe。
+
+再分发时请保留 `LICENSE`，以及 `NOTICE` 与 `assets/licenses/` 中的第三方声明。变更记录见 [CHANGELOG.md](CHANGELOG.md)。
