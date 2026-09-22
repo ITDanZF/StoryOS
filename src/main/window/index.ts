@@ -15,6 +15,7 @@ export default class AppWindowManager {
   private defaultOptions: WindowManagerOptions = { id: this.MainId };
 
   constructor(options?: WindowManagerOptions) {
+    const isDarwin = process.platform === "darwin";
     this.defaultOptions = {
       width: 1440,
       height: 900,
@@ -22,7 +23,6 @@ export default class AppWindowManager {
       minHeight: 560,
       show: false, // ready-to-show 再显示，防白屏
       autoHideMenuBar: true, // Windows/Linux 隐藏菜单栏
-      frame: false,
       hasShadow: true,
       backgroundColor: "#f7f7f5",
       webPreferences: {
@@ -31,6 +31,12 @@ export default class AppWindowManager {
         nodeIntegration: false,
         spellcheck: true,
       },
+      ...(isDarwin
+        ? {
+            titleBarStyle: "hidden",
+            trafficLightPosition: { x: 16, y: 10 },
+          }
+        : { frame: false }),
       ...options,
     };
   }

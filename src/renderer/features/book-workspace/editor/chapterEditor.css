@@ -7,14 +7,16 @@
 }
 
 .chapter-rich-text {
+  --chapter-ink: #1c1917;
+  --chapter-ink-strong: #120f0d;
   min-height: 650px;
   padding: var(--chapter-page-margin-top, 72px)
     var(--chapter-page-margin-right, 72px)
     var(--chapter-page-margin-bottom, 72px)
     var(--chapter-page-margin-left, 72px);
   outline: none;
-  color: #292724;
-  caret-color: #7c3aed;
+  color: var(--chapter-ink);
+  caret-color: var(--app-accent-foreground);
   font-family: var(--chapter-body-font-family,
     "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC",
     STSong, SimSun, "Times New Roman", serif);
@@ -26,6 +28,11 @@
   text-rendering: optimizeLegibility;
 }
 
+:root[data-appearance="dark"] .chapter-rich-text {
+  --chapter-ink: #f4f0e6;
+  --chapter-ink-strong: #fbf8f1;
+}
+
 .chapter-rich-text p {
   margin: 0 0 0.75em;
   text-indent: 2em;
@@ -33,7 +40,7 @@
 
 .chapter-rich-text h2,
 .chapter-rich-text h3 {
-  color: #211f1c;
+  color: var(--chapter-ink-strong);
   font-family: "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei",
     sans-serif;
   letter-spacing: 0.025em;
@@ -59,11 +66,11 @@
 
 .chapter-rich-text blockquote {
   margin: 1.35em 0;
-  border-left: 3px solid #a78bfa;
+  border-left: 3px solid var(--app-accent-border);
   border-radius: 0 6px 6px 0;
-  background: #faf9ff;
+  background: var(--app-accent);
   padding: 0.75em 1.2em;
-  color: #57534e;
+  color: var(--app-text-secondary);
 }
 
 .chapter-rich-text blockquote p {
@@ -96,30 +103,30 @@
 }
 
 .chapter-rich-text s {
-  color: #78716c;
+  color: var(--app-muted-foreground);
 }
 
 .chapter-rich-text a {
-  color: #6d28d9;
+  color: var(--app-accent-foreground);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .chapter-rich-text .chapter-find-match {
   border-radius: 2px;
-  background: #fef3c7;
-  box-shadow: 0 0 0 1px rgb(245 158 11 / 18%);
+  background: var(--app-warning-surface);
+  box-shadow: 0 0 0 1px var(--app-warning-border);
 }
 
 .chapter-rich-text .chapter-find-match-active {
-  background: #fbbf24;
-  box-shadow: 0 0 0 1px rgb(217 119 6 / 35%);
+  background: var(--app-warning-border);
+  box-shadow: 0 0 0 1px var(--app-warning-text);
 }
 
 .chapter-rich-text p.is-editor-empty:first-child::before {
   float: left;
   height: 0;
-  color: #a8a29e;
+  color: var(--app-text-subtle);
   content: attr(data-placeholder);
   pointer-events: none;
 }
@@ -132,7 +139,7 @@
 }
 
 .chapter-rich-text ::selection {
-  background: #ede9fe;
+  background: color-mix(in srgb, var(--app-accent-foreground) 22%, transparent);
 }
 
 .book-pagination-measure-host {

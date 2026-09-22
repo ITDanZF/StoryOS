@@ -1,4 +1,14 @@
-import type { WindowDesktopApi } from "../../../shared/window/contracts.ts";
+import type {
+  WindowDesktopApi,
+  WindowPlatform,
+} from "../../../shared/window/contracts.ts";
+
+const previewPlatform: WindowPlatform = /Mac/i.test(navigator.platform) ||
+    /Mac OS X/i.test(navigator.userAgent)
+  ? "darwin"
+  : /Win/i.test(navigator.userAgent)
+    ? "win32"
+    : "linux";
 
 const previewEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
 
@@ -10,6 +20,7 @@ if (previewEnabled && !window.storyOSWindow) {
     { name: "旧稿.txt", extension: "txt", size: 142000 },
   ];
   const api: WindowDesktopApi = {
+    platform: previewPlatform,
     getState: async () => ({ maximized: false, fullScreen: false }),
     pickDirectory: async () => "/preview/Documents",
     pickFile: async () => "/preview/Documents/完整备份.storyos-book",

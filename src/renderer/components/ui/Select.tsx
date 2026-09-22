@@ -45,7 +45,7 @@ export default function Select({
     trigger = useRef<HTMLButtonElement>(null),
     popup = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false),
-    [position, setPosition] = useState({ left: 0, top: 0, minWidth: 160 });
+    [position, setPosition] = useState({ left: 0, top: 0, minWidth: 0 });
   const selected = Math.max(
     0,
     options.findIndex((option) => option.value === value),
@@ -64,11 +64,11 @@ export default function Select({
     const update = () => {
       const anchor = trigger.current.getBoundingClientRect(),
         height = element.offsetHeight;
-      const width = Math.max(180, anchor.width);
+      const width = Math.max(anchor.width, element.offsetWidth);
       setPosition({
         left: Math.max(
           12,
-          Math.min(anchor.right - width, innerWidth - width - 12),
+          Math.min(anchor.left, innerWidth - width - 12),
         ),
         top: Math.max(
           12,
