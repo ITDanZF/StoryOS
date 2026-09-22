@@ -15,6 +15,17 @@ const packagedRuntimeRoots = [
     '/node_modules/better-sqlite3',
     '/node_modules/bindings',
     '/node_modules/file-uri-to-path',
+    '/node_modules/@lancedb',
+    '/node_modules/@lancedb/lancedb',
+    '/node_modules/@lancedb/lancedb-win32-x64-msvc',
+    '/node_modules/@lancedb/lancedb-darwin-arm64',
+    '/node_modules/@opentelemetry',
+    '/node_modules/@opentelemetry/api',
+    '/node_modules/reflect-metadata',
+    '/node_modules/apache-arrow',
+    '/node_modules/tslib',
+    '/node_modules/flatbuffers',
+    '/node_modules/json-bignum',
 ];
 
 const config: ForgeConfig = {

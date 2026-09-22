@@ -79,6 +79,8 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@lancedb/lancedb": "0.39.0",
+    "apache-arrow": "18.1.0",
     "@langchain/core": "^1.2.3",
     "@langchain/langgraph": "^1.4.8",
     "@langchain/langgraph-checkpoint-sqlite": "^1.0.3",
@@ -114,5 +116,9 @@
     "three": "0.185.1",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
+  },
+  "optionalDependencies": {
+    "@lancedb/lancedb-darwin-arm64": "0.39.0",
+    "@lancedb/lancedb-win32-x64-msvc": "0.39.0"
   }
 }
