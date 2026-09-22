@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  type RefObject,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS,
@@ -31,11 +26,10 @@ type Input = {
   activeVolumeTitle: string;
   activeChapterPageNumber: number | null;
   livePagination: LiveChapterPagination | null;
+  activeChapterId: string | null;
   editorBridgeRef: RefObject<ChapterEditorBridge | null>;
   editorContextRef: RefObject<ChapterEditorLiveContext | null>;
-  assistantContextEnabled: boolean;
-  setAssistantDraft: Dispatch<SetStateAction<string>>;
-  setAssistantVisible: Dispatch<SetStateAction<boolean>>;
+  setAssistantVisible: (visible: boolean) => void;
 };
 /** Adapts existing conversation APIs to this workspace; does not own editor content. */
 export default function useBookConversations({
@@ -47,12 +41,13 @@ export default function useBookConversations({
   activeVolumeTitle,
   activeChapterPageNumber,
   livePagination,
+  activeChapterId,
   editorBridgeRef,
   editorContextRef,
-  assistantContextEnabled,
-  setAssistantDraft,
   setAssistantVisible,
 }: Input) {
+  const [assistantDraft, setAssistantDraft] = useState("");
+  const [assistantContextEnabled, setAssistantContextEnabled] = useState(true);
   const {
     state,
     switchProject,
@@ -133,6 +128,10 @@ export default function useBookConversations({
     state.threads,
     switchThread,
   ]);
+  useEffect(() => {
+    setAssistantContextEnabled(true);
+    editorContextRef.current = null;
+  }, [activeChapterId, editorContextRef]);
 
   const scope = { kind: "project", projectId } as const;
   const ensureProjectConversation = async () => {
@@ -244,6 +243,10 @@ export default function useBookConversations({
   };
 
   return {
+    assistantDraft,
+    setAssistantDraft,
+    assistantContextEnabled,
+    setAssistantContextEnabled,
     projectConversationActive,
     projectConversationSnapshot,
     runningThreadIds,

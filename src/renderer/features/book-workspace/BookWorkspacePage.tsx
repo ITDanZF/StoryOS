@@ -1,12 +1,11 @@
 import useBookConversations from "./useBookConversations.ts";
 import { Toast } from "../../components/ui/Notice.tsx";
-import { hasOpenDialog, isEditableTarget } from "../../lib/keyboard.ts";
 import useBookNavigation from "./useBookNavigation.ts";
 import useBookWorkspaceLayout from "./useBookWorkspaceLayout.ts";
 import BookWorkspaceHeader from "./components/BookWorkspaceHeader.tsx";
 import { PageSurface } from "../../components/layout/PageSurface.tsx";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useBlocker, useParams } from "react-router-dom";
+import { useMemo, useRef } from "react";
+import { useParams } from "react-router-dom";
 import { cn } from "../../../lib/utils.ts";
 import "../../components/motion/motion.css";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
@@ -20,9 +19,8 @@ import {
   createBookChapterGroups,
   findBookChapterLocation,
   flattenBookChapterGroups,
+  formatBookVolumeTitle,
   formatChineseOrdinal,
-  neighborChapterIds,
-  resolveDisplayedChapter,
 } from "./bookWorkspaceModel.ts";
 import useBookWorkspace from "./useBookWorkspace.ts";
 import type {
@@ -32,6 +30,8 @@ import type {
 import useBookEditorToolHandler from "./ai/useBookEditorToolHandler.ts";
 import useBookGenerationEvents from "./ai/useBookGenerationEvents.ts";
 import useBookMutationSync from "./ai/useBookMutationSync.ts";
+import useChapterReadingSession from "./useChapterReadingSession.ts";
+import useFlushEditorOnLeave from "./useFlushEditorOnLeave.ts";
 
 export default function BookWorkspacePage() {
   const { projectId } = useParams();
@@ -82,25 +82,12 @@ export default function BookWorkspacePage() {
     assistantFocused,
     setAssistantFocused,
   } = useBookWorkspaceLayout();
-  const [assistantDraft, setAssistantDraft] = useState("");
-  const [assistantContextEnabled, setAssistantContextEnabled] = useState(true);
   // The live editor context is only read when a turn is sent. Keeping it in a
   // ref prevents caret moves and editor updates from re-rendering the entire
   // workspace, including the outline and assistant panel.
   const editorContextRef = useRef<ChapterEditorLiveContext | null>(null);
   const editorBridgeRef = useRef<ChapterEditorBridge | null>(null);
-  const settingsBlocker = useBlocker(
-    ({ nextLocation }) =>
-      Boolean(editorBridgeRef.current) &&
-      ["/settings", "/developer"].includes(nextLocation.pathname),
-  );
-  useEffect(() => {
-    if (settingsBlocker.state !== "blocked") return;
-    void editorBridgeRef.current
-      .flushPending()
-      .then(() => settingsBlocker.proceed())
-      .catch(() => settingsBlocker.reset()); // The chapter save hook displays the persistence error.
-  }, [settingsBlocker]);
+  useFlushEditorOnLeave(editorBridgeRef);
   const readyWorkspace = workspace?.state === "ready" ? workspace : null;
   const chapterGroups = useMemo(
     () =>
@@ -115,130 +102,29 @@ export default function BookWorkspacePage() {
     activeChapterId,
   );
   const activeChapter = activeChapterLocation?.chapter ?? null;
-  const [heldChapterId, setHeldChapterId] = useState<string | null>(null);
-  const previousActiveChapterIdRef = useRef<string | null>(null);
-  const prefetchStartedRef = useRef(new Set<string>());
-  const chapterLoading = useRef<string | null>(null);
-  const loadedContentRevision = useRef(new Map<string, string | null>());
-  useEffect(() => {
-    prefetchStartedRef.current = new Set();
-    loadedContentRevision.current = new Map();
-    setHeldChapterId(null);
-  }, [projectId]);
-  useEffect(() => {
-    const previous = previousActiveChapterIdRef.current;
-    previousActiveChapterIdRef.current = activeChapterId;
-    if (previous && previous !== activeChapterId) {
-      void editorBridgeRef.current?.flushPending().catch((): void => undefined);
-    }
-  }, [activeChapterId]);
-  useEffect(() => {
-    if (!activeChapterId) {
-      setHeldChapterId(null);
-      return;
-    }
-    if (activeChapter?.contentLoaded) setHeldChapterId(activeChapter.id);
-  }, [activeChapterId, activeChapter?.id, activeChapter?.contentLoaded]);
-  const heldChapter =
-    heldChapterId && readyWorkspace
-      ? readyWorkspace.chapters.find(
-          (chapter) => chapter.id === heldChapterId && chapter.contentLoaded,
-        ) ?? null
-      : null;
-  const displayedChapter = resolveDisplayedChapter(activeChapter, heldChapter);
-  const displayedLocation =
-    displayedChapter?.id === activeChapterId
-      ? activeChapterLocation
-      : findBookChapterLocation(chapterGroups, displayedChapter?.id ?? null);
-  useEffect(() => {
-    if (!activeChapter) return;
-    const loadedRevision = loadedContentRevision.current.get(activeChapter.id);
-    if (
-      activeChapter.contentLoaded &&
-      loadedRevision === activeChapter.currentRevisionId
-    ) return;
-    const loadKey = `${activeChapter.id}:${activeChapter.currentRevisionId ?? "none"}`;
-    if (chapterLoading.current === loadKey) return;
-    chapterLoading.current = loadKey;
-    void loadChapter(activeChapter.id)
-      .then((chapter) => {
-        loadedContentRevision.current.set(chapter.id, chapter.currentRevisionId);
-      })
-      .catch((): void => undefined)
-      .finally(() => {
-        if (chapterLoading.current === loadKey) chapterLoading.current = null;
-      });
-  }, [
-    activeChapter?.id,
-    activeChapter?.currentRevisionId,
-    activeChapter?.contentLoaded,
-    loadChapter,
-  ]);
-  useEffect(() => {
-    if (!readyWorkspace || !activeChapterId) return;
-    const neighborIds = neighborChapterIds(
-      flattenBookChapterGroups(chapterGroups).map((chapter) => chapter.id),
+  const { displayedChapter, displayedLocation, chapterContentPending } =
+    useChapterReadingSession({
+      projectId,
+      workspace,
       activeChapterId,
-    );
-    for (const chapterId of neighborIds) {
-      const chapter = readyWorkspace.chapters.find((item) => item.id === chapterId);
-      if (!chapter || chapter.contentLoaded) continue;
-      if (prefetchStartedRef.current.has(chapterId)) continue;
-      prefetchStartedRef.current.add(chapterId);
-      void prefetchChapter(chapterId).catch(() => {
-        prefetchStartedRef.current.delete(chapterId);
-      });
-    }
-  }, [activeChapterId, chapterGroups, prefetchChapter, readyWorkspace]);
-  const activeVolume = activeChapterLocation?.group.volume ?? null;
+      chapterGroups,
+      loadChapter,
+      prefetchChapter,
+      showBookOverview,
+      editorBridgeRef,
+    });
   const chapterNumber = activeChapterLocation?.chapterNumber ?? null;
-  const activeVolumeNumber = activeVolume
-    ? chapterGroups
-        .filter((group) => group.kind === "volume")
-        .findIndex((group) => group.volume?.id === activeVolume.id) + 1
-    : null;
-  const activeVolumeTitle =
-    activeVolume && activeVolumeNumber !== null
-      ? activeVolume.title === `第${activeVolumeNumber}卷`
-        ? `第${activeVolumeNumber}卷`
-        : `第${activeVolumeNumber}卷 · ${activeVolume.title}`
-      : "未分卷";
+  const activeVolumeTitle = formatBookVolumeTitle(
+    chapterGroups,
+    activeChapterLocation,
+  );
   const editorChapterNumber = displayedLocation?.chapterNumber ?? null;
-  const editorVolume = displayedLocation?.group.volume ?? null;
-  const editorVolumeNumber = editorVolume
-    ? chapterGroups
-        .filter((group) => group.kind === "volume")
-        .findIndex((group) => group.volume?.id === editorVolume.id) + 1
-    : null;
   const editorVolumeTitle =
     displayedChapter?.id === activeChapter?.id
       ? activeVolumeTitle
-      : editorVolume && editorVolumeNumber !== null
-        ? editorVolume.title === `第${editorVolumeNumber}卷`
-          ? `第${editorVolumeNumber}卷`
-          : `第${editorVolumeNumber}卷 · ${editorVolume.title}`
-        : "未分卷";
+      : formatBookVolumeTitle(chapterGroups, displayedLocation);
 
   useBookGenerationEvents(projectId, revealChapter);
-
-  useEffect(() => {
-    if (!workspace) return;
-    if (workspace.state === "uninitialized") {
-      if (activeChapterId !== null) showBookOverview();
-      return;
-    }
-    if (
-      activeChapterId &&
-      workspace.chapters.some((chapter) => chapter.id === activeChapterId)
-    )
-      return;
-    if (activeChapterId !== null) showBookOverview();
-  }, [activeChapterId, workspace]);
-
-  useEffect(() => {
-    setAssistantContextEnabled(true);
-    editorContextRef.current = null;
-  }, [activeChapterId]);
 
   useBookEditorToolHandler({
     projectId,
@@ -261,38 +147,11 @@ export default function BookWorkspacePage() {
     onRevealChapter: revealChapter,
   });
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.isComposing ||
-        hasOpenDialog() ||
-        isEditableTarget(event.target)
-      )
-        return;
-      if (!(event.ctrlKey || event.metaKey)) return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target.closest("input, textarea, select, [contenteditable='true']"))
-      )
-        return;
-      if (event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        setCatalogVisible((value) => !value);
-      }
-      if (event.key.toLowerCase() === "j") {
-        event.preventDefault();
-        setAssistantVisible((value) => !value);
-        setAssistantFocused(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   const {
+    assistantDraft,
+    setAssistantDraft,
+    assistantContextEnabled,
+    setAssistantContextEnabled,
     projectConversationActive,
     projectConversationSnapshot,
     runningThreadIds,
@@ -310,11 +169,10 @@ export default function BookWorkspacePage() {
     chapterNumber,
     activeVolumeTitle,
     activeChapterPageNumber,
+    livePagination,
+    activeChapterId,
     editorBridgeRef,
     editorContextRef,
-    assistantContextEnabled,
-    livePagination,
-    setAssistantDraft,
     setAssistantVisible,
   });
 
@@ -446,7 +304,7 @@ export default function BookWorkspacePage() {
           />
         )}
 
-        {!assistantFocused && activeChapter && !displayedChapter && (
+        {!assistantFocused && chapterContentPending && (
           <div
             role="status"
             className="motion-reveal grid flex-1 place-items-center text-sm text-muted-foreground"

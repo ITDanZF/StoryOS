@@ -1,5 +1,6 @@
-import { useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import useResizablePanel from "../../components/layout/useResizablePanel.ts";
+import { hasOpenDialog, isEditableTarget } from "../../lib/keyboard.ts";
 
 export default function useBookWorkspaceLayout() {
   const [container, containerRef] = useState<HTMLDivElement | null>(null);
@@ -31,6 +32,36 @@ export default function useBookWorkspaceLayout() {
     observer.observe(element);
     return () => observer.disconnect();
   }, [container]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        hasOpenDialog() ||
+        isEditableTarget(event.target)
+      )
+        return;
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest("input, textarea, select, [contenteditable='true']"))
+      )
+        return;
+      if (event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        setCatalogVisible((value) => !value);
+      }
+      if (event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        setAssistantVisible((value) => !value);
+        setAssistantFocused(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   return {
     containerRef,
     catalog,
