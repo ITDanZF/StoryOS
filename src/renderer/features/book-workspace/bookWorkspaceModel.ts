@@ -123,6 +123,22 @@ export function findBookChapterLocation(
   return null;
 }
 
+export function formatBookVolumeTitle(
+  groups: readonly BookChapterGroup[],
+  location: BookChapterLocation | null,
+): string {
+  const volume = location?.group.volume ?? null;
+  if (!volume) return "未分卷";
+  const volumeNumber =
+    groups
+      .filter((group) => group.kind === "volume")
+      .findIndex((group) => group.volume?.id === volume.id) + 1;
+  const numberedTitle = `第${volumeNumber}卷`;
+  return volume.title === numberedTitle
+    ? numberedTitle
+    : `${numberedTitle} · ${volume.title}`;
+}
+
 const STATUS_LABELS = {
   outline: "大纲",
   draft: "草稿",

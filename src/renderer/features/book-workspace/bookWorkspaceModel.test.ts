@@ -8,6 +8,7 @@ import {
   createBookChapterGroups,
   findBookChapterLocation,
   flattenBookChapterGroups,
+  formatBookVolumeTitle,
   neighborChapterIds,
   resolveDisplayedChapter,
   selectContinueChapter,
@@ -103,6 +104,51 @@ describe("book workspace chapter groups", () => {
       [],
       [chapter("orphan", "missing-volume", 0)],
     )).toThrow("references unknown volume");
+  });
+});
+
+describe("volume titles", () => {
+  it("labels a missing or unassigned chapter as 未分卷", () => {
+    const groups = createBookChapterGroups(
+      [volume("volume-1", "正文", 0)],
+      [chapter("loose", null, 0)],
+    );
+
+    expect(formatBookVolumeTitle(groups, null)).toBe("未分卷");
+    expect(
+      formatBookVolumeTitle(groups, findBookChapterLocation(groups, "loose")),
+    ).toBe("未分卷");
+  });
+
+  it("keeps an already numbered title and appends any other title", () => {
+    const groups = createBookChapterGroups(
+      [volume("volume-1", "第1卷", 0), volume("volume-2", "远行", 1)],
+      [
+        chapter("first", "volume-1", 0),
+        chapter("second", "volume-2", 0),
+      ],
+    );
+
+    expect(
+      formatBookVolumeTitle(groups, findBookChapterLocation(groups, "first")),
+    ).toBe("第1卷");
+    expect(
+      formatBookVolumeTitle(groups, findBookChapterLocation(groups, "second")),
+    ).toBe("第2卷 · 远行");
+  });
+
+  it("numbers volumes only among volume groups", () => {
+    const groups = createBookChapterGroups(
+      [volume("volume-1", "甲", 0), volume("volume-2", "乙", 1)],
+      [
+        chapter("loose", null, 0),
+        chapter("second", "volume-2", 0),
+      ],
+    );
+
+    expect(
+      formatBookVolumeTitle(groups, findBookChapterLocation(groups, "second")),
+    ).toBe("第2卷 · 乙");
   });
 });
 
