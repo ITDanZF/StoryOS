@@ -1,28 +1,25 @@
-import OpenAICompatibleEmbeddingGateway from "./OpenAICompatibleEmbeddingGateway.ts";
+import { createAliyunTextEmbeddingClient } from "./aliyun/index.ts";
 import type {
-  TextEmbeddingConfiguration,
-  TextEmbeddingGateway,
-} from "./TextEmbeddingGateway.ts";
+  AliyunTextEmbeddingClient,
+  AliyunTextEmbeddingOptions,
+} from "./aliyun/index.ts";
 
 export default class LiveEmbeddingConnection {
-  private gateway: TextEmbeddingGateway | null;
+  private client: AliyunTextEmbeddingClient | null;
 
-  constructor(configuration: TextEmbeddingConfiguration | null) {
-    this.gateway = configuration
-      ? new OpenAICompatibleEmbeddingGateway(configuration)
-      : null;
+  constructor(configuration: AliyunTextEmbeddingOptions | null) {
+    this.client = configuration ? createAliyunTextEmbeddingClient(configuration) : null;
   }
 
-  getSnapshot(): TextEmbeddingGateway | null {
-    return this.gateway;
+  getTextEmbeddingClient(): AliyunTextEmbeddingClient {
+    if (!this.client) throw new Error("文本向量尚未配置。");
+    return this.client;
   }
 
-  prepareUpdate(configuration: TextEmbeddingConfiguration | null): () => void {
-    const next = configuration
-      ? new OpenAICompatibleEmbeddingGateway(configuration)
-      : null;
+  prepareUpdate(configuration: AliyunTextEmbeddingOptions | null): () => void {
+    const next = configuration ? createAliyunTextEmbeddingClient(configuration) : null;
     return () => {
-      this.gateway = next;
+      this.client = next;
     };
   }
 }

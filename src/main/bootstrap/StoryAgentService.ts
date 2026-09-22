@@ -14,13 +14,21 @@ import {
 import BookReaderApplication from "../story/application/books/BookReaderApplication.ts";
 import type { ConversationApplicationEventHandler } from "../story/application/conversations/conversationContracts.ts";
 import WorkSpace from "../story/workspace/index.ts";
-import Configuration, { type InfoType } from "../story/config/index.ts";
+import Configuration, {
+  sameAliyunEmbeddingAddress,
+  type InfoType,
+  type StoredAgentConfiguration,
+} from "../story/config/index.ts";
 import type BookTransferService from "../story/application/transfers/BookTransferService.ts";
 import { withApplicationEnvironment } from "../agent/environment/AgentEnvironment.ts";
 import type { ApplicationHostOptions } from "./ApplicationHostOptions.ts";
 import ApplicationRuntimeFactory from "./ApplicationRuntimeFactory.ts";
+import {
+  createAliyunTextEmbeddingClient,
+  type AliyunTextEmbeddingClient,
+  type AliyunTextEmbeddingOptions,
+} from "../agent/embedding/aliyun/index.ts";
 import LiveEmbeddingConnection from "../agent/embedding/LiveEmbeddingConnection.ts";
-import OpenAICompatibleEmbeddingGateway from "../agent/embedding/OpenAICompatibleEmbeddingGateway.ts";
 export type {
   AgentConfigurationRequest,
   AgentServiceStatus,
@@ -48,34 +56,34 @@ export default class StoryAgentService {
   private transfers: BookTransferService | null = null;
   private embeddingConnection = new LiveEmbeddingConnection(null);
 
-  private embeddingConfiguration(input: EmbeddingConfigurationInput) {
-    return input.enabled
-      ? {
-          modelName: input.modelName,
-          endpointUrl: input.endpointUrl,
-          apiKey: input.apiKey,
-          ...(input.dimensions !== undefined
-            ? { dimensions: input.dimensions }
-            : {}),
-        }
-      : null;
+  private embeddingConfiguration(
+    input: StoredAgentConfiguration["embedding"],
+  ): AliyunTextEmbeddingOptions | null {
+    if (!input.enabled) return null;
+    return {
+      apiKey: input.apiKey,
+      baseUrl: input.baseUrl,
+      model: input.modelName,
+      dimensions: input.dimensions,
+    };
+  }
+
+  getTextEmbeddingClient(): AliyunTextEmbeddingClient {
+    return this.embeddingConnection.getTextEmbeddingClient();
   }
 
   async testEmbedding(input: EmbeddingConfigurationInput): Promise<boolean> {
     const previous = this.configuration.loadConfig()?.embedding;
     const resolved =
-      input.enabled &&
       !input.apiKey.trim() &&
       previous?.enabled &&
-      previous.endpointUrl === input.endpointUrl
+      sameAliyunEmbeddingAddress(previous, input)
         ? { ...input, apiKey: previous.apiKey }
         : input;
     const configuration = this.embeddingConfiguration(resolved);
-    if (!configuration) throw new Error("请先启用 Text Embedding。");
-    await new OpenAICompatibleEmbeddingGateway(configuration).embedQuery(
-      "StoryOS connection test",
-    );
-    return true;
+    if (!configuration) throw new Error("请填写阿里云文本向量配置。");
+    createAliyunTextEmbeddingClient(configuration);
+    throw new Error("文本向量接口已就绪，当前不发起调用。");
   }
 
   requireBookReader(): BookReaderApplication {
@@ -169,12 +177,18 @@ export default class StoryAgentService {
   async initialize(): Promise<AgentServiceStatus> {
     await this.workspace.createHomeRoot();
     const config = this.configuration.loadConfig();
-    this.configured = config !== null;
-    if (config && !this.controller) {
+    this.configured = config?.embedding.enabled === true;
+    if (config?.embedding.enabled === true && !this.controller) {
       await this.initializeRuntime(
         createModelConnectionConfiguration(config.chat),
       );
-      this.activeConfiguration = config;
+      this.activeConfiguration = {
+        schemaVersion: config.schemaVersion,
+        chat: config.chat,
+        embedding: config.embedding,
+        workspace: config.workspace,
+        logLevel: config.logLevel,
+      };
       this.embeddingConnection = new LiveEmbeddingConnection(
         this.embeddingConfiguration(config.embedding),
       );
@@ -231,16 +245,34 @@ export default class StoryAgentService {
     }
 
     const embeddingInput = request.embedding;
-    if (!embeddingInput || typeof embeddingInput.enabled !== "boolean") {
-      throw new Error("请选择 Text Embedding 配置状态。");
-    }
-    const embedding =
-      embeddingInput.enabled &&
+    if (!embeddingInput?.enabled) throw new Error("请填写阿里云文本向量配置。");
+    const previousEmbedding = previous?.embedding;
+    const reusedKey =
       !embeddingInput.apiKey.trim() &&
-      previous?.embedding.enabled &&
-      previous.embedding.endpointUrl === embeddingInput.endpointUrl
-        ? { ...embeddingInput, apiKey: previous.embedding.apiKey }
-        : embeddingInput;
+      previousEmbedding?.enabled &&
+      sameAliyunEmbeddingAddress(previousEmbedding, embeddingInput)
+        ? previousEmbedding.apiKey
+        : embeddingInput.apiKey.trim();
+    const embeddingBaseUrl = embeddingInput.baseUrl.trim();
+    let parsedEmbeddingBaseUrl: URL;
+    try {
+      parsedEmbeddingBaseUrl = new URL(embeddingBaseUrl);
+    } catch {
+      throw new Error("请填写文本向量 Base URL。");
+    }
+    if (
+      parsedEmbeddingBaseUrl.protocol !== "https:" &&
+      parsedEmbeddingBaseUrl.protocol !== "http:"
+    ) {
+      throw new Error("文本向量地址必须使用 HTTP 或 HTTPS。");
+    }
+    const embedding: EmbeddingConfigurationInput = {
+      enabled: true,
+      modelName: embeddingInput.modelName,
+      apiKey: reusedKey,
+      baseUrl: embeddingBaseUrl,
+      dimensions: embeddingInput.dimensions,
+    };
     const config: InfoType = {
       schemaVersion: 2,
       chat: { provider: request.provider, modelName, baseUrl, apiKey },
@@ -294,10 +326,8 @@ export default class StoryAgentService {
             enabled: true,
             configured: true,
             modelName: config.embedding.modelName,
-            endpointUrl: config.embedding.endpointUrl,
-            ...(config.embedding.dimensions !== undefined
-              ? { dimensions: config.embedding.dimensions }
-              : {}),
+            baseUrl: config.embedding.baseUrl,
+            dimensions: config.embedding.dimensions,
           }
         : { enabled: false, configured: false },
     });

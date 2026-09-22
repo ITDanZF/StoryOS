@@ -7,7 +7,7 @@ import type {
   InstanceSnapshot,
   StoryInstanceDto,
 } from "../../../shared/contracts/instances/contracts.ts";
-import Configuration from "../config/index.ts";
+import Configuration, { sameAliyunEmbeddingAddress } from "../config/index.ts";
 import InstanceRegistry from "./InstanceRegistry.ts";
 import {
   normalizeInstancePath,
@@ -54,10 +54,8 @@ export default class InstanceApplication {
         ? Object.freeze({
             enabled: true,
             modelName: config.embedding.modelName,
-            endpointUrl: config.embedding.endpointUrl,
-            ...(config.embedding.dimensions !== undefined
-              ? { dimensions: config.embedding.dimensions }
-              : {}),
+            baseUrl: config.embedding.baseUrl,
+            dimensions: config.embedding.dimensions,
             apiKeyConfigured: true,
           })
         : Object.freeze({ enabled: false }),
@@ -82,10 +80,9 @@ export default class InstanceApplication {
         (canReuseChatKey ? previous.chat.apiKey : ""),
     };
     const embedding =
-      input.embedding.enabled &&
       !input.embedding.apiKey.trim() &&
       previous.embedding.enabled &&
-      previous.embedding.endpointUrl === input.embedding.endpointUrl
+      sameAliyunEmbeddingAddress(previous.embedding, input.embedding)
         ? { ...input.embedding, apiKey: previous.embedding.apiKey }
         : input.embedding;
     new Configuration(entry.rootPath).saveConfig({ ...input, chat, embedding });

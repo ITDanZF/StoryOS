@@ -1,9 +1,16 @@
 import { FolderOpen, Settings2, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import type { AgentConfigurationInput } from "../../../shared/contracts/settings/contracts.ts";
+import {
+  ALIYUN_EMBEDDING_DIMENSIONS,
+  ALIYUN_TEXT_EMBEDDING_MODEL,
+  DEFAULT_ALIYUN_EMBEDDING_DIMENSIONS,
+  type AgentConfigurationInput,
+  type AliyunEmbeddingDimensions,
+} from "../../../shared/contracts/settings/contracts.ts";
 import type { InstanceConfigurationDto, StoryInstanceDto } from "../../../shared/contracts/instances/contracts.ts";
 import AnimatedDialog from "../../components/motion/AnimatedDialog.tsx";
 import { Button } from "../../components/ui/Button.tsx";
+import EmbeddingConfigurationFields from "../model-configuration/EmbeddingConfigurationFields.tsx";
 import { FormField, Input } from "../../components/ui/Field.tsx";
 import Select from "../../components/ui/Select.tsx";
 
@@ -15,9 +22,7 @@ type Draft = {
   baseUrl: string;
   apiKey: string;
   chatKeyConfigured: boolean;
-  embeddingEnabled: boolean;
-  embeddingModel: string;
-  embeddingUrl: string;
+  embeddingBaseUrl: string;
   embeddingKey: string;
   embeddingKeyConfigured: boolean;
   dimensions: string;
@@ -43,12 +48,10 @@ export function createInstanceDraft(rootPath: string): Draft {
     baseUrl: "",
     apiKey: "",
     chatKeyConfigured: false,
-    embeddingEnabled: false,
-    embeddingModel: "",
-    embeddingUrl: "",
+    embeddingBaseUrl: "",
     embeddingKey: "",
     embeddingKeyConfigured: false,
-    dimensions: "",
+    dimensions: String(DEFAULT_ALIYUN_EMBEDDING_DIMENSIONS),
     defaultProjectsRoot: "",
     logLevel: "info",
   };
@@ -63,14 +66,12 @@ export function editInstanceDraft(instance: StoryInstanceDto, configuration: Ins
     baseUrl: configuration.chat.baseUrl,
     apiKey: "",
     chatKeyConfigured: configuration.chat.apiKeyConfigured,
-    embeddingEnabled: configuration.embedding.enabled,
-    embeddingModel: configuration.embedding.enabled ? configuration.embedding.modelName : "",
-    embeddingUrl: configuration.embedding.enabled ? configuration.embedding.endpointUrl : "",
+    embeddingBaseUrl: configuration.embedding.enabled ? configuration.embedding.baseUrl : "",
     embeddingKey: "",
     embeddingKeyConfigured: configuration.embedding.enabled && configuration.embedding.apiKeyConfigured,
-    dimensions: configuration.embedding.enabled && configuration.embedding.dimensions !== undefined
+    dimensions: configuration.embedding.enabled
       ? String(configuration.embedding.dimensions)
-      : "",
+      : String(DEFAULT_ALIYUN_EMBEDDING_DIMENSIONS),
     defaultProjectsRoot: configuration.workspace.defaultProjectsRoot,
     logLevel: configuration.logLevel,
   };
@@ -88,13 +89,12 @@ function makeConfiguration(draft: Draft, editing: boolean): AgentConfigurationIn
   if (!draft.modelName.trim()) throw new Error("请填写对话模型名称。");
   if (!editing && !draft.apiKey.trim()) throw new Error("请填写对话模型 API Key。");
   const baseUrl = requireHttpUrl(draft.baseUrl, "对话模型 URL");
-  if (draft.embeddingEnabled && (!draft.embeddingModel.trim() || !draft.embeddingUrl.trim()))
-    throw new Error("请填写完整的 Text Embedding 配置。");
-  if (draft.embeddingEnabled && !editing && !draft.embeddingKey.trim())
+  const embeddingBaseUrl = requireHttpUrl(draft.embeddingBaseUrl, "文本向量 Base URL");
+  if ((!editing || !draft.embeddingKeyConfigured) && !draft.embeddingKey.trim())
     throw new Error("请填写 Embedding API Key。");
-  const dimensions = draft.embeddingEnabled && draft.dimensions.trim() ? Number(draft.dimensions) : undefined;
-  if (dimensions !== undefined && (!Number.isInteger(dimensions) || dimensions <= 0))
-    throw new Error("维度必须为正整数。");
+  const dimensions = Number(draft.dimensions);
+  if (!(ALIYUN_EMBEDDING_DIMENSIONS as readonly number[]).includes(dimensions))
+    throw new Error("请选择支持的向量维度。");
   return {
     schemaVersion: 2,
     chat: {
@@ -103,15 +103,13 @@ function makeConfiguration(draft: Draft, editing: boolean): AgentConfigurationIn
       baseUrl,
       apiKey: draft.apiKey.trim(),
     },
-    embedding: draft.embeddingEnabled
-      ? {
-          enabled: true,
-          modelName: draft.embeddingModel.trim(),
-          endpointUrl: requireHttpUrl(draft.embeddingUrl, "Embedding URL"),
-          apiKey: draft.embeddingKey.trim(),
-          ...(dimensions !== undefined ? { dimensions } : {}),
-        }
-      : { enabled: false },
+    embedding: {
+      enabled: true,
+      modelName: ALIYUN_TEXT_EMBEDDING_MODEL,
+      apiKey: draft.embeddingKey.trim(),
+      baseUrl: embeddingBaseUrl,
+      dimensions: dimensions as AliyunEmbeddingDimensions,
+    },
     workspace: { defaultProjectsRoot: draft.defaultProjectsRoot.trim() },
     logLevel: draft.logLevel,
   };
@@ -173,13 +171,19 @@ export default function InstanceConfigurationDialog({ instance, initialDraft, on
           <FormField label="Base URL">{control => <Input {...control} required disabled={saving} type="url" value={draft.baseUrl} onChange={(event) => change({ baseUrl: event.target.value, apiKey: "", chatKeyConfigured: false })} />}</FormField>
           <FormField label={editing && draft.chatKeyConfigured ? "API Key（已保存）" : "API Key"} description={editing && draft.chatKeyConfigured ? "留空保持原密钥；更换服务商或地址后需重新填写。" : undefined}>{control => <Input {...control} required={!editing || !draft.chatKeyConfigured} disabled={saving} type="password" autoComplete="new-password" placeholder={editing && draft.chatKeyConfigured ? "留空保持原密钥" : "输入 API Key"} value={draft.apiKey} onChange={(event) => change({ apiKey: event.target.value })} />}</FormField>
 
-          <label className="col-span-full flex min-h-11 cursor-pointer items-center gap-3 border-t border-border pt-4 text-xs font-semibold text-text-secondary"><input type="checkbox" disabled={saving} checked={draft.embeddingEnabled} onChange={(event) => change({ embeddingEnabled: event.target.checked })} />启用 Text Embedding（可跳过）</label>
-          {draft.embeddingEnabled && <>
-            <FormField label="Embedding 模型">{control => <Input {...control} required disabled={saving} value={draft.embeddingModel} onChange={(event) => change({ embeddingModel: event.target.value })} />}</FormField>
-            <FormField label="完整 API URL">{control => <Input {...control} required disabled={saving} type="url" value={draft.embeddingUrl} onChange={(event) => change({ embeddingUrl: event.target.value, embeddingKey: "", embeddingKeyConfigured: false })} />}</FormField>
-            <FormField label={editing && draft.embeddingKeyConfigured ? "Embedding API Key（已保存）" : "Embedding API Key"}>{control => <Input {...control} required={!editing || !draft.embeddingKeyConfigured} disabled={saving} type="password" autoComplete="new-password" placeholder={editing && draft.embeddingKeyConfigured ? "留空保持原密钥" : "输入 API Key"} value={draft.embeddingKey} onChange={(event) => change({ embeddingKey: event.target.value })} />}</FormField>
-            <FormField label="维度（可选）">{control => <Input {...control} disabled={saving} type="number" min="1" step="1" value={draft.dimensions} onChange={(event) => change({ dimensions: event.target.value })} />}</FormField>
-          </>}
+          <EmbeddingConfigurationFields
+            baseUrl={draft.embeddingBaseUrl}
+            apiKey={draft.embeddingKey}
+            apiKeyLabel={editing && draft.embeddingKeyConfigured ? "API Key（已保存）" : "API Key"}
+            apiKeyPlaceholder={editing && draft.embeddingKeyConfigured ? "留空保持原密钥" : "输入 API Key"}
+            apiKeyDescription={editing && draft.embeddingKeyConfigured ? "留空保持原密钥。更换地址后需重新填写。" : undefined}
+            apiKeyRequired={!editing || !draft.embeddingKeyConfigured}
+            dimensions={draft.dimensions}
+            disabled={saving}
+            onBaseUrlChange={(value) => change({ embeddingBaseUrl: value, embeddingKey: "", embeddingKeyConfigured: false })}
+            onApiKeyChange={(value) => change({ embeddingKey: value })}
+            onDimensionsChange={(value) => change({ dimensions: value })}
+          />
         </div>
 
         {error && <p role="alert" className="mx-5 mb-3 rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-xs text-danger-text sm:mx-6">{error}</p>}

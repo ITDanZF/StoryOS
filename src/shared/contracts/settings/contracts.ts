@@ -14,15 +14,25 @@ export type ChatModelConfigurationInput = {
   readonly apiKey: string;
 };
 
-export type EmbeddingConfigurationInput =
-  | { readonly enabled: false }
-  | {
-      readonly enabled: true;
-      readonly modelName: string;
-      readonly endpointUrl: string;
-      readonly apiKey: string;
-      readonly dimensions?: number;
-    };
+export const ALIYUN_TEXT_EMBEDDING_MODEL = "text-embedding-v4" as const;
+
+export const ALIYUN_EMBEDDING_DIMENSIONS = [
+  64, 128, 256, 512, 768, 1024, 1536, 2048,
+] as const;
+
+export type AliyunEmbeddingDimensions = (typeof ALIYUN_EMBEDDING_DIMENSIONS)[number];
+
+export const DEFAULT_ALIYUN_EMBEDDING_DIMENSIONS: AliyunEmbeddingDimensions = 1024;
+
+export type AliyunEmbeddingConfigurationInput = {
+  readonly enabled: true;
+  readonly modelName: typeof ALIYUN_TEXT_EMBEDDING_MODEL;
+  readonly apiKey: string;
+  readonly baseUrl: string;
+  readonly dimensions: AliyunEmbeddingDimensions;
+};
+
+export type EmbeddingConfigurationInput = AliyunEmbeddingConfigurationInput;
 
 export type AgentConfigurationInput = {
   readonly schemaVersion: 2;
@@ -44,8 +54,8 @@ export type AgentServiceStatus = {
   readonly embedding: {
     readonly enabled: boolean;
     readonly configured: boolean;
-    readonly modelName?: string;
-    readonly endpointUrl?: string;
-    readonly dimensions?: number;
+    readonly modelName?: typeof ALIYUN_TEXT_EMBEDDING_MODEL;
+    readonly baseUrl?: string;
+    readonly dimensions?: AliyunEmbeddingDimensions;
   };
 };

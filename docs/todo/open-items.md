@@ -6,7 +6,9 @@
 
 - 书籍工作区性能阶段 2–5：`docs/todo/performance/`
 - 大纲模块：`docs/todo/outline-module-design-analysis.md`
-- 向量 RAG、专业资料、人物/大纲表：`docs/architecture/database-vnext/`
+- 阿里云 Text Embedding 接入：`docs/todo/aliyun-text-embedding.md`
+- 小说正文向量化：`docs/todo/novel-vectorization.md`
+- 向量 RAG、专业资料、人物/大纲表设计稿：`docs/architecture/database-vnext/`
 - 代码签名发布：`docs/release/signpath-code-signing-plan.md`
 
 ## 书架展示模型

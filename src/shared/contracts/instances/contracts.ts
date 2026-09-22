@@ -1,4 +1,8 @@
-import type { AgentConfigurationInput } from "../settings/contracts.ts";
+import {
+  ALIYUN_TEXT_EMBEDDING_MODEL,
+  type AgentConfigurationInput,
+  type AliyunEmbeddingDimensions,
+} from "../settings/contracts.ts";
 
 export type InstanceStatus = "ready" | "needs-setup" | "missing" | "invalid";
 
@@ -37,9 +41,9 @@ export type InstanceConfigurationDto = {
     | { readonly enabled: false }
     | {
         readonly enabled: true;
-        readonly modelName: string;
-        readonly endpointUrl: string;
-        readonly dimensions?: number;
+        readonly modelName: typeof ALIYUN_TEXT_EMBEDDING_MODEL;
+        readonly baseUrl: string;
+        readonly dimensions: AliyunEmbeddingDimensions;
         readonly apiKeyConfigured: boolean;
       };
   readonly workspace: { readonly defaultProjectsRoot: string };

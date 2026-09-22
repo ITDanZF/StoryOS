@@ -18,7 +18,7 @@ import {
   readInstanceMetadata,
 } from "./InstanceLayout.ts";
 import { InstanceError } from "./instanceErrors.ts";
-import Configuration from "../config/index.ts";
+import Configuration, { isCompleteConfiguration } from "../config/index.ts";
 
 type RegistryEntry = {
   readonly id: string;
@@ -299,7 +299,7 @@ export default class InstanceRegistry {
         status:
           metadata.instanceId !== entry.id
             ? "invalid"
-            : new Configuration(entry.rootPath).loadConfig()
+            : isCompleteConfiguration(new Configuration(entry.rootPath).loadConfig())
               ? "ready"
               : "needs-setup",
       });

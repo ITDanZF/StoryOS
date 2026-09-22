@@ -29,7 +29,13 @@ if (!window.storyOSInstances) {
           baseUrl: "https://api.openai.com/v1",
           apiKey: "preview-key",
         },
-        embedding: { enabled: false },
+        embedding: {
+          enabled: true,
+          modelName: "text-embedding-v4",
+          apiKey: "preview-key",
+          baseUrl: "https://ws-example.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+          dimensions: 1024,
+        },
         workspace: { defaultProjectsRoot: "" },
         logLevel: "info",
       },
@@ -64,9 +70,13 @@ if (!window.storyOSInstances) {
       return {
         ...configuration,
         chat: { ...configuration.chat, apiKeyConfigured: true },
-        embedding: configuration.embedding.enabled
-          ? { ...configuration.embedding, apiKeyConfigured: true }
-          : { enabled: false },
+        embedding: {
+          enabled: true,
+          modelName: configuration.embedding.modelName,
+          baseUrl: configuration.embedding.baseUrl,
+          dimensions: configuration.embedding.dimensions,
+          apiKeyConfigured: true,
+        },
       };
     },
     updateConfiguration: async (instanceId, configuration) => {

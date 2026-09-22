@@ -28,7 +28,13 @@ const original: InfoType = {
     baseUrl: "https://api.deepseek.com",
     apiKey: "original-test-key",
   },
-  embedding: { enabled: false },
+  embedding: {
+    enabled: true,
+    modelName: "text-embedding-v4",
+    apiKey: "embedding-secret",
+    baseUrl: "https://ws-example.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    dimensions: 1024,
+  },
   workspace: { defaultProjectsRoot: "" },
   logLevel: "debug",
 };
@@ -38,7 +44,13 @@ const request: AgentConfigurationRequest = {
   baseUrl: "https://api.deepseek.com",
   apiKey: "",
   workspacePath: "",
-  embedding: { enabled: false },
+  embedding: {
+    enabled: true,
+    modelName: "text-embedding-v4",
+    apiKey: "embedding-secret",
+    baseUrl: "https://ws-example.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    dimensions: 1024,
+  },
 };
 let directory: string;
 let environment: NodeJS.ProcessEnv;

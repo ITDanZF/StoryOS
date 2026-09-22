@@ -353,7 +353,13 @@ if (previewEnabled && !window.storyOSAgent) {
     baseUrl: "https://api.deepseek.com",
     workspacePath: "",
     restartRequired: false,
-    embedding: { enabled: false, configured: false },
+    embedding: {
+      enabled: true,
+      configured: true,
+      modelName: "text-embedding-v4",
+      baseUrl: "https://ws-example.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+      dimensions: 1024,
+    },
   };
   let previewStatus = initialStatus;
   const api: AgentDesktopApi = {
@@ -384,17 +390,13 @@ if (previewEnabled && !window.storyOSAgent) {
         baseUrl: request.baseUrl.trim(),
         workspacePath: request.workspacePath?.trim() ?? "",
         restartRequired: Boolean(request.workspacePath?.trim()),
-        embedding: request.embedding.enabled
-          ? {
-              enabled: true,
-              configured: true,
-              modelName: request.embedding.modelName,
-              endpointUrl: request.embedding.endpointUrl,
-              ...(request.embedding.dimensions !== undefined
-                ? { dimensions: request.embedding.dimensions }
-                : {}),
-            }
-          : { enabled: false, configured: false },
+        embedding: {
+          enabled: true,
+          configured: true,
+          modelName: request.embedding.modelName,
+          baseUrl: request.embedding.baseUrl.trim(),
+          dimensions: request.embedding.dimensions,
+        },
       };
       return { ...previewStatus };
     },
