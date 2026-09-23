@@ -1,4 +1,5 @@
 import { chapters, projects, projectConversations, activeConversationByProject, globalConversations } from "./modules/data.js?v=2";
+import { mountEventGraph, openChapterHandoff, queueEventGraphAction } from "./modules/eventGraph.js?v=2";
 import { state, countCharacters, readDraft, writeDraft } from "./modules/store.js";
 import { openDialog, closeDialog } from "./modules/dialogs.js";
 import { renderGlobalConversation, renderSettings, renderAbout } from "./modules/workspace.js?v=2";
@@ -104,16 +105,71 @@ function showStandalonePage(screen, markup) {
   document.querySelector(".creation-workspace").hidden = true;
   setHeaderVisible(false);
   removeStandalonePage();
+  removeEventGraphPage();
   document.querySelector(".workspace").insertAdjacentHTML("beforeend", markup);
   bindStandalonePage();
+}
+
+function removeEventGraphPage() {
+  document.querySelector(".workspace > .event-graph-page")?.remove();
+  document.querySelector(".breadcrumb")?.classList.remove("is-event-graph");
+  document.querySelectorAll(".project-event.active").forEach((button) => button.classList.remove("active"));
+}
+
+function restoreBookBreadcrumb() {
+  const chapter = chapters[activeChapterId];
+  document.querySelector(".breadcrumb")?.classList.remove("is-event-graph");
+  if (!chapter) return;
+  document.querySelector("#breadcrumb-volume").textContent = chapter.volume;
+  document.querySelector("#breadcrumb-chapter").textContent = `第${chapter.number}章`;
+}
+
+function highlightProjectSurface(projectId, surface) {
+  document.querySelectorAll(".project-book").forEach((button) => {
+    button.classList.toggle("active", surface === "book" && button.dataset.project === projectId);
+  });
+  document.querySelectorAll(".project-event").forEach((button) => {
+    button.classList.toggle("active", surface === "event" && button.dataset.project === projectId);
+  });
+}
+
+function showEventGraph(projectId) {
+  if (!projects[projectId]) return;
+  activateProject(projectId);
+  state.screen = "event-graph";
+  document.querySelector(".bookshelf-launcher")?.classList.remove("active");
+  removeStandalonePage();
+  setHeaderVisible(true);
+  document.querySelector(".creation-workspace").hidden = true;
+  removeEventGraphPage();
+  document.querySelector(".breadcrumb")?.classList.add("is-event-graph");
+  document.querySelector("#breadcrumb-volume").textContent = "事件图";
+  highlightProjectSurface(projectId, "event");
+  const page = document.createElement("section");
+  page.className = "event-graph-page";
+  page.setAttribute("aria-label", "事件图");
+  document.querySelector(".workspace").append(page);
+  mountEventGraph(page, {
+    projectId,
+    project: projects[projectId],
+    chapters,
+    onToast: showToast,
+    onGenerate: () => {
+      queueEventGraphAction({ type: "propose", mode: "sequential", parentId: null, skipBrief: true });
+      showEventGraph(projectId);
+    },
+  });
 }
 
 function showBookWorkspace() {
   state.screen = "book";
   document.querySelector(".bookshelf-launcher")?.classList.remove("active");
   removeStandalonePage();
+  removeEventGraphPage();
+  restoreBookBreadcrumb();
   setHeaderVisible(true);
   document.querySelector(".creation-workspace").hidden = false;
+  highlightProjectSurface(activeProjectId, "book");
 }
 
 function showBookshelf() {
@@ -264,7 +320,7 @@ function createProject() {
       projects[id] = { name, bookTitle: "未命名书籍", description: "在这里填写新书简介。", chapters: 0, chapterIds: [], volumes: {} };
       projectConversations[id] = [];
       activeConversationByProject[id] = null;
-      document.querySelector("#project-tree").insertAdjacentHTML("beforeend", `<section class="project-node" data-project="${id}"><button class="project-row" type="button" data-action="toggle-project" aria-expanded="false"><svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>${escapeHtml(name)}</strong></button><div class="project-children"><button class="project-book" type="button" data-project="${id}"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>0章</small></button></div></section>`);
+      document.querySelector("#project-tree").insertAdjacentHTML("beforeend", `<section class="project-node" data-project="${id}"><button class="project-row" type="button" data-action="toggle-project" aria-expanded="false"><svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><strong>${escapeHtml(name)}</strong></button><div class="project-children"><button class="project-entry project-event" type="button" data-project="${id}"><span class="tree-rail"></span><svg><use href="#i-graph"/></svg><span>事件图</span><small>未建</small></button><button class="project-entry project-book" type="button" data-project="${id}"><span class="tree-rail"></span><svg><use href="#i-book"/></svg><span>书籍工作区</span><small>0章</small></button></div></section>`);
       decorateProjectRows();
       updateSidebarEmptyStates();
       activateProject(id);
@@ -607,6 +663,12 @@ conversationSwitcher.addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  const projectEvent = event.target.closest(".project-event");
+  if (projectEvent) {
+    showEventGraph(projectEvent.dataset.project);
+    showToast(`已打开「${projects[projectEvent.dataset.project].name}」的事件图`);
+    return;
+  }
   const projectBook = event.target.closest(".project-book");
   if (projectBook) {
     activateProject(projectBook.dataset.project);
@@ -737,9 +799,27 @@ document.addEventListener("click", (event) => {
   }
   if (action === "open-settings") { document.querySelector("#settings-menu").hidden = true; showStandalonePage("settings", renderSettings(state.configured)); }
   if (action === "open-about") { document.querySelector("#settings-menu").hidden = true; showStandalonePage("about", renderAbout()); }
+  if (action === "write-from-event-graph") {
+    if (!activeChapterId || !chapters[activeChapterId]) {
+      showToast("先打开一章，再读取事件图主线");
+    } else {
+      openChapterHandoff({
+        projectId: activeProjectId,
+        chapterId: activeChapterId,
+        project: projects[activeProjectId],
+        chapters,
+        onToast: showToast,
+        onGenerate: () => {
+          queueEventGraphAction({ type: "propose", mode: "sequential", parentId: null, skipBrief: true });
+          showEventGraph(activeProjectId);
+        },
+      });
+    }
+  }
   if (action === "back-workspace") {
     if (previousScreen === "global") showStandalonePage("global", renderGlobalConversation("悬疑开场写作方法"));
     else if (previousScreen === "bookshelf") showBookshelf();
+    else if (previousScreen === "event-graph") showEventGraph(activeProjectId);
     else showBookWorkspace();
   }
   if (action === "project-menu") { event.preventDefault(); event.stopPropagation(); openProjectActions(actionTarget.closest(".project-node")); }
