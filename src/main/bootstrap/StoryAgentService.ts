@@ -29,6 +29,8 @@ import {
   type AliyunTextEmbeddingOptions,
 } from "../agent/embedding/aliyun/index.ts";
 import LiveEmbeddingConnection from "../agent/embedding/LiveEmbeddingConnection.ts";
+import { novelVectorSpaceId } from "../story/storage/book/BookVectorPaths.ts";
+import type NovelVectorIndexCoordinator from "../story/application/vectors/NovelVectorIndexCoordinator.ts";
 export type {
   AgentConfigurationRequest,
   AgentServiceStatus,
@@ -55,6 +57,7 @@ export default class StoryAgentService {
   private bookReader: BookReaderApplication | null = null;
   private transfers: BookTransferService | null = null;
   private embeddingConnection = new LiveEmbeddingConnection(null);
+  private novelVectorIndex: NovelVectorIndexCoordinator | null = null;
 
   private embeddingConfiguration(
     input: StoredAgentConfiguration["embedding"],
@@ -151,6 +154,7 @@ export default class StoryAgentService {
       else await controller?.closeForDeveloper();
       this.runtimeScope = null;
       this.controller = null;
+      this.novelVectorIndex = null;
       this.applicationDatabase?.close();
       this.applicationDatabase = null;
     } catch (error) {
@@ -179,6 +183,9 @@ export default class StoryAgentService {
     const config = this.configuration.loadConfig();
     this.configured = config?.embedding.enabled === true;
     if (config?.embedding.enabled === true && !this.controller) {
+      this.embeddingConnection = new LiveEmbeddingConnection(
+        this.embeddingConfiguration(config.embedding),
+      );
       await this.initializeRuntime(
         createModelConnectionConfiguration(config.chat),
       );
@@ -189,9 +196,6 @@ export default class StoryAgentService {
         workspace: config.workspace,
         logLevel: config.logLevel,
       };
-      this.embeddingConnection = new LiveEmbeddingConnection(
-        this.embeddingConfiguration(config.embedding),
-      );
     }
     return this.getStatus();
   }
@@ -300,6 +304,9 @@ export default class StoryAgentService {
         workspace: this.activeConfiguration?.workspace ?? config.workspace,
       };
     }
+    this.novelVectorIndex?.noteEmbeddingSpace(
+      config.embedding.enabled ? novelVectorSpaceId(config.embedding.dimensions) : null,
+    );
     return this.getStatus();
   }
 
@@ -383,6 +390,7 @@ export default class StoryAgentService {
       if (this.runtimeScope) await this.runtimeScope.close();
       else await controller?.shutdown();
       this.runtimeScope = null;
+      this.novelVectorIndex = null;
     } finally {
       try {
         this.applicationDatabase?.close();
@@ -426,10 +434,12 @@ export default class StoryAgentService {
     await this.workspace.createAgentWorkSpace();
     const created = await new ApplicationRuntimeFactory(this.options).create(
       modelConfiguration,
+      { getClient: () => this.embeddingConnection.currentTextEmbeddingClient() },
     );
     this.applicationDatabase = created.applicationDatabase;
     this.runtimeScope = created.scope;
     this.controller = created.controller;
+    this.novelVectorIndex = created.novelVectorIndex;
     this.bookReader = created.bookReader;
     this.transfers = created.bookTransfer;
     try {
@@ -443,6 +453,7 @@ export default class StoryAgentService {
       this.controller = null;
       this.applicationDatabase = null;
       this.bookReader = null;
+      this.novelVectorIndex = null;
       throw error;
     }
   }

@@ -51,6 +51,6 @@ StoryOS 的小说正文已经落在每本书的 `book.sqlite` 里。当前章由
 
 返回的是有限片段和定位，调用方再按修订号回读原文。向量文本不写回章节表。
 
-更后面的检索，例如跨章节对照、带关键词的混合召回、把检索片段放进 Agent 上下文，都复用这里的书籍范围、修订身份和已发布向量。那些策略另做，不改变这一步的数据主题。
+更后面的检索，例如跨章节对照、带关键词的混合召回、把检索片段放进 Agent 上下文，都复用这里的书籍范围、修订身份和已发布向量。那些策略另做，不改变这一步的数据主题。写作时如何用已发布片段对照旧文，见 `docs/todo/novel-writing-recall.md`。
 
 专业资料库、人物和大纲不在这一步里。更大范围的设计仍见 `docs/architecture/database-vnext/02-vector-rag.md`。按当前书库落地的目录、表结构和实现步骤见 `docs/architecture/database-vnext/05-novel-vector-store.md`。

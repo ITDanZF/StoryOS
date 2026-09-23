@@ -16,6 +16,10 @@ export default class LiveEmbeddingConnection {
     return this.client;
   }
 
+  currentTextEmbeddingClient(): AliyunTextEmbeddingClient | null {
+    return this.client;
+  }
+
   prepareUpdate(configuration: AliyunTextEmbeddingOptions | null): () => void {
     const next = configuration ? createAliyunTextEmbeddingClient(configuration) : null;
     return () => {

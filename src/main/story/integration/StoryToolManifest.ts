@@ -5,6 +5,8 @@ const READ_ONLY_TOOLS = new Set([
   "get_book_outline",
   "read_book_chapter",
   "search_book_chapters",
+  "search_novel_passages",
+  "find_similar_passages",
   "get_book_statistics",
   "get_active_editor_context",
   "inspect_active_editor_text",
@@ -38,7 +40,7 @@ export function describeToolSecurity(
   id: string,
 ): Omit<ToolManifest, "id" | "title" | "description"> {
   if (READ_ONLY_TOOLS.has(id)) {
-    if (id.includes("book")) {
+    if (id.includes("book") || id === "search_novel_passages" || id === "find_similar_passages") {
       return {
         provides: ["book.read"],
         effects: [],

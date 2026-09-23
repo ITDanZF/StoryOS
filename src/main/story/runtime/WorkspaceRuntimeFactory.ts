@@ -36,8 +36,14 @@ import SkillDraftService from "../../agent/skills/SkillDraftService.ts";
 import SkillInstallService from "../../agent/skills/SkillInstallService.ts";
 import SkillLoader from "../../agent/skills/SkillLoader.ts";
 import SkillScaffoldService from "../../agent/skills/SkillScaffoldService.ts";
+import type NovelVectorPassageQuery from "../application/vectors/NovelVectorPassageQuery.ts";
 import BookRuntimeManager from "./BookRuntimeManager.ts";
 import type { ActiveWorkspaceRuntime } from "./WorkspaceRuntimeManager.ts";
+
+export type WorkspaceNovelVectorHooks = {
+  readonly onRevisionSaved: (bookId: string) => void;
+  readonly passages: NovelVectorPassageQuery;
+};
 function samePath(first: string, second: string): boolean {
   const left = path.resolve(first);
   const right = path.resolve(second);
@@ -53,6 +59,7 @@ export default class WorkspaceRuntimeFactory {
     private readonly modelConnection: LiveModelConnection,
     private readonly subscribers: ReadonlySet<ConversationApplicationEventHandler>,
     private readonly rendererEditorTools?: RendererEditorToolClient,
+    private readonly novelVectors?: WorkspaceNovelVectorHooks,
   ) {}
   async create(projectPath: string | null): Promise<ActiveWorkspaceRuntime> {
     const resources = new ResourceScope();
@@ -114,6 +121,7 @@ export default class WorkspaceRuntimeFactory {
               });
             }
           : undefined,
+        this.novelVectors?.onRevisionSaved,
       );
       const modelSessions = new Memory({
         checkpointBackend: "sqlite",
@@ -160,7 +168,12 @@ export default class WorkspaceRuntimeFactory {
           workspaceContext,
           ...(project
             ? {
-                bookContext: new BookToolContext(project.id, novels, chapterGeneration),
+                bookContext: new BookToolContext(
+                  project.id,
+                  novels,
+                  chapterGeneration,
+                  this.novelVectors?.passages,
+                ),
               }
             : {}),
           ...(project && this.rendererEditorTools

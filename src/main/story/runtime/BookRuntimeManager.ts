@@ -47,6 +47,7 @@ export default class BookRuntimeManager {
   private readonly healthInspector: BookStorageHealthInspector;
   private closed = false;
   private readonly catalogFiles = new Map<string, string>();
+  private openedListener: ((bookId: string) => void) | null = null;
 
   constructor(
     agentHome: string,
@@ -60,12 +61,21 @@ export default class BookRuntimeManager {
     return this.catalog?.deviceId ?? "local";
   }
 
+  setOpenedListener(listener: (bookId: string) => void): void {
+    this.openedListener = listener;
+  }
+
+  listOpenBookIds(): readonly string[] {
+    return Object.freeze([...this.runtimes.keys()]);
+  }
+
   acquire(bookId: string): BookRuntimeLease {
     if (this.closed) {
       throw new BookRuntimeOpenError("manager_closed", "Book runtime manager is closed.");
     }
     const book = this.requireOpenableBook(bookId);
     let runtime = this.runtimes.get(book.id);
+    let opened = false;
     if (runtime) {
       if (runtime.book.storagePath !== book.storagePath) {
         throw new BookRuntimeOpenError(
@@ -112,9 +122,11 @@ export default class BookRuntimeManager {
         referenceCount: 0,
       };
       this.runtimes.set(book.id, runtime);
+      opened = true;
     }
     const acquiredRuntime = runtime;
     acquiredRuntime.referenceCount += 1;
+    if (opened) this.openedListener?.(acquiredRuntime.book.id);
     let released = false;
     return Object.freeze({
       book: acquiredRuntime.book,

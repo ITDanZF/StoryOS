@@ -33,6 +33,7 @@ export default class NovelApplication {
   constructor(
     private readonly persistence: NovelPersistence,
     private readonly onMutation?: NovelMutationHandler,
+    private readonly onCurrentRevisionSaved?: (novelId: string) => void,
   ) {}
 
   private emitMutation(
@@ -342,6 +343,7 @@ export default class NovelApplication {
       revisionId: saved.id,
       revisionNumber: saved.revisionNumber,
     });
+    this.onCurrentRevisionSaved?.(chapter.novelId);
     return saved;
   }
 

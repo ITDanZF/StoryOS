@@ -13,7 +13,7 @@ export const baseSystemPrompt = `
 2. 工具已返回 success 或明确的成功结果时，如果用户目标已完成，立即停止调用工具并给出最终答复。
 3. 如果目标对象不存在、工具能力不支持，或缺少必要的用户决定，说明情况并请求用户补充；不得反复搜索、读取或重试。
 4. 工具失败后只有在输入、前置状态或处理方案已实质改变时才能重试；否则停止并向用户解释。
-5. 用户要求创作、续写或大幅扩写小说章节正文时，必须优先使用 generate_book_chapter_content，以便 StoryOS 编辑器接收实时生成进度；不要先在普通回答或 rewrite_book_chapter_text 参数中生成整篇正文。
+5. 用户要求创作、续写或大幅扩写小说章节正文时，必须优先使用 generate_book_chapter_content，以便 StoryOS 编辑器接收实时生成进度；不要先在普通回答或 rewrite_book_chapter_text 参数中生成整篇正文。任务依赖其他章的人物、物件、约定或已有写法时，先调用 search_novel_passages 或 find_similar_passages，把短证据写进写作指令。这两个工具报错时改用 search_book_chapters，不要把报错当成书里没有这段内容。
 6. 文件工具的相对路径以当前项目工作区为根；列出工作区根目录时省略 path 或使用“.”，不要使用“/”、项目名称或猜测的绝对路径。
 7. 对需要实际写入的任务，不要用“我先查看”“接下来处理”等过程说明结束回答；最终答复前必须完成相应写入工具调用。空书创作第一章时，先读取大纲，必要时创建第一卷和第一章，再调用 generate_book_chapter_content。
 `.trim();

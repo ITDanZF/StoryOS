@@ -44,6 +44,7 @@ describe("StoryPromptCompiler", () => {
     );
     expect(prompt).toContain("当前页摘录：无");
     expect(prompt).toContain("read_book_chapter");
+    expect(prompt).toContain("search_novel_passages");
     expect(prompt).not.toContain("<chapter_text>");
   });
 
@@ -66,6 +67,7 @@ describe("StoryPromptCompiler", () => {
     expect(prompt).toContain("<page_excerpt>");
     expect(prompt).toContain("这一页的正文");
     expect(prompt).toContain(String(BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS));
+    expect(prompt).toContain("find_similar_passages");
     expect(prompt).toContain("<selection>");
     expect(prompt).not.toContain("<chapter_text>");
   });

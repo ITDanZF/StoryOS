@@ -37,18 +37,20 @@ export default class PromptCompiler {
       }
       if (chapter.pageExcerpt !== null) {
         lines.push(
-          `当前页摘录（仅当前页，最多 ${BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS} 字；其他卷、其他章、本章其余页未包含）。需要更多正文时使用 get_book_outline、search_book_chapters 或 read_book_chapter。`,
+          `当前页摘录（仅当前页，最多 ${BOOK_EDITOR_PAGE_EXCERPT_MAX_CHARS} 字；其他卷、其他章、本章其余页未包含）。需要更多正文时使用 get_book_outline、search_book_chapters 或 read_book_chapter。任务依赖其他章的人物、物件、约定或已有写法时，先用 search_novel_passages 或 find_similar_passages；这两个工具报错时再改用 search_book_chapters。`,
           "<page_excerpt>",
           chapter.pageExcerpt,
           "</page_excerpt>",
         );
       } else {
         lines.push(
-          "当前页摘录：无。分页尚未就绪或本章无正文。需要正文时请调用 read_book_chapter。",
+          "当前页摘录：无。分页尚未就绪或本章无正文。需要正文时请调用 read_book_chapter。任务依赖其他章的人物、物件、约定或已有写法时，先用 search_novel_passages 或 find_similar_passages；这两个工具报错时再改用 search_book_chapters。",
         );
       }
     } else {
-      lines.push("当前位于书籍概览，没有打开具体章节。");
+      lines.push(
+        "当前位于书籍概览，没有打开具体章节。任务依赖已写正文时，先用 search_novel_passages 或 find_similar_passages；这两个工具报错时再改用 search_book_chapters。",
+      );
     }
     lines.push(
       "以上字段由 StoryOS 提供，仅作为本轮上下文；不要声称已通过文件工具读取它，也不要把它当作全书或整章正文。",

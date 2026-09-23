@@ -7,7 +7,9 @@ import type { ModelSessionStore } from "./ModelSessionStore.ts";
 const INTERNAL_RUN_TAG = "mini-agent:internal";
 
 function getRecursionLimit(maxTurns: number | undefined): number | undefined {
-  return maxTurns === undefined ? undefined : maxTurns * 2 + 1;
+  if (maxTurns === undefined) return undefined;
+  const limit = maxTurns * 2 + 1;
+  return Number.isSafeInteger(limit) ? limit : Number.MAX_SAFE_INTEGER;
 }
 
 function hasInternalRunTag(metadata: unknown): boolean {

@@ -20,7 +20,9 @@ import type {
 import type { DesktopControllerDependencies } from "../../../desktop/DesktopControllerDependencies.ts";
 import type { ActiveWorkspaceRuntime } from "../../runtime/WorkspaceRuntimeManager.ts";
 export default class BookWorkspaceApplication {
-  constructor(private readonly dependencies: Pick<DesktopControllerDependencies, "runtime">) {}
+  constructor(
+    private readonly dependencies: Pick<DesktopControllerDependencies, "runtime" | "novelVectorIndex">,
+  ) {}
   async getBookWorkspace(projectId: string): Promise<BookWorkspaceSnapshot> {
     const runtime = await this.dependencies.runtime.resolve({
       kind: "project",
@@ -182,6 +184,7 @@ export default class BookWorkspaceApplication {
       expectedRowVersion: request.expectedRowVersion,
       expectedDraftVersion: request.expectedDraftVersion,
     });
+    this.dependencies.novelVectorIndex.enqueue(chapter.novelId);
     const updated = runtime.novels.getChapter(chapter.id);
     return Object.freeze({
       chapter: this.toBookWorkspaceChapter(runtime, updated, true),

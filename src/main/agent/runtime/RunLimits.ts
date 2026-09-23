@@ -17,10 +17,11 @@ function readTimeoutMsFromEnv(): number {
 }
 
 export const DEFAULT_RUN_LIMITS: RunLimits = Object.freeze({
-  // A multi-step task commonly needs several read, create, inspect, and write
-  // rounds. Keep this aligned with LangGraph's default 25-superstep budget:
-  // LangChainModelGateway maps 12 agent turns to 25 graph supersteps.
-  maxTurns: 12,
+  // LangGraph rejects a missing recursion limit and otherwise stops at 25.
+  // A conversation may keep calling tools until the model stops, the user
+  // cancels, or the run times out. Callers that pass a small maxTurns still
+  // keep a short graph.
+  maxTurns: Number.MAX_SAFE_INTEGER,
   maxToolCalls: 20,
   timeoutMs: readTimeoutMsFromEnv(),
   maxDelegationDepth: 1,

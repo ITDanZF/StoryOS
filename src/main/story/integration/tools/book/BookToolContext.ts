@@ -1,11 +1,13 @@
 import type NovelApplication from "../../../application/books/NovelApplication.ts";
 import type ChapterGenerationService from "../../../application/books/ChapterGenerationService.ts";
+import type NovelVectorPassageQuery from "../../../application/vectors/NovelVectorPassageQuery.ts";
 
 export default class BookToolContext {
   constructor(
     readonly projectId: string,
     readonly novels: NovelApplication,
     readonly chapterGeneration?: ChapterGenerationService,
+    readonly novelPassages?: NovelVectorPassageQuery,
   ) {}
 
   requireBook() {

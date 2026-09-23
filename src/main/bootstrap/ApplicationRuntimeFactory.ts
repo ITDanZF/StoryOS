@@ -21,10 +21,16 @@ import BookFormatRegistry from "../story/application/transfers/BookFormatRegistr
 import BookTransferService from "../story/application/transfers/BookTransferService.ts";
 import BookRuntimeManager from "../story/runtime/BookRuntimeManager.ts";
 import WorkspaceRuntimeManager from "../story/runtime/WorkspaceRuntimeManager.ts";
+import type { AliyunTextEmbeddingClient } from "../agent/embedding/aliyun/types.ts";
+import NovelVectorIndexCoordinator from "../story/application/vectors/NovelVectorIndexCoordinator.ts";
+import NovelVectorPassageQuery from "../story/application/vectors/NovelVectorPassageQuery.ts";
 import type { ApplicationHostOptions } from "./ApplicationHostOptions.ts";
 export default class ApplicationRuntimeFactory {
   constructor(private readonly options: ApplicationHostOptions) {}
-  async create(modelConfiguration: ModelConnectionConfiguration) {
+  async create(
+    modelConfiguration: ModelConnectionConfiguration,
+    embedding: { getClient(): AliyunTextEmbeddingClient | null },
+  ) {
     const scope = new ResourceScope();
     const applicationDatabase = new ApplicationDatabase(this.options.agentHome);
     scope.add("application database", () => applicationDatabase.close());
@@ -44,6 +50,12 @@ export default class ApplicationRuntimeFactory {
       );
       const bookReconciler = new BookRegistryReconciler(books, bookRuntimes);
       bookReconciler.reconcile();
+      const novelVectorIndex = new NovelVectorIndexCoordinator(
+        embedding.getClient,
+        (bookId) => books.getBookById(bookId),
+        () => bookRuntimes.listOpenBookIds(),
+      );
+      bookRuntimes.setOpenedListener((bookId) => novelVectorIndex.enqueue(bookId));
       // Repair projections after a crash between independent book/app commits.
       for (const book of books.listBooks()) {
         if (book.state !== "available") continue;
@@ -65,6 +77,13 @@ export default class ApplicationRuntimeFactory {
         bookProvisioning,
         modelConfiguration,
         this.options.rendererEditorTools,
+        {
+          onRevisionSaved: (bookId) => novelVectorIndex.enqueue(bookId),
+          passages: new NovelVectorPassageQuery(
+            (bookId) => books.getBookById(bookId),
+            () => embedding.getClient(),
+          ),
+        },
       );
       scope.add("workspace runtimes", () => runtime.shutdown());
       const bookBindings = new ProjectBookBindingService(projects, books, bookRuntimes, runtime);
@@ -92,13 +111,14 @@ export default class ApplicationRuntimeFactory {
         runtime,
         projectNavigation: new ProjectNavigationReader(projects, books, bookRuntimes),
         bookshelf,
+        novelVectorIndex,
       });
       const bookReader = new BookReaderApplication(
         bookRuntimes,
         new SqliteBookReadingStateStore(applicationDatabase.handle),
       );
       scope.add("book readers", () => bookReader.dispose());
-      return { applicationDatabase, controller, bookReader, scope, bookTransfer };
+      return { applicationDatabase, controller, bookReader, scope, bookTransfer, novelVectorIndex };
     } catch (error) {
       try {
         await scope.close();

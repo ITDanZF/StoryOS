@@ -18,7 +18,9 @@ import type ProjectApplication from "../application/projects/ProjectApplication.
 import { type WorkspaceLayout } from "../workspace/ProjectLayout.ts";
 import SkillApplication from "../../agent/skills/SkillApplication.ts";
 import BookRuntimeManager from "./BookRuntimeManager.ts";
-import WorkspaceRuntimeFactory from "./WorkspaceRuntimeFactory.ts";
+import WorkspaceRuntimeFactory, {
+  type WorkspaceNovelVectorHooks,
+} from "./WorkspaceRuntimeFactory.ts";
 
 export type ActiveWorkspaceRuntime = {
   readonly conversationScope: ConversationScope;
@@ -58,6 +60,7 @@ export default class WorkspaceRuntimeManager {
     private readonly bookProvisioning: BookProvisioningService,
     private readonly modelConfiguration: ModelConnectionConfiguration,
     private readonly rendererEditorTools?: RendererEditorToolClient,
+    private readonly novelVectors?: WorkspaceNovelVectorHooks,
   ) {
     this.modelConnection = new LiveModelConnection(modelConfiguration);
   }
@@ -80,6 +83,7 @@ export default class WorkspaceRuntimeManager {
     bookProvisioning: BookProvisioningService,
     modelConfiguration: ModelConnectionConfiguration,
     rendererEditorTools?: RendererEditorToolClient,
+    novelVectors?: WorkspaceNovelVectorHooks,
   ): Promise<WorkspaceRuntimeManager>;
   static async create(
     projects: ProjectApplication,
@@ -88,6 +92,7 @@ export default class WorkspaceRuntimeManager {
     provisioningOrConfiguration: BookProvisioningService | ModelConnectionConfiguration,
     configurationOrRenderer?: ModelConnectionConfiguration | RendererEditorToolClient,
     rendererEditorTools?: RendererEditorToolClient,
+    novelVectors?: WorkspaceNovelVectorHooks,
   ): Promise<WorkspaceRuntimeManager> {
     const bookRuntimes =
       typeof bookRuntimesOrAgentHome === "string"
@@ -105,6 +110,7 @@ export default class WorkspaceRuntimeManager {
       typeof bookRuntimesOrAgentHome === "string"
         ? (configurationOrRenderer as RendererEditorToolClient | undefined)
         : rendererEditorTools;
+    const vectors = typeof bookRuntimesOrAgentHome === "string" ? undefined : novelVectors;
     const manager = new WorkspaceRuntimeManager(
       projects,
       books,
@@ -112,6 +118,7 @@ export default class WorkspaceRuntimeManager {
       bookProvisioning,
       modelConfiguration,
       editorTools,
+      vectors,
     );
     manager.ownsBookRuntimes = typeof bookRuntimesOrAgentHome === "string";
     try {
@@ -202,6 +209,7 @@ export default class WorkspaceRuntimeManager {
       this.modelConnection,
       this.subscribers,
       this.rendererEditorTools,
+      this.novelVectors,
     ).create(projectPath);
   }
 
