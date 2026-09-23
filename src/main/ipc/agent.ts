@@ -10,6 +10,7 @@ import IpcRegistrar from "../desktop/ipc/IpcRegistrar.ts";
 import ProjectIpcController from "../desktop/ipc/ProjectIpcController.ts";
 import SettingsIpcController from "../desktop/ipc/SettingsIpcController.ts";
 import SkillIpcController from "../desktop/ipc/SkillIpcController.ts";
+import OutlineIpcController from "../desktop/ipc/OutlineIpcController.ts";
 import TransferIpcController from "../desktop/ipc/TransferIpcController.ts";
 import { registerBookReaderIpc } from "./bookReader.ts";
 export function registerAgentIpc(
@@ -32,6 +33,7 @@ export function registerAgentIpc(
     new BookIpcController(registrar, () => service().requireController());
     new TransferIpcController(registrar, () => service().requireController());
     new SkillIpcController(registrar, () => service().requireController());
+    new OutlineIpcController(registrar, () => service().requireController());
     disposers.push(registerBookReaderIpc(service, trusted));
     disposers.push(
       host.subscribe((event) => {

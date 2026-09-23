@@ -11,6 +11,9 @@ function summarize(toolName: string, input: unknown): string | undefined {
     ].includes(toolName)
   )
     return "Edit saved chapter text: " + String(values.chapter_id ?? "<unknown>");
+  if (toolName === "apply_outline_patch" || toolName === "map_outline_nodes_to_chapter") {
+    return "Change the narrative outline";
+  }
   if (toolName === "apply_active_editor_styles") {
     const count = Array.isArray(values.operations) ? values.operations.length : 0;
     return "Apply " + count + " targeted editor style operation" + (count === 1 ? "" : "s");

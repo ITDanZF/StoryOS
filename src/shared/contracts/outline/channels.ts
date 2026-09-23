@@ -1,0 +1,18 @@
+export const OUTLINE_IPC_CHANNELS = Object.freeze({
+  snapshot: "outline:snapshot",
+  create: "outline:create",
+  updateProfile: "outline:update-profile",
+  propose: "outline:propose",
+  previewPatch: "outline:preview-patch",
+  applyPatch: "outline:apply-patch",
+  check: "outline:check",
+  chapterContext: "outline:chapter-context",
+  markPending: "outline:mark-pending",
+  reviewCoverage: "outline:review-coverage",
+  handoff: "outline:handoff",
+  waiveMainline: "outline:waive-mainline",
+  writeChapter: "outline:write-chapter",
+  updateNode: "outline:update-node",
+  mapNodes: "outline:map-nodes",
+  unmapNode: "outline:unmap-node",
+});

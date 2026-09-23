@@ -1,6 +1,7 @@
 import { coversAll } from "../../agent/runtime/capabilities.ts";
 import type { ExecutionRequirements } from "../../agent/orchestration/contracts.ts";
 import type { ToolManifest } from "../../agent/tools/ToolManifest.ts";
+import { NARRATIVE_OUTLINE_TOOL_IDS } from "./StoryToolManifest.ts";
 
 const SAFE_BOOK_EDITOR_WRITE_TOOLS = new Set([
   "create_project_book",
@@ -29,6 +30,7 @@ export function grantsStoryEffects(
   manifest: ToolManifest,
   requirements: ExecutionRequirements,
 ): boolean {
+  if (NARRATIVE_OUTLINE_TOOL_IDS.has(manifest.id)) return false;
   if (coversAll(requirements.effects, manifest.effects)) return true;
   return isBookEditorContext(requirements) && SAFE_BOOK_EDITOR_WRITE_TOOLS.has(manifest.id);
 }

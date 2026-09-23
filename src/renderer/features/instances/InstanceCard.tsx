@@ -78,7 +78,7 @@ export default function InstanceCard({
           <IconButton disabled={busy} aria-label={`编辑 ${instance.name} 配置`} title="编辑实例配置" onClick={(event) => action(event, onEdit)}><Pencil size={15} /></IconButton>
           <IconButton disabled={busy} aria-label={`显示 ${instance.name} 的目录`} title="显示目录" onClick={(event) => action(event, onReveal)}><FolderOpen size={15} /></IconButton>
           {unavailable && <button type="button" disabled={busy} className="h-8 rounded-lg px-2 text-xs text-text-secondary hover:bg-muted hover:text-foreground" onClick={(event) => action(event, onRelocate)}>重新定位</button>}
-          {!active && <IconButton disabled={busy} aria-label={`移除 ${instance.name}`} title="从列表移除" onClick={(event) => action(event, onRemove)}><Trash2 size={15} /></IconButton>}
+          <IconButton disabled={busy} aria-label={`删除实例 ${instance.name}`} title="删除实例" onClick={(event) => action(event, onRemove)}><Trash2 size={15} /></IconButton>
         </div>
       </div>
     </article>

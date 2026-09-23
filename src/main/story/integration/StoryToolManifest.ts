@@ -26,6 +26,18 @@ const BOOK_WRITE_TOOLS = new Set([
   "generate_book_chapter_content",
 ]);
 
+const OUTLINE_READ_TOOLS = new Set([
+  "get_narrative_outline",
+  "get_chapter_outline_context",
+  "list_narrative_promises",
+  "check_narrative_outline",
+  "propose_outline_patch",
+]);
+
+const OUTLINE_WRITE_TOOLS = new Set(["apply_outline_patch", "map_outline_nodes_to_chapter"]);
+
+export const NARRATIVE_OUTLINE_TOOL_IDS = new Set([...OUTLINE_READ_TOOLS, ...OUTLINE_WRITE_TOOLS]);
+
 const EDITOR_WRITE_TOOLS = new Set([
   "replace_active_editor_range",
   "format_active_editor_selection",
@@ -39,6 +51,24 @@ const EDITOR_WRITE_TOOLS = new Set([
 export function describeToolSecurity(
   id: string,
 ): Omit<ToolManifest, "id" | "title" | "description"> {
+  if (OUTLINE_READ_TOOLS.has(id)) {
+    return {
+      provides: ["outline.read"],
+      effects: [],
+      requiredContexts: ["book-editor"],
+      approval: "allow",
+      risk: "low",
+    };
+  }
+  if (OUTLINE_WRITE_TOOLS.has(id)) {
+    return {
+      provides: ["outline.read"],
+      effects: ["outline.write"],
+      requiredContexts: ["book-editor"],
+      approval: "ask",
+      risk: "high",
+    };
+  }
   if (READ_ONLY_TOOLS.has(id)) {
     if (id.includes("book") || id === "search_novel_passages" || id === "find_similar_passages") {
       return {

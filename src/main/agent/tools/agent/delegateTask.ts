@@ -24,6 +24,7 @@ export type DelegateTaskContext = {
   readonly onEvent?: AgentEventHandler;
   readonly budget: RunBudget;
   readonly approval?: ToolApprovalHandler;
+  readonly rejectDelegation?: (subagentType: string) => string | null;
 };
 
 export function formatDelegateTaskResult(description: string, result: AgentRunResult): string {
@@ -69,6 +70,10 @@ export function createDelegateTaskTool(
           "Subagent delegation rejected.",
           `Maximum delegation depth is ${context.budget.limits.maxDelegationDepth}.`,
         ].join("\n");
+      }
+      const rejected = context.rejectDelegation?.(subagent_type);
+      if (rejected) {
+        return ["Subagent delegation rejected.", rejected].join("\n");
       }
 
       try {

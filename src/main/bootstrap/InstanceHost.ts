@@ -143,13 +143,31 @@ export default class InstanceHost {
     return this.getSnapshot();
   }
 
-  remove(instanceId: string): InstanceSnapshot {
-    if (this.transitioning)
-      throw new InstanceError("INSTANCE_SWITCH_IN_PROGRESS", "正在切换实例。");
-    if (instanceId === this.activeInstanceId)
-      throw new InstanceError("INSTANCE_BUSY", "不能移除当前实例。");
-    this.instances.remove(instanceId);
-    return this.getSnapshot();
+  remove(instanceId: string): Promise<InstanceSnapshot> {
+    return this.transition(async () => {
+      this.registry.get(instanceId);
+      if (instanceId === this.activeInstanceId) {
+        this.checkBusy();
+        const service = this.activeService;
+        this.activeService = null;
+        this.activeInstanceId = null;
+        this.clearSubscriptions();
+        try {
+          await service?.shutdown();
+        } catch (cause) {
+          this.activeService = service;
+          this.activeInstanceId = instanceId;
+          if (service) this.bindSubscriptions(service);
+          throw new InstanceError(
+            "INSTANCE_BUSY",
+            "无法关闭当前实例，请稍后重试。",
+            { cause },
+          );
+        }
+      }
+      this.instances.remove(instanceId);
+      return this.getSnapshot();
+    });
   }
 
   relocate(instanceId: string, rootPath: string): InstanceSnapshot {

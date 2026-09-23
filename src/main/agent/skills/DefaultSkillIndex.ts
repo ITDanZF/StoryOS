@@ -24,4 +24,12 @@ export const KNOWN_M0_TOOL_NAMES = Object.freeze([
   "select_text_context",
   "delegate_task",
   "create_skill",
+  "get_narrative_outline",
+  "get_chapter_outline_context",
+  "list_narrative_promises",
+  "check_narrative_outline",
+  "propose_outline_patch",
+  "apply_outline_patch",
+  "map_outline_nodes_to_chapter",
+  "generate_book_chapter_content",
 ]);

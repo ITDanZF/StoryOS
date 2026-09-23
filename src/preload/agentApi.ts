@@ -9,8 +9,10 @@ import type {
 } from "../shared/agent/contracts.ts";
 import { AGENT_IPC_CHANNELS } from "../shared/agent/contracts.ts";
 import { READER_CHANNELS } from "../shared/book/reader.ts";
+import { OUTLINE_IPC_CHANNELS } from "../shared/contracts/outline/channels.ts";
+import type { OutlineDesktopApi } from "../shared/contracts/outline/desktopApi.ts";
 
-const agentApi: AgentDesktopApi = {
+const agentApi: AgentDesktopApi & OutlineDesktopApi = {
   openBookReader: (bookId) =>
     ipcRenderer.invoke(READER_CHANNELS.openBookReader, bookId),
   readBookReaderChapter: (request) =>
@@ -162,6 +164,38 @@ const agentApi: AgentDesktopApi = {
     ipcRenderer.invoke(AGENT_IPC_CHANNELS.disableSkill, skillId, threadId),
   clearSkillState: (threadId) =>
     ipcRenderer.invoke(AGENT_IPC_CHANNELS.clearSkillState, threadId),
+  getOutlineSnapshot: (projectId) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.snapshot, projectId),
+  createOutline: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.create, request),
+  updateOutlineProfile: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.updateProfile, request),
+  updateOutlineNode: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.updateNode, request),
+  proposeOutline: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.propose, request),
+  previewOutlinePatch: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.previewPatch, request),
+  applyOutlinePatch: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.applyPatch, request),
+  runOutlineChecks: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.check, request),
+  buildChapterContext: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.chapterContext, request),
+  markNodesPendingVerification: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.markPending, request),
+  reviewChapterCoverage: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.reviewCoverage, request),
+  loadEventGraphHandoff: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.handoff, request),
+  waiveChapterMainline: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.waiveMainline, request),
+  startChapterWriting: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.writeChapter, request),
+  mapOutlineNodes: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.mapNodes, request),
+  unmapOutlineNode: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.unmapNode, request),
   onEvent: (handler: (event: ConversationApplicationEvent) => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

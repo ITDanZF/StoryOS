@@ -1,5 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
+import type { Database as BetterSqliteDatabase } from "better-sqlite3";
 import type BookCatalogProjection from "../storage/global/BookCatalogProjection.ts";
 import type { BookRecord, BookRegistry } from "../application/books/bookRegistryPorts.ts";
 import type { NovelPersistence } from "../application/books/novelPorts.ts";
@@ -39,6 +40,7 @@ export class BookRuntimeOpenError extends Error {
 export type BookRuntimeLease = {
   readonly book: BookRecord;
   readonly persistence: NovelPersistence;
+  readonly database: BetterSqliteDatabase;
   readonly close: () => void;
 };
 
@@ -131,6 +133,7 @@ export default class BookRuntimeManager {
     return Object.freeze({
       book: acquiredRuntime.book,
       persistence: acquiredRuntime.persistence,
+      database: acquiredRuntime.database.handle,
       close: () => {
         if (released) return;
         released = true;

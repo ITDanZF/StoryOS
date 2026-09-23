@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import type { SqliteMigration } from "../common/SqliteDatabase.ts";
 import SqliteDatabase from "../common/SqliteDatabase.ts";
 import { BOOK_CHANGE_TRIGGERS, BOOK_SCHEMA } from "./bookSchema.ts";
+import { OUTLINE_SCHEMA } from "./outlineSchema.ts";
 
 export const BOOK_DATABASE_APPLICATION_ID = 0x53544f42;
 
@@ -10,6 +11,12 @@ const migrations: readonly SqliteMigration[] = [
     version: 100,
     up(database) {
       database.exec(BOOK_SCHEMA + BOOK_CHANGE_TRIGGERS);
+    },
+  },
+  {
+    version: 101,
+    up(database) {
+      database.exec(OUTLINE_SCHEMA);
     },
   },
 ];

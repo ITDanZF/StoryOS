@@ -12,6 +12,7 @@ import StoryToolPolicy from "./StoryToolPolicy.ts";
 import { grantsStoryEffects } from "./StoryToolAccess.ts";
 import { toAgentInput } from "./StoryTurnAdapter.ts";
 import { baseSystemPrompt } from "../resources/prompts/baseSystem.prompt.ts";
+import { rejectStoryDelegation } from "./storyDelegation.ts";
 export type AgentOrchestratorFactoryOptions = EngineOptions & CreateToolsOptions;
 export function createAgentOrchestrator(options: AgentOrchestratorFactoryOptions | RunLimits = {}) {
   const settings: AgentOrchestratorFactoryOptions =
@@ -26,6 +27,7 @@ export function createAgentOrchestrator(options: AgentOrchestratorFactoryOptions
     skillContexts: ["global", "book-editor"],
     grantsEffects: grantsStoryEffects,
     systemPrompt: baseSystemPrompt,
+    rejectDelegation: settings.rejectDelegation ?? rejectStoryDelegation,
   });
   return {
     run: (input: AgentTurnInput, runOptions: AgentOrchestratorRunOptions) =>

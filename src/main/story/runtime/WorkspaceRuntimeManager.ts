@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { Database as BetterSqliteDatabase } from "better-sqlite3";
 import AgentApplication from "../application/conversations/AgentApplication.ts";
 import Memory from "../../agent/checkpoints/index.ts";
 import LiveModelConnection from "../../agent/model/LiveModelConnection.ts";
@@ -17,6 +18,8 @@ import SqliteConversationEventStore from "../storage/project/SqliteConversationE
 import type ProjectApplication from "../application/projects/ProjectApplication.ts";
 import { type WorkspaceLayout } from "../workspace/ProjectLayout.ts";
 import SkillApplication from "../../agent/skills/SkillApplication.ts";
+import type ChapterGenerationService from "../application/books/ChapterGenerationService.ts";
+import type { OutlineEvidence } from "../../../shared/contracts/outline/outlineContracts.ts";
 import BookRuntimeManager from "./BookRuntimeManager.ts";
 import WorkspaceRuntimeFactory, {
   type WorkspaceNovelVectorHooks,
@@ -33,6 +36,13 @@ export type ActiveWorkspaceRuntime = {
   readonly skills: SkillApplication;
   readonly model: Model;
   readonly modelSessions: Memory;
+  readonly openBookDatabase: () => BetterSqliteDatabase | null;
+  readonly chapterGeneration: ChapterGenerationService | null;
+  readonly retrieveOutlineEvidence: (
+    bookId: string,
+    chapterId: string,
+    query: string,
+  ) => Promise<readonly OutlineEvidence[]>;
   readonly unsubscribe: () => void;
   readonly close: () => Promise<void>;
 };

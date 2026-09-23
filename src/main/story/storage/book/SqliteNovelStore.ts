@@ -341,9 +341,14 @@ export default class SqliteNovelStore implements NovelPersistence {
 
   deleteChapter(chapterId: string): void {
     this.requireChapter(chapterId);
-    this.database
-      .prepare(`UPDATE chapters SET deleted_at=?,updated_at=?,row_version=row_version+1 WHERE id=?`)
-      .run(Date.now(), Date.now(), chapterId);
+    const now = Date.now();
+    this.database.transaction(() => {
+      this.database
+        .prepare(`UPDATE chapters SET deleted_at=?,updated_at=?,row_version=row_version+1 WHERE id=?`)
+        .run(now, now, chapterId);
+      this.database.prepare("DELETE FROM outline_node_chapters WHERE chapter_id = ?").run(chapterId);
+      this.database.prepare("DELETE FROM outline_chapter_waivers WHERE chapter_id = ?").run(chapterId);
+    })();
   }
 
   saveRevision(

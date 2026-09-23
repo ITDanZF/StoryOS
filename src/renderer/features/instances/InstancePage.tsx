@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import type { AgentConfigurationInput } from "../../../shared/contracts/settings/contracts.ts";
 import type { StoryInstanceDto } from "../../../shared/contracts/instances/contracts.ts";
 import { Button } from "../../components/ui/Button.tsx";
+import { ConfirmDialog } from "../../components/ui/Dialog.tsx";
 import WindowTitleBar from "../../components/WindowTitleBar.tsx";
 import InstanceCard from "./InstanceCard.tsx";
 import InstanceConfigurationDialog, {
@@ -24,6 +25,7 @@ export default function InstancePage() {
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<StoryInstanceDto | null>(null);
 
   const execute = async (operation: () => Promise<void>) => {
     setBusy(true);
@@ -72,13 +74,24 @@ export default function InstancePage() {
             const selected = await window.storyOSWindow.pickDirectory({ title: `重新定位“${instance.name}”` });
             if (selected) setSnapshot(await window.storyOSInstances.relocate(instance.id, selected));
           })}
-          onRemove={() => {
-            if (confirm(`从列表移除“${instance.name}”？本地文件不会删除。`))
-              void execute(async () => setSnapshot(await window.storyOSInstances.remove(instance.id)));
-          }}
+          onRemove={() => setPendingDelete(instance)}
         />)}
       </div>
     </div>
+    {pendingDelete && <ConfirmDialog
+      danger
+      title={`删除实例“${pendingDelete.name}”？`}
+      confirmLabel="删除"
+      description={pendingDelete.id === snapshot.activeInstanceId
+        ? `这是当前正在使用的实例。确认后会先关闭它，再从列表中移除。\n目录中的文件会保留：\n${pendingDelete.rootPath}`
+        : `确认后，这个实例会从列表中移除。\n目录中的文件会保留：\n${pendingDelete.rootPath}`}
+      onClose={() => setPendingDelete(null)}
+      onConfirm={() => {
+        const target = pendingDelete;
+        setPendingDelete(null);
+        void execute(async () => setSnapshot(await window.storyOSInstances.remove(target.id)));
+      }}
+    />}
     {dialog && <InstanceConfigurationDialog
       instance={dialog.instance}
       initialDraft={dialog.draft}

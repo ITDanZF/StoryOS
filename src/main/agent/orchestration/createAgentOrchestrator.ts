@@ -47,6 +47,7 @@ export type AgentOrchestratorFactoryOptions = {
   readonly policy?: ToolPolicy;
   readonly grantsEffects?: ConstructorParameters<typeof ToolAccessResolver>[1];
   readonly systemPrompt?: string;
+  readonly rejectDelegation?: (subagentType: string) => string | null;
 };
 
 function isSkillAgent(definition: { readonly metadata?: Readonly<Record<string, unknown>> }) {
@@ -124,6 +125,7 @@ export function createAgentOrchestrator(
     executor,
     subagentRuntime: taskRuntime,
     systemPrompt: usesLegacyLimits ? undefined : options.systemPrompt,
+    rejectDelegation: usesLegacyLimits ? undefined : options.rejectDelegation,
   });
   const scheduler = new TaskScheduler(
     new AgentTaskRunner(taskRuntime),

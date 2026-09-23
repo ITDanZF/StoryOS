@@ -1,3 +1,4 @@
+import type { Database as BetterSqliteDatabase } from "better-sqlite3";
 import type BookRuntimeManager from "../../runtime/BookRuntimeManager.ts";
 import type { BookRuntimeLease } from "../../runtime/BookRuntimeManager.ts";
 import type BookProvisioningService from "../../application/books/BookProvisioningService.ts";
@@ -13,6 +14,7 @@ import type {
 export default class ProjectBookNovelStore implements NovelPersistence {
   private lease: BookRuntimeLease | null = null;
   private delegate: NovelPersistence | null = null;
+  private database: BetterSqliteDatabase | null = null;
 
   constructor(
     private readonly projectId: string | null,
@@ -31,8 +33,13 @@ export default class ProjectBookNovelStore implements NovelPersistence {
 
   close(): void {
     this.delegate = null;
+    this.database = null;
     this.lease?.close();
     this.lease = null;
+  }
+
+  getDatabase(): BetterSqliteDatabase | null {
+    return this.database;
   }
 
   createNovel(input: Omit<NovelRecord, "createdAt" | "updatedAt">): NovelRecord {
@@ -155,6 +162,7 @@ export default class ProjectBookNovelStore implements NovelPersistence {
     this.lease?.close();
     this.lease = lease;
     this.delegate = lease.persistence;
+    this.database = lease.database;
   }
 
   private requireStore(): NovelPersistence {

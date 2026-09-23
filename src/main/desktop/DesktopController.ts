@@ -1,11 +1,29 @@
 import { shell } from "electron";
 import type { ModelConnectionConfiguration } from "../agent/model/ModelConfiguration.ts";
 import BookWorkspaceApplication from "../story/application/books/BookWorkspaceApplication.ts";
+import OutlineApplication from "../story/application/outline/OutlineApplication.ts";
+import SqliteOutlineStore from "../story/storage/book/SqliteOutlineStore.ts";
 import ConversationApplication from "../story/application/conversations/ConversationApplication.ts";
 import type { ConversationApplicationEventHandler } from "../story/application/conversations/conversationContracts.ts";
 import ProjectLifecycleApplication from "../story/application/projects/ProjectLifecycleApplication.ts";
 import ProjectNavigationReader from "../story/application/projects/ProjectNavigationReader.ts";
 import type { DesktopControllerDependencies } from "./DesktopControllerDependencies.ts";
+import type {
+  ApplyOutlinePatchRequest,
+  BuildChapterContextRequest,
+  CreateOutlineRequest,
+  LoadHandoffRequest,
+  MapOutlineNodesRequest,
+  MarkNodesPendingRequest,
+  ProposeOutlineRequest,
+  ReviewCoverageRequest,
+  RunOutlineChecksRequest,
+  StartChapterWritingRequest,
+  UnmapOutlineNodeRequest,
+  UpdateOutlineNodeRequest,
+  UpdateOutlineProfileRequest,
+  WaiveMainlineRequest,
+} from "../../shared/contracts/outline/outlineContracts.ts";
 export type { DesktopControllerDependencies } from "./DesktopControllerDependencies.ts";
 
 export default class DesktopController {
@@ -306,5 +324,83 @@ export default class DesktopController {
   }
   clearSkillState(threadId?: string) {
     return this.dependencies.runtime.threads.clearSkillState(threadId);
+  }
+
+  getOutlineSnapshot(projectId: string) {
+    return this.outlineApplication(projectId).then((outline) => outline.getOutlineSnapshot(projectId));
+  }
+
+  createOutline(request: CreateOutlineRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.createOutline(request));
+  }
+
+  updateOutlineProfile(request: UpdateOutlineProfileRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.updateOutlineProfile(request));
+  }
+
+  updateOutlineNode(request: UpdateOutlineNodeRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.updateOutlineNode(request));
+  }
+
+  previewOutlinePatch(request: ApplyOutlinePatchRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.previewOutlinePatch(request));
+  }
+
+  applyOutlinePatch(request: ApplyOutlinePatchRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.applyOutlinePatch(request));
+  }
+
+  mapOutlineNodes(request: MapOutlineNodesRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.mapOutlineNodes(request));
+  }
+
+  unmapOutlineNode(request: UnmapOutlineNodeRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.unmapOutlineNode(request));
+  }
+
+  proposeOutline(request: ProposeOutlineRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.proposeOutline(request));
+  }
+
+  runOutlineChecks(request: RunOutlineChecksRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.runOutlineChecks(request));
+  }
+
+  buildChapterContext(request: BuildChapterContextRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.buildChapterContext(request));
+  }
+
+  markNodesPendingVerification(request: MarkNodesPendingRequest) {
+    return this.outlineApplication(request.projectId).then((outline) =>
+      outline.markNodesPendingVerification(request),
+    );
+  }
+
+  reviewChapterCoverage(request: ReviewCoverageRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.reviewChapterCoverage(request));
+  }
+
+  loadEventGraphHandoff(request: LoadHandoffRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.loadEventGraphHandoff(request));
+  }
+
+  waiveChapterMainline(request: WaiveMainlineRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.waiveChapterMainline(request));
+  }
+
+  startChapterWriting(request: StartChapterWritingRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.startChapterWriting(request));
+  }
+
+  private async outlineApplication(projectId: string): Promise<OutlineApplication> {
+    const runtime = await this.dependencies.runtime.resolve({ kind: "project", projectId });
+    const database = runtime.openBookDatabase();
+    if (!database) throw new Error("The current project does not contain a book.");
+    return new OutlineApplication(new SqliteOutlineStore(database), {
+      model: runtime.model,
+      chapterGeneration: runtime.chapterGeneration,
+      retrieveEvidence: (bookId, chapterId, query) =>
+        runtime.retrieveOutlineEvidence(bookId, chapterId, query),
+    });
   }
 }

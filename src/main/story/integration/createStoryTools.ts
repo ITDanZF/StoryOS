@@ -2,6 +2,10 @@ import { getDefaultWorkSpace } from "../../agent/environment/paths.ts";
 import type { SkillInstaller } from "../../agent/skills/SkillInstallService.ts";
 import WorkspaceToolContext from "./StoryWorkspaceToolContext.ts";
 import { createBookTools, type BookToolContext } from "./tools/book/index.ts";
+import {
+  createUnavailableChapterWriterTool,
+  createUnavailableOutlineTools,
+} from "./tools/outline/index.ts";
 import type { RendererEditorToolClient } from "./tools/editor/contracts.ts";
 import { createEditorTools } from "./tools/editor/editorTools.ts";
 import { createTools as createCoreTools } from "../../agent/tools/index.ts";
@@ -16,12 +20,18 @@ export type CreateToolsOptions = {
 
 export function createTools(options: CreateToolsOptions = {}) {
   const context = options.workspaceContext ?? new WorkspaceToolContext(getDefaultWorkSpace());
-  return [
+  const tools = [
     ...createCoreTools({ workspaceContext: context, skillInstaller: options.skillInstaller }),
     ...(options.bookContext ? createBookTools(options.bookContext) : []),
     ...(options.rendererEditorTools && options.rendererEditorProjectId
       ? createEditorTools(options.rendererEditorTools, options.rendererEditorProjectId)
       : []),
+  ];
+  const names = new Set(tools.map((item) => item.name));
+  return [
+    ...tools,
+    ...(names.has("get_narrative_outline") ? [] : createUnavailableOutlineTools()),
+    ...(names.has("generate_book_chapter_content") ? [] : [createUnavailableChapterWriterTool()]),
   ];
 }
 

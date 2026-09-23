@@ -6,6 +6,10 @@
 
 - 书籍工作区性能阶段 2–5：`docs/todo/performance/`
 - 大纲模块：`docs/todo/outline-module-design-analysis.md`
+- 叙事事件模型（论文综合与落地边界）：`docs/architecture/narrative-event-model.md`
+- 叙事事件前端原型：`docs/architecture/narrative-event-frontend-prototype.md`
+- 叙事事件后端架构：`docs/architecture/narrative-event-backend.md`
+- 叙事事件后端执行方案：`docs/todo/narrative-event-execution-plan.md`
 - 阿里云 Text Embedding 接入：`docs/todo/aliyun-text-embedding.md`
 - 小说正文向量化：`docs/todo/novel-vectorization.md`
 - 小说向量库落地架构与实现步骤：`docs/architecture/database-vnext/05-novel-vector-store.md`

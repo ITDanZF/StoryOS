@@ -14,6 +14,9 @@ import { createAgentOrchestrator } from "../integration/createStoryAgentOrchestr
 import BookToolContext from "../integration/tools/book/BookToolContext.ts";
 import type { RendererEditorToolClient } from "../integration/tools/editor/contracts.ts";
 import WorkspaceToolContext from "../integration/StoryWorkspaceToolContext.ts";
+import OutlineApplication from "../application/outline/OutlineApplication.ts";
+import SqliteOutlineStore from "../storage/book/SqliteOutlineStore.ts";
+import { NovelVectorQueryError } from "../application/vectors/searchNovelVectors.ts";
 import BookProvisioningService from "../application/books/BookProvisioningService.ts";
 import type { BookRegistry } from "../application/books/bookRegistryPorts.ts";
 import ChapterGenerationService from "../application/books/ChapterGenerationService.ts";
@@ -136,6 +139,32 @@ export default class WorkspaceRuntimeFactory {
       const chapterGeneration = project
         ? new ChapterGenerationService(model, novels, publishScopedEvent)
         : undefined;
+      const retrieveOutlineEvidence = async (bookId: string, chapterId: string, query: string) => {
+        const passages = this.novelVectors?.passages;
+        if (!passages) throw new NovelVectorQueryError("Novel vector index does not exist.");
+        const hits = await passages.searchPassages({
+          bookId,
+          query,
+          limit: 4,
+          upToChapterId: chapterId,
+        });
+        return hits.map((hit) => ({
+          chapterId: hit.chapterId,
+          revisionId: hit.revisionId,
+          startOffset: hit.startOffset,
+          endOffset: hit.endOffset,
+          content: hit.content,
+        }));
+      };
+      const openOutline = () => {
+        const database = bookStore.getDatabase();
+        if (!database) throw new Error("The current project does not contain a book.");
+        return new OutlineApplication(new SqliteOutlineStore(database), {
+          model,
+          chapterGeneration: chapterGeneration ?? null,
+          retrieveEvidence: retrieveOutlineEvidence,
+        });
+      };
       const skills = await SkillApplication.create({
         loader: new SkillLoader({ projectSkillRoot: layout.skillsRoot }),
         scaffold: new SkillScaffoldService({
@@ -173,6 +202,7 @@ export default class WorkspaceRuntimeFactory {
                   novels,
                   chapterGeneration,
                   this.novelVectors?.passages,
+                  openOutline,
                 ),
               }
             : {}),
@@ -209,6 +239,9 @@ export default class WorkspaceRuntimeFactory {
         skills,
         model,
         modelSessions,
+        openBookDatabase: () => bookStore.getDatabase(),
+        chapterGeneration: chapterGeneration ?? null,
+        retrieveOutlineEvidence,
         unsubscribe,
         close: () => resources.close(),
       });

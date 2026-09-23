@@ -55,6 +55,7 @@ export type AgentGeneratorOptions = {
   readonly executor?: AgentExecutor;
   readonly subagentRuntime?: AgentRuntime;
   readonly systemPrompt?: string;
+  readonly rejectDelegation?: (subagentType: string) => string | null;
 };
 
 const delegationInstructions = [
@@ -88,6 +89,7 @@ export default class AgentGenerator {
   private readonly activeRuns = new Map<string, RunAbortScope>();
   private readonly promptCompiler = new PromptCompiler();
   private readonly systemPrompt?: string;
+  private readonly rejectDelegation?: (subagentType: string) => string | null;
 
   constructor(options: AgentGeneratorOptions = {}) {
     const model = options.model ?? new AgentModel().getActiveAgent().model;
@@ -104,6 +106,7 @@ export default class AgentGenerator {
     this.limits = options.limits ?? DEFAULT_RUN_LIMITS;
     this.skillContextProvider = options.skillContextProvider;
     this.systemPrompt = options.systemPrompt;
+    this.rejectDelegation = options.rejectDelegation;
     this.executor = options.executor ?? new AgentExecutor(model);
     this.subagentRuntime =
       options.subagentRuntime ??
@@ -143,6 +146,7 @@ export default class AgentGenerator {
       onEvent: options.onAgentEvent,
       budget,
       approval: options.approval ?? this.approval,
+      rejectDelegation: this.rejectDelegation,
     });
     const requiredEffects = [...new Set(options.requiredEffects ?? [])];
     const requiredToolIds = new Set(
