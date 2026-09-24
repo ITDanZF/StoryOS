@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StoryOS · 叙事图 canvas</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./storywriter.css">
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span><strong>StoryOS</strong><small>GRAPH</small></span>
+      </div>
+      <div class="tools" id="tools"></div>
+    </header>
+    <div class="stage">
+      <div class="viewport" id="viewport" tabindex="0" aria-label="叙事图画布">
+        <div class="world" id="world">
+          <svg id="edges" aria-hidden="true"></svg>
+          <div id="nodes"></div>
+        </div>
+        <p class="hint">拖动画布 · 滚轮缩放 · 双击复位</p>
+      </div>
+      <aside class="inspector" id="inspector" aria-label="顶点与边"></aside>
+    </div>
+  </div>
+  <script src="./storywriter.js"></script>
+</body>
+</html>
