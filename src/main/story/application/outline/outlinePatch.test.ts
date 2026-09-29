@@ -327,4 +327,52 @@ describe("outline patch", () => {
       book.database.handle.prepare("SELECT title FROM chapters WHERE id = ?").get(book.chapterId),
     ).toEqual({ title: "第一章" });
   });
+
+  it("deletes one relation and leaves the nodes", () => {
+    const { book, outline } = application();
+    const created = createActive(outline, book.projectId);
+    const seeded = outline.applyOutlinePatch({
+      projectId: book.projectId,
+      patch: {
+        outlineId: created.outline.id,
+        expectedRevision: created.outline.revision,
+        operations: [
+          { type: "create_node", tempId: "temp-1", value: eventNode({ title: "夜探", storyOrder: 1, narrativeOrder: 1 }) },
+          { type: "create_node", tempId: "temp-2", value: eventNode({ title: "天亮", storyOrder: 2, narrativeOrder: 2 }) },
+        ],
+      },
+    });
+    const source = seeded.snapshot.nodes.find((node) => node.title === "夜探");
+    const target = seeded.snapshot.nodes.find((node) => node.title === "天亮");
+    if (!source || !target) throw new Error("nodes missing");
+    const linked = outline.applyOutlinePatch({
+      projectId: book.projectId,
+      patch: {
+        outlineId: created.outline.id,
+        expectedRevision: seeded.snapshot.outline.revision,
+        operations: [{
+          type: "upsert_relation",
+          value: {
+            sourceNodeId: source.id,
+            targetNodeId: target.id,
+            type: "causes",
+            description: "夜探引出天亮",
+            orderException: false,
+          },
+        }],
+      },
+    });
+    const relationId = linked.snapshot.relations[0]?.id;
+    if (!relationId) throw new Error("relation missing");
+    const removed = outline.applyOutlinePatch({
+      projectId: book.projectId,
+      patch: {
+        outlineId: created.outline.id,
+        expectedRevision: linked.snapshot.outline.revision,
+        operations: [{ type: "delete_relation", relationId }],
+      },
+    });
+    expect(removed.snapshot.relations).toEqual([]);
+    expect(removed.snapshot.nodes).toHaveLength(2);
+  });
 });

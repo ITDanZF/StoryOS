@@ -86,6 +86,7 @@ const patchSchema = z
             })
             .strict(),
           z.object({ type: z.literal("delete_node"), nodeId: id }).strict(),
+          z.object({ type: z.literal("delete_relation"), relationId: id }).strict(),
           z
             .object({
               type: z.literal("upsert_relation"),
@@ -184,18 +185,25 @@ export default class OutlineIpcController {
           .parse(withoutBookId(request)),
       ),
     );
-    handle(OUTLINE_IPC_CHANNELS.propose, (request: unknown) =>
-      getController().proposeOutline(
-        z
-          .object({
-            projectId: id,
-            planningMode: z.enum(OUTLINE_PLANNING_MODES),
-            parentNodeId: id.nullable(),
-          })
-          .strict()
-          .parse(withoutBookId(request)),
-      ),
-    );
+    handle(OUTLINE_IPC_CHANNELS.propose, (request: unknown) => {
+      const parsed = z
+        .object({
+          projectId: id,
+          planningMode: z.enum(OUTLINE_PLANNING_MODES),
+          parentNodeId: id.nullable(),
+          instruction: text(OUTLINE_LIMITS.instruction).optional(),
+          focusNodeIds: z.array(id).max(OUTLINE_LIMITS.operations).optional(),
+        })
+        .strict()
+        .parse(withoutBookId(request));
+      return getController().proposeOutline({
+        projectId: parsed.projectId,
+        planningMode: parsed.planningMode,
+        parentNodeId: parsed.parentNodeId ?? null,
+        ...(parsed.instruction !== undefined ? { instruction: parsed.instruction } : {}),
+        ...(parsed.focusNodeIds !== undefined ? { focusNodeIds: parsed.focusNodeIds } : {}),
+      });
+    });
     handle(OUTLINE_IPC_CHANNELS.previewPatch, (request: unknown) =>
       getController().previewOutlinePatch(patchRequest(request)),
     );

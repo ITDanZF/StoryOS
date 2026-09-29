@@ -96,6 +96,8 @@ export function renderOutlineProposalPrompt(
   snapshot: OutlineSnapshot | null,
   parentNodeId: string | null,
   planningMode: OutlinePlanningMode,
+  instruction = "",
+  focusNodeIds: readonly string[] = [],
 ): string {
   if (!OUTLINE_PLANNING_MODES.includes(planningMode)) {
     throw new OutlineValidationError("规划模式枚举非法");
@@ -122,6 +124,8 @@ export function renderOutlineProposalPrompt(
     `同级标题：${siblings.join("、")}`,
     `紧邻叶子：${leaves.slice(0, 2).join("；")}`,
     parent ? `展开节点：${parent.title}` : "展开根层",
+    instruction.trim() === "" ? "" : `作者要求：${instruction.trim()}`,
+    focusSection(snapshot, focusNodeIds),
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -169,6 +173,23 @@ export function readProposalOperations(
   }
   if (problems.length > 0) return { problems };
   return { summary: result.data.summary, operations: result.data.operations };
+}
+
+function focusSection(snapshot: OutlineSnapshot | null, focusNodeIds: readonly string[]): string {
+  if (focusNodeIds.length === 0) return "";
+  const lines = ["作者点名了这些节点。可以更新它们，或给它们添加一层子事件和边。不要改未点名节点的原文。"];
+  for (const nodeId of focusNodeIds) {
+    const node = snapshot?.nodes.find((item) => item.id === nodeId);
+    if (!node) continue;
+    lines.push(`点名节点：${node.title}；摘要 ${node.summary}；目标 ${node.goal}；冲突 ${node.conflict}；结果 ${node.outcome}`);
+  }
+  for (const relation of snapshot?.relations ?? []) {
+    if (!focusNodeIds.includes(relation.sourceNodeId) && !focusNodeIds.includes(relation.targetNodeId)) continue;
+    const source = snapshot?.nodes.find((node) => node.id === relation.sourceNodeId)?.title ?? relation.sourceNodeId;
+    const target = snapshot?.nodes.find((node) => node.id === relation.targetNodeId)?.title ?? relation.targetNodeId;
+    lines.push(`已有边：${source} -${relation.type}-> ${target}：${relation.description}`);
+  }
+  return lines.join("\n");
 }
 
 function ancestorTitles(snapshot: OutlineSnapshot | null, nodeId: string): string[] {

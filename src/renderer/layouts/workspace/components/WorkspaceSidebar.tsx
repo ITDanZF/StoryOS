@@ -21,6 +21,7 @@ import SettingsLauncher, { type SettingsPage } from "./SettingsLauncher.tsx";
 type WorkspaceSidebarProps = {
   readonly open: boolean;
   readonly bookshelfActive: boolean;
+  readonly activeEventGraphProjectId: string | null;
   readonly projects: ProjectSnapshot | null;
   readonly activeBookProjectId: string | null;
   readonly conversationScope: ConversationScope;
@@ -28,6 +29,7 @@ type WorkspaceSidebarProps = {
   readonly projectNavigations: Readonly<Record<string, ProjectNavigationSnapshot>>;
   readonly onClose: () => void;
   readonly onOpenBookshelf: () => void;
+  readonly onOpenEventGraph: (project: ProjectDto) => Promise<void>;
   readonly onCreateProject: (request: CreateProjectRequest) => Promise<void>;
   readonly onOpenProject: (projectPath: string) => Promise<void>;
   readonly onOpenProjectDirectory: (projectPath: string) => Promise<void>;
@@ -51,6 +53,7 @@ type WorkspaceSidebarProps = {
 export default function WorkspaceSidebar({
   open,
   bookshelfActive,
+  activeEventGraphProjectId,
   projects,
   activeBookProjectId,
   conversationScope,
@@ -58,6 +61,7 @@ export default function WorkspaceSidebar({
   projectNavigations,
   onClose,
   onOpenBookshelf,
+  onOpenEventGraph,
   onCreateProject,
   onOpenProject,
   onOpenProjectDirectory,
@@ -173,11 +177,13 @@ export default function WorkspaceSidebar({
               projects={projects}
               projectsExpanded={projectsExpanded}
               activeBookProjectId={activeBookProjectId}
+              activeEventGraphProjectId={activeEventGraphProjectId}
               conversationScope={conversationScope}
               globalThreads={globalThreads}
               projectNavigations={projectNavigations}
               onLoadProjectNavigation={onLoadProjectNavigation}
               onOpenBookWorkspace={async (project) => { await onOpenBookWorkspace(project); onClose(); }}
+              onOpenEventGraph={async (project) => { await onOpenEventGraph(project); onClose(); }}
               onCreateConversation={async (scope) => { await onCreateConversation(scope); onClose(); }}
               onSwitchConversation={async (scope, threadId) => { await onSwitchConversation(scope, threadId); onClose(); }}
               onDeleteConversation={onDeleteConversation}

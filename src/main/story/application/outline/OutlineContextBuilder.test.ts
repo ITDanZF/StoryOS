@@ -169,6 +169,43 @@ describe("outline context", () => {
     expect(context.instruction).toContain("没有命中");
   });
 
+  it("writes chosen edges into the instruction and keeps outside edges as context", () => {
+    const current = snapshot();
+    const context = buildChapterInstruction({
+      snapshot: {
+        ...current,
+        relations: [
+          {
+            id: "rel-1",
+            outlineId: "outline-1",
+            sourceNodeId: "current",
+            targetNodeId: "next",
+            type: "causes",
+            description: "夜探引出天亮",
+            orderException: false,
+            createdAt: "2026-09-23T00:00:00.000Z",
+          },
+          {
+            id: "rel-2",
+            outlineId: "outline-1",
+            sourceNodeId: "draft",
+            targetNodeId: "current",
+            type: "foreshadows",
+            description: "草拟只作铺垫",
+            orderException: false,
+            createdAt: "2026-09-23T00:00:00.000Z",
+          },
+        ],
+      },
+      chapterId: "chapter-1",
+      selection: ["current", "next"],
+      chapters,
+      evidence: [],
+    });
+    expect(context.instruction).toContain("必须写进正文：夜探 —因果→ 天亮：夜探引出天亮");
+    expect(context.instruction).toContain("只作上下文：草拟 —伏笔→ 夜探：草拟只作铺垫");
+  });
+
   it("keeps hard constraints and drops evidence content when the budget is exceeded", () => {
     const context = buildChapterInstruction({
       snapshot: snapshot(),

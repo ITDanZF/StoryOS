@@ -59,6 +59,7 @@ const patchSchema = z.object({
           order: z.number().int(),
         }),
         z.object({ type: z.literal("delete_node"), nodeId: z.string().min(1) }),
+        z.object({ type: z.literal("delete_relation"), relationId: z.string().min(1).max(OUTLINE_LIMITS.id) }),
         z.object({
           type: z.literal("upsert_relation"),
           value: z.object({
@@ -94,12 +95,14 @@ const patchSchema = z.object({
 export function createOutlineMutationTools(openOutline: () => OutlineApplication, projectId: string) {
   return [
     tool(
-      async ({ planning_mode, parent_node_id }) =>
+      async ({ planning_mode, parent_node_id, instruction, focus_node_ids }) =>
         stringify(
           await openOutline().proposeOutline({
             projectId,
             planningMode: planning_mode,
             parentNodeId: parent_node_id,
+            ...(instruction ? { instruction } : {}),
+            ...(focus_node_ids ? { focusNodeIds: focus_node_ids } : {}),
           }),
         ),
       {
@@ -108,6 +111,8 @@ export function createOutlineMutationTools(openOutline: () => OutlineApplication
         schema: z.object({
           planning_mode: z.enum(OUTLINE_PLANNING_MODES),
           parent_node_id: z.string().nullable(),
+          instruction: z.string().max(OUTLINE_LIMITS.instruction).optional(),
+          focus_node_ids: z.array(z.string().min(1).max(OUTLINE_LIMITS.id)).max(OUTLINE_LIMITS.operations).optional(),
         }),
       },
     ),

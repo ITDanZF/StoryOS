@@ -65,6 +65,7 @@ export function buildChapterInstruction(input: {
     { id: "hard", text: hard },
     { id: "ancestors", text: ancestorSection(input.snapshot, chosen) },
     { id: "neighbors", text: neighborSection(input.snapshot, chosen) },
+    { id: "selected-relations", text: selectedRelationSection(input.snapshot, chosen) },
     { id: "chapter-leaves", text: otherLeafSection(input.snapshot, input.chapterId, chosen) },
     { id: "participant-state", text: participantStateSection(input.snapshot, chosen) },
     { id: "promises", text: promiseSection(input.snapshot, input.chapterId, input.chapters) },
@@ -174,6 +175,41 @@ function neighborSection(snapshot: OutlineSnapshot, chosen: readonly OutlineNode
   }
   const next = lastIndex >= 0 ? leaves[lastIndex + 1] : undefined;
   if (next) lines.push(`下一叶子（${NEXT_LEAF_MARKER}）：${next.title}：${next.summary}`);
+  return lines.length === 1 ? "" : lines.join("\n");
+}
+
+function selectedRelationSection(snapshot: OutlineSnapshot, chosen: readonly OutlineNode[]): string {
+  if (chosen.length === 0) return "";
+  const ids = new Set(chosen.map((node) => node.id));
+  const name = (id: string) => snapshot.nodes.find((node) => node.id === id)?.title ?? id;
+  const label: Readonly<Record<string, string>> = {
+    causes: "因果",
+    requires: "前置",
+    reveals: "揭示",
+    foreshadows: "伏笔",
+    contrasts: "对照",
+  };
+  const lines = ["节点关系"];
+  for (const relation of snapshot.relations) {
+    const sourceIn = ids.has(relation.sourceNodeId);
+    const targetIn = ids.has(relation.targetNodeId);
+    if (!sourceIn && !targetIn) continue;
+    const arrow = `${name(relation.sourceNodeId)} —${label[relation.type] ?? relation.type}→ ${name(relation.targetNodeId)}`;
+    const description = relation.description.trim();
+    const text = description === "" ? arrow : `${arrow}：${description}`;
+    lines.push(sourceIn && targetIn ? `必须写进正文：${text}` : `只作上下文：${text}`);
+  }
+  const narrative = [...chosen].sort(
+    (left, right) => left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id),
+  );
+  const story = [...chosen].sort(
+    (left, right) => left.storyOrder - right.storyOrder || left.id.localeCompare(right.id),
+  );
+  if (narrative.map((node) => node.id).join("\0") !== story.map((node) => node.id).join("\0")) {
+    lines.push(
+      `按叙事序写：${narrative.map((node) => node.title).join("，")}。故事发生顺序是：${story.map((node) => node.title).join("，")}。`,
+    );
+  }
   return lines.length === 1 ? "" : lines.join("\n");
 }
 

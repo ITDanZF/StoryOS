@@ -205,7 +205,26 @@ export default class OutlineApplication {
   async proposeOutline(request: ProposeOutlineRequest): Promise<OutlineProposal> {
     this.guard(request);
     const snapshot = this.store.readActive();
-    const prompt = renderOutlineProposalPrompt(snapshot, request.parentNodeId, request.planningMode);
+    const instruction = request.instruction?.trim() ?? "";
+    if (outlineTextLength(instruction) > OUTLINE_LIMITS.instruction) {
+      throw new OutlineValidationError("要求超过上限");
+    }
+    const focusNodeIds = request.focusNodeIds ?? [];
+    if (focusNodeIds.length > OUTLINE_LIMITS.operations) {
+      throw new OutlineValidationError("点名节点过多");
+    }
+    for (const nodeId of focusNodeIds) {
+      if (!snapshot?.nodes.some((node) => node.id === nodeId)) {
+        throw new OutlineValidationError("引用不存在");
+      }
+    }
+    const prompt = renderOutlineProposalPrompt(
+      snapshot,
+      request.parentNodeId,
+      request.planningMode,
+      instruction,
+      focusNodeIds,
+    );
     const text = await this.invoke(prompt, outlineProposePrompt);
     const parsed = readProposalOperations(text);
     if ("problems" in parsed) return { status: "repairable", problems: parsed.problems };

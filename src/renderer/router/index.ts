@@ -4,6 +4,7 @@ import InstanceGate from "../features/instances/InstanceGate.tsx";
 import InstancePage from "../features/instances/InstancePage.tsx";
 import AboutPage from "../pages/about/AboutPage.tsx";
 import BookshelfPage from "../pages/bookshelf/BookshelfPage.tsx";
+import EventGraphPage from "../pages/event-graph/EventGraphPage.tsx";
 import BookshelfTrashPage from "../pages/bookshelf/trash/BookshelfTrashPage.tsx";
 import ConversationPage from "../pages/conversation/ConversationPage.tsx";
 import BookWorkspacePage from "../pages/book/BookWorkspacePage.tsx";
@@ -37,6 +38,10 @@ export const router = createHashRouter([
           {
             path: "conversations/:threadId?",
             Component: ConversationPage,
+          },
+          {
+            path: "projects/:projectId/events",
+            Component: EventGraphPage,
           },
           {
             path: "bookshelf",

@@ -282,6 +282,7 @@ export type OutlinePatchOperation =
     }
   | { readonly type: "delete_node"; readonly nodeId: string }
   | { readonly type: "upsert_relation"; readonly value: RelationInput }
+  | { readonly type: "delete_relation"; readonly relationId: string }
   | { readonly type: "upsert_promise"; readonly value: PromiseInput };
 
 export type OutlinePatch = {
@@ -392,6 +393,8 @@ export type ProposeOutlineRequest = {
   readonly projectId: string;
   readonly planningMode: OutlinePlanningMode;
   readonly parentNodeId: string | null;
+  readonly instruction?: string;
+  readonly focusNodeIds?: readonly string[];
 };
 
 export type ApplyOutlinePatchRequest = {

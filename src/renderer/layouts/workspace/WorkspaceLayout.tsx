@@ -69,6 +69,9 @@ export default function WorkspaceLayout() {
       {location.pathname !== "/settings" && !reading && <WorkspaceSidebar
         open={sidebarOpen}
         bookshelfActive={location.pathname.startsWith("/bookshelf")}
+        activeEventGraphProjectId={
+          location.pathname.match(/^\/projects\/([^/]+)\/events$/)?.[1] ?? null
+        }
         projects={state.projects}
         activeBookProjectId={
           location.pathname.match(/^\/projects\/([^/]+)\/book$/)?.[1] ?? null
@@ -80,6 +83,12 @@ export default function WorkspaceLayout() {
         onOpenBookshelf={() => {
           setSidebarOpen(false);
           navigate("/bookshelf");
+        }}
+        onOpenEventGraph={async (project) => {
+          if (state.projects?.activeProjectId !== project.id) {
+            await switchProject(project.path);
+          }
+          navigate(`/projects/${project.id}/events`);
         }}
         onCreateProject={async (request) => {
           await createProject(request);

@@ -5,6 +5,7 @@ import {
   MessageSquareText,
   Plus,
   Trash2,
+  Waypoints,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type {
@@ -22,11 +23,13 @@ type ProjectConversationTreeProps = {
   readonly projects: ProjectSnapshot;
   readonly projectsExpanded: boolean;
   readonly activeBookProjectId: string | null;
+  readonly activeEventGraphProjectId: string | null;
   readonly conversationScope: ConversationScope;
   readonly globalThreads: ThreadSnapshot | null;
   readonly projectNavigations: Readonly<Record<string, ProjectNavigationSnapshot>>;
   readonly onLoadProjectNavigation: (projectId: string) => Promise<void>;
   readonly onOpenBookWorkspace: (project: ProjectDto) => Promise<void>;
+  readonly onOpenEventGraph: (project: ProjectDto) => Promise<void>;
   readonly onCreateConversation: (scope: ConversationScope) => Promise<void>;
   readonly onSwitchConversation: (
     scope: ConversationScope,
@@ -45,11 +48,13 @@ export default function ProjectConversationTree({
   projects,
   projectsExpanded,
   activeBookProjectId,
+  activeEventGraphProjectId,
   conversationScope,
   globalThreads,
   projectNavigations,
   onLoadProjectNavigation,
   onOpenBookWorkspace,
+  onOpenEventGraph,
   onCreateConversation,
   onSwitchConversation,
   onDeleteConversation,
@@ -208,6 +213,21 @@ export default function ProjectConversationTree({
 
                 <AnimatedCollapse open={expanded}>
                   <div className="grid gap-0.5">
+                    <button
+                      className={cn(
+                        "ml-5 flex h-9 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-xs text-text-secondary transition hover:bg-border/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong",
+                        activeEventGraphProjectId === project.id &&
+                          "bg-border text-foreground",
+                      )}
+                      type="button"
+                      aria-current={
+                        activeEventGraphProjectId === project.id ? "page" : undefined
+                      }
+                      onClick={() => void onOpenEventGraph(project)}
+                    >
+                      <Waypoints size={14} />
+                      <span className="min-w-0 flex-1 truncate">事件图</span>
+                    </button>
                     <button
                       className={cn(
                         "ml-5 flex h-9 items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-left text-xs text-text-secondary transition hover:bg-border/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong",

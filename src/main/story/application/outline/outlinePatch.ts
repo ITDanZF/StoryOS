@@ -148,6 +148,9 @@ function applyOperation(
     case "upsert_relation":
       upsertRelation(working, operation.value, tempIds, affected, allocateId, now);
       return;
+    case "delete_relation":
+      deleteRelation(working, operation.relationId, affected, preview);
+      return;
     case "upsert_promise":
       upsertPromise(working, operation.value, tempIds, foreignNodeIds, allocateId, now);
       return;
@@ -418,6 +421,21 @@ function upsertRelation(
   }
   affected.add(sourceNodeId);
   affected.add(targetNodeId);
+}
+
+function deleteRelation(
+  working: WorkingSnapshot,
+  relationId: string,
+  affected: Set<string>,
+  preview: OutlinePatchPreviewMutable,
+): void {
+  const index = working.relations.findIndex((relation) => relation.id === relationId);
+  const existing = working.relations[index];
+  if (!existing) throw new OutlineValidationError("引用不存在");
+  working.relations.splice(index, 1);
+  preview.relationIds.push(existing.id);
+  affected.add(existing.sourceNodeId);
+  affected.add(existing.targetNodeId);
 }
 
 function upsertPromise(
