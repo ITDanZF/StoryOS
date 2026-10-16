@@ -53,14 +53,17 @@ CREATE TABLE outline_node_relations (
 ) STRICT;
 CREATE TABLE outline_node_chapters (
  chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
- node_id TEXT NOT NULL UNIQUE REFERENCES outline_nodes(id) ON DELETE CASCADE,
+ node_id TEXT NOT NULL REFERENCES outline_nodes(id) ON DELETE CASCADE,
  sort_order INTEGER NOT NULL,
+ segment_intent TEXT NOT NULL,
+ expected_local_change TEXT NOT NULL,
  coverage_status TEXT NOT NULL CHECK(coverage_status IN ('planned','drafted','verified','deviated')),
  coverage_note TEXT NOT NULL,
  verification_outline_revision INTEGER,
  verification_chapter_revision_id TEXT,
  PRIMARY KEY(chapter_id, node_id)
 ) STRICT;
+CREATE INDEX outline_node_chapters_node ON outline_node_chapters(node_id, chapter_id);
 CREATE TABLE outline_node_participants (
  node_id TEXT NOT NULL REFERENCES outline_nodes(id) ON DELETE CASCADE,
  participant_name TEXT NOT NULL,

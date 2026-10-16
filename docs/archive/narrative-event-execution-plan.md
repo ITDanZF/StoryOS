@@ -1,5 +1,7 @@
 # 叙事事件后端执行方案
 
+> 历史实施记录（2026-09-23）。本文记录当时后端阶段 1–5 的落地过程，不作为当前前端待办清单。当前执行状态见 [事件图第一版执行步骤](../architecture/event-graph-v1-implementation.md)。
+
 > 文档状态：后端阶段 1–5 已写入代码，尚未接渲染进程  
 > 生成日期：2026-09-23  
 > 进度：2026-09-23，阶段 1–5 后端已落地。没有主线时返回 `choice`，不创建 `chapter-writer` 运行；`generate-events` 只做一次 `outline:propose` 并返回候选，不落库、不启动 event-graph 运行；`continue` 先写入放弃记录，再以 `waived` 写作。主 Agent 的 `delegate_task` 不能直接委派 `chapter-writer`。验证：`npx tsc --noEmit -p tsconfig.backend.json` 通过；`node scripts/verify-agent-boundary.cjs` 通过；改动范围内 eslint 通过；`npx vitest run` 覆盖 `src/main/story/application/outline`、`SqliteOutlineStore.test.ts`、`OutlineIpcController.test.ts`、`IpcRegistrar.test.ts`、`outlineTools.test.ts`、`delegateTask.test.ts`、`ChapterGenerationService.outline.test.ts`，10 个文件、32 个测试通过。未覆盖：真实 Electron 窗口里的不可信 frame、真实模型的语义检查与覆盖判断、带模型的端到端专员运行、渲染进程页面。  
@@ -7,8 +9,8 @@
 > 关联文档：  
 > - `docs/architecture/narrative-event-backend.md`（本轮步骤的来源）  
 > - `docs/architecture/narrative-event-model.md`（上下文包与流水线）  
-> - `docs/todo/outline-module-design-analysis.md` 第 6–10 节（字段与检查）  
-> - `docs/architecture/narrative-event-frontend-prototype.md`（不进入本轮）
+> - `docs/archive/outline-module-design-analysis.md` 第 6–10 节（当时的字段与检查建议）<br>
+> - `docs/archive/narrative-event-frontend-prototype.md`（当时未进入后端实施范围）
 
 本文只排列主进程、共享契约、桌面 IPC、preload 桥和产品运行时 Skill 的实现步骤。渲染进程的页面、顶栏模式和对话框留到单独的前端轮次，不作为本轮完成标准。
 
@@ -236,7 +238,7 @@ type EventGraphHandoff =
 
 ## 4. 本轮明确不做的前端
 
-下列界面在 `docs/architecture/narrative-event-frontend-prototype.md` 里，依赖本轮用例，但不属于本轮步骤，也不作为本轮完成标准：
+下列界面写在历史稿 `docs/archive/narrative-event-frontend-prototype.md` 里，当时依赖本轮用例，但不属于本轮步骤，也不作为本轮完成标准：
 
 - 书籍工作区顶栏「正文 / 大纲」。
 - `src/renderer/features/narrative-outline/` 的树、详情、时间线、承诺和检查。

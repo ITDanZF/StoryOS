@@ -262,7 +262,7 @@ describe("outline patch", () => {
       projectId: book.projectId,
       expectedRevision: seeded.snapshot.outline.revision,
       chapterId: book.chapterId,
-      nodeIds: [childId],
+      mappings: [{ nodeId: childId, segmentIntent: "本章推进子事件", expectedLocalChange: "子事件发生变化" }],
     });
     const withPromise = outline.applyOutlinePatch({
       projectId: book.projectId,

@@ -128,13 +128,13 @@ export function createOutlineMutationTools(openOutline: () => OutlineApplication
       },
     ),
     tool(
-      async ({ chapter_id, node_ids, expected_revision }) =>
+      async ({ chapter_id, mappings, expected_revision }) =>
         stringify(
           openOutline().mapOutlineNodes({
             projectId,
             expectedRevision: expected_revision,
             chapterId: chapter_id,
-            nodeIds: node_ids,
+            mappings,
           }),
         ),
       {
@@ -142,7 +142,12 @@ export function createOutlineMutationTools(openOutline: () => OutlineApplication
         description: "Map outline leaf nodes onto one existing chapter. Requires approval and does not change the chapter title.",
         schema: z.object({
           chapter_id: z.string().min(1).max(OUTLINE_LIMITS.id),
-          node_ids: z.array(z.string().min(1).max(OUTLINE_LIMITS.id)).min(1),
+          mappings: z.array(z.object({
+            nodeId: z.string().min(1).max(OUTLINE_LIMITS.id),
+            segmentIntent: z.string().min(1).max(OUTLINE_LIMITS.mappingIntent),
+            expectedLocalChange: z.string().min(1).max(OUTLINE_LIMITS.mappingChange),
+            sortOrder: z.number().int().nonnegative().optional(),
+          }).strict()).min(1).max(OUTLINE_LIMITS.operations),
           expected_revision: z.number().int().positive(),
         }),
       },

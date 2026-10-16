@@ -16,6 +16,8 @@ export const OUTLINE_LIMITS = Object.freeze({
   relationDescription: 2_000,
   participantName: 80,
   participantState: 2_000,
+  mappingIntent: 2_000,
+  mappingChange: 2_000,
   promiseTitle: 200,
   promiseField: 4_000,
   promiseNotes: 4_000,
@@ -93,6 +95,13 @@ export type OutlineIssueSeverity = (typeof OUTLINE_ISSUE_SEVERITIES)[number];
 export type OutlineIssueSource = (typeof OUTLINE_ISSUE_SOURCES)[number];
 export type OutlineIssueStatus = (typeof OUTLINE_ISSUE_STATUSES)[number];
 export type OutlinePlanningMode = (typeof OUTLINE_PLANNING_MODES)[number];
+export type OutlinePlanningField = "title" | "summary" | "goal" | "conflict" | "outcome" | "locationText" | "timeText" | "notes";
+export type OutlinePlanningScope =
+  | { readonly kind: "book" }
+  | { readonly kind: "stage"; readonly stageId: string }
+  | { readonly kind: "node"; readonly nodeId: string }
+  | { readonly kind: "relation"; readonly sourceNodeId: string; readonly targetNodeId: string }
+  | { readonly kind: "field"; readonly nodeId: string; readonly field: OutlinePlanningField };
 
 export type Outline = {
   readonly id: string;
@@ -147,6 +156,8 @@ export type ChapterOutlineMapping = {
   readonly chapterId: string;
   readonly nodeId: string;
   readonly sortOrder: number;
+  readonly segmentIntent: string;
+  readonly expectedLocalChange: string;
   readonly coverageStatus: OutlineCoverageStatus;
   readonly coverageNote: string;
   readonly verificationOutlineRevision: number | null;
@@ -323,14 +334,101 @@ export type OutlineProposalProblem = {
 };
 
 export type OutlineProposal =
-  | { readonly status: "draft"; readonly patch: OutlinePatch; readonly summary: string }
+  | { readonly status: "draft"; readonly patch: OutlinePatch; readonly summary: string; readonly scope?: OutlinePlanningScope }
   | { readonly status: "repairable"; readonly problems: readonly OutlineProposalProblem[] };
+
+export type BackfillEvidence = {
+  readonly chapterId: string;
+  readonly revisionId: string;
+  readonly startOffset: number;
+  readonly endOffset: number;
+  readonly excerpt: string;
+};
+export type NodeBackfillEvidence = BackfillEvidence & { readonly stale: boolean };
+
+export type BackfillCandidate = {
+  readonly candidateId: string;
+  readonly disposition: "matched" | "update-suggested" | "new" | "uncertain";
+  readonly displayTitle: string;
+  readonly fieldDiff: readonly { readonly field: "summary" | "goal" | "conflict" | "outcome"; readonly before: string; readonly after: string }[];
+  readonly matchedNodeId?: string;
+  readonly patchOperations: readonly OutlinePatchOperation[];
+  readonly mappingChanges: readonly {
+    readonly nodeRef: string;
+    readonly chapterId: string;
+    readonly segmentIntent: string;
+    readonly expectedLocalChange: string;
+  }[];
+  readonly evidence: readonly BackfillEvidence[];
+  readonly explanation: string;
+  readonly acceptedNodeId?: string;
+};
+
+export type BackfillScan = {
+  readonly scanId: string;
+  readonly projectId: string;
+  readonly outlineRevision: number;
+  readonly extractorVersion: string;
+  readonly chapterInputs: readonly { readonly chapterId: string; readonly revisionId: string }[];
+  readonly completedChapterIds: readonly string[];
+  readonly candidates: readonly BackfillCandidate[];
+  readonly status: "scanning" | "ready" | "failed" | "stale" | "cancelled";
+};
+
+export type ScanBackfillRequest = { readonly projectId: string; readonly chapterIds?: readonly string[]; readonly volumeId?: string };
+export type CancelBackfillRequest = { readonly projectId: string; readonly scanId: string };
+export type AcceptBackfillRequest = { readonly projectId: string; readonly scanId: string; readonly candidateIds: readonly string[]; readonly confirmedUncertainIds?: readonly string[]; readonly applySuggestedUpdatesFor?: readonly string[] };
+export type BackfillAcceptancePreview = {
+  readonly scanId: string;
+  readonly outlineRevision: number;
+  readonly candidateIds: readonly string[];
+  readonly operations: readonly OutlinePatchOperation[];
+  readonly mappingChanges: BackfillCandidate["mappingChanges"];
+  readonly evidence: readonly BackfillEvidence[];
+};
+
+export type GraphWritingStep = {
+  readonly stepId: string;
+  readonly chapterId: string;
+  readonly chapterTitle: string;
+  readonly nodeIds: readonly string[];
+  readonly mode: "append" | "rewrite";
+  readonly expectedChapterRevisionId: string | null;
+  readonly expectedChapterRowVersion: number;
+  readonly handoffDigest: string;
+  readonly instruction: string;
+  readonly state: "pending" | "running" | "saved" | "failed" | "cancelled";
+  readonly savedRevisionId?: string;
+  readonly errorCode?: string;
+};
+
+export type GraphWritingPlan = {
+  readonly planId: string;
+  readonly projectId: string;
+  readonly scope: { readonly kind: "node" | "stage"; readonly id: string };
+  readonly outlineRevision: number;
+  readonly status: "previewed" | "running" | "completed" | "partial" | "failed" | "cancelled";
+  readonly chapterInputs: readonly { readonly chapterId: string; readonly revisionId: string | null }[];
+  readonly steps: readonly GraphWritingStep[];
+  readonly skippedNodeIds: readonly string[];
+  readonly previewDigest: string;
+};
+
+export type PreviewGraphWritingRequest = {
+  readonly projectId: string;
+  readonly scope: GraphWritingPlan["scope"];
+  readonly chapterIds?: readonly string[];
+  readonly rewriteChapterIds?: readonly string[];
+};
+export type StartGraphWritingRequest = { readonly projectId: string; readonly planId: string; readonly previewDigest: string };
+export type CancelGraphWritingRequest = { readonly projectId: string; readonly planId: string };
 
 export type EventGraphHandoff =
   | {
       readonly status: "ready";
       readonly outlineRevision: number;
       readonly chapterId: string;
+      readonly chapterRevisionId: string | null;
       readonly instruction: string;
       readonly nodeIds: readonly string[];
     }
@@ -342,6 +440,7 @@ export type EventGraphHandoff =
   | {
       readonly status: "waived";
       readonly chapterId: string;
+      readonly chapterRevisionId: string | null;
       readonly instruction: string;
       readonly waivedAtOutlineRevision: number | null;
     }
@@ -395,11 +494,14 @@ export type ProposeOutlineRequest = {
   readonly parentNodeId: string | null;
   readonly instruction?: string;
   readonly focusNodeIds?: readonly string[];
+  readonly scope?: OutlinePlanningScope;
+  readonly expectedOutlineRevision?: number;
 };
 
 export type ApplyOutlinePatchRequest = {
   readonly projectId: string;
   readonly patch: OutlinePatch;
+  readonly scope?: OutlinePlanningScope;
 };
 
 export type RunOutlineChecksRequest = {
@@ -443,6 +545,7 @@ export type StartChapterWritingRequest = {
   readonly selection: readonly string[];
   readonly mode: "append" | "rewrite";
   readonly decision?: "generate-events" | "continue";
+  readonly expectedHandoff?: Extract<EventGraphHandoff, { readonly status: "ready" | "waived" }>;
 };
 
 export type UpdateOutlineNodeRequest = {
@@ -450,18 +553,25 @@ export type UpdateOutlineNodeRequest = {
   readonly expectedRevision: number;
   readonly nodeId: string;
   readonly changes: UpdateNodeInput;
+  readonly coverageVerification?: { readonly chapterId: string; readonly chapterRevisionId: string };
 };
 
 export type MapOutlineNodesRequest = {
   readonly projectId: string;
   readonly expectedRevision: number;
   readonly chapterId: string;
-  readonly nodeIds: readonly string[];
+  readonly mappings: readonly {
+    readonly nodeId: string;
+    readonly segmentIntent: string;
+    readonly expectedLocalChange: string;
+    readonly sortOrder?: number;
+  }[];
 };
 
 export type UnmapOutlineNodeRequest = {
   readonly projectId: string;
   readonly expectedRevision: number;
+  readonly chapterId: string;
   readonly nodeId: string;
 };
 

@@ -33,6 +33,7 @@ export type OutlinePatchSimulation = {
   readonly snapshot: OutlineSnapshot;
   readonly affectedNodeIds: readonly string[];
   readonly preview: OutlinePatchPreview;
+  readonly createdNodeIds: ReadonlyMap<string, string>;
 };
 
 type WorkingSnapshot = {
@@ -105,6 +106,7 @@ export function simulateOutlinePatch(
     snapshot: working,
     affectedNodeIds: [...affected],
     preview,
+    createdNodeIds: tempIds,
   };
 }
 

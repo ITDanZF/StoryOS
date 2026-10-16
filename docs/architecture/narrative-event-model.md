@@ -2,7 +2,7 @@
 
 > v0.1 · 2026-09-23 · 设计综合，不含实现  
 > 目的：把 `docs/pdf` 里与叙事事件直接相关的论文收成一套可落地的事件模型，并标明它和现有目录、章节生成、检索工作流的边界。  
-> 节点、关系、章节映射和叙事承诺的字段以 `docs/todo/outline-module-design-analysis.md` 第 6–9 节为准。本文解释这些字段从哪来、写作时怎么用，不另起一套表。
+> 本文解释叙事事件模型的研究来源与写作用途，不定义现行字段。节点、关系、章节映射和叙事承诺的字段以 `src/shared/contracts/outline/outlineContracts.ts` 为准；最初的字段讨论已归档至 `docs/archive/outline-module-design-analysis.md`。
 
 ## 1. 结论
 
@@ -262,7 +262,7 @@ EVOSPARK 的主路径是角色社会模拟。三种控制范式里，层级化�
 
 ## 12. 和相邻设计的边界
 
-- 大纲模块的字段、SQLite 表、patch 和检查规则见 `docs/todo/outline-module-design-analysis.md`。该文第 3 节的论文摘要以本文为展开说明。屏幕见 `docs/architecture/narrative-event-frontend-prototype.md`，模块与调用链见 `docs/architecture/narrative-event-backend.md`。
+- 现行字段见 `src/shared/contracts/outline/outlineContracts.ts`，模块与调用链见 `docs/architecture/narrative-event-backend.md`，当前屏幕方案见 `docs/architecture/event-graph-long-novel-design.md` 和 `docs/architecture/event-graph-theory-and-node-design.md`。早期字段与前端原型保存在 `docs/archive/`，不再作为现行方案。
 - 人物、事件、伏笔尚未进入当前书库重设计。表何时创建见 `docs/architecture/database-vnext/03-future-business.md`。
 - 写作前的正文检索见 `docs/todo/novel-writing-recall.md`。事件上下文包只消费检索结果，不把检索做进写作器。
 - 图运行时见 `docs/architecture/langchain-workflow-runtime.md`。`draft` 图负责把短证据交给现有章节生成。事件约束由外层写入同一条指令，不在 `maxTurns = 1` 的生成内部再开检索环。

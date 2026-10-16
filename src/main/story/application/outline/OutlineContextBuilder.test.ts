@@ -57,6 +57,8 @@ function snapshot(): OutlineSnapshot {
         chapterId: "chapter-1",
         nodeId: "current",
         sortOrder: 1000,
+        segmentIntent: "本章夜探",
+        expectedLocalChange: "取得线索",
         coverageStatus: "planned",
         coverageNote: "",
         verificationOutlineRevision: null,
@@ -66,6 +68,8 @@ function snapshot(): OutlineSnapshot {
         chapterId: "chapter-1",
         nodeId: "next",
         sortOrder: 2000,
+        segmentIntent: "本章天亮后行动",
+        expectedLocalChange: "转入下一步",
         coverageStatus: "planned",
         coverageNote: "",
         verificationOutlineRevision: null,
@@ -75,6 +79,8 @@ function snapshot(): OutlineSnapshot {
         chapterId: "chapter-2",
         nodeId: "draft",
         sortOrder: 3000,
+        segmentIntent: "草稿片段",
+        expectedLocalChange: "仍待确认",
         coverageStatus: "planned",
         coverageNote: "",
         verificationOutlineRevision: null,
@@ -279,7 +285,7 @@ describe("outline context", () => {
         projectId: book.projectId,
         expectedRevision: applied.snapshot.outline.revision,
         chapterId: book.chapterId,
-        nodeIds: [nodeId],
+        mappings: [{ nodeId, segmentIntent: "本章夜探", expectedLocalChange: "从侧门离开" }],
       });
       await expect(
         outline.buildChapterContext({

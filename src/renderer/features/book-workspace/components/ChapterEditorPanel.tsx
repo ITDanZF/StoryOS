@@ -5,7 +5,7 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import type { BookWorkspaceChapterDto } from "../../../../shared/agent/contracts.ts";
 import {
   countTiptapCharacters,
@@ -50,6 +50,7 @@ type ChapterEditorPanelProps = {
   readonly onAskAi: (prompt: string) => void;
   readonly onEditorContextChange: (context: ChapterEditorLiveContext) => void;
   readonly onEditorBridgeChange: (bridge: ChapterEditorBridge | null) => void;
+  readonly mainline?: ReactNode;
 };
 
 export default function ChapterEditorPanel({
@@ -66,6 +67,7 @@ export default function ChapterEditorPanel({
   onAskAi,
   onEditorContextChange,
   onEditorBridgeChange,
+  mainline,
 }: ChapterEditorPanelProps) {
   const generation = useGenerationJob(chapter.id);
   const aiPreviewContent = useChapterGenerationPreview({
@@ -120,6 +122,7 @@ export default function ChapterEditorPanel({
 
   return (
     <article className="motion-reveal flex min-h-0 min-w-0 flex-1 flex-col bg-card">
+      {mainline}
       <header className="flex min-h-20 shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-5 lg:px-7 2xl:min-h-[84px] 2xl:px-8">
         <div className="grid min-w-0 gap-0.5">
           <span className="text-xs font-medium tracking-[0.03em] text-text-subtle">

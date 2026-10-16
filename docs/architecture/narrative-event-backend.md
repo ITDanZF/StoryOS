@@ -2,7 +2,7 @@
 
 > v0.1 · 2026-09-23 · 架构设计，不含实现  
 > 依据：`docs/architecture/narrative-event-model.md` 的流水线、上下文包和首版边界。  
-> 节点、关系、映射、承诺和 patch 的字段以 `docs/todo/outline-module-design-analysis.md` 第 6–10 节为准。本文规定这些能力放在哪一层、怎样接上现有书籍和章节生成。  
+> 本文说明模块边界和调用链；节点、关系、映射、承诺和 patch 的现行字段以 `src/shared/contracts/outline/outlineContracts.ts` 为准。最初的字段建议已归档至 `docs/archive/outline-module-design-analysis.md`。
 > 大纲设计稿第 8.1 节曾把应用层写在 `main/agent/application/outline`。该路径与现行引擎边界冲突，以本文目录为准。
 
 ## 1. 架构结论

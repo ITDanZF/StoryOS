@@ -34,7 +34,8 @@ export function acceptedChapterLeaves(snapshot: OutlineSnapshot, chapterId: stri
     snapshot.mappings.filter((mapping) => mapping.chapterId === chapterId).map((mapping) => mapping.nodeId),
   );
   return snapshot.nodes
-    .filter((node) => node.status === "confirmed" && mapped.has(node.id) && isLeaf(snapshot, node.id))
+    .filter((node) => (node.status === "confirmed" || node.status === "writing" || node.status === "covered") &&
+      mapped.has(node.id) && isLeaf(snapshot, node.id))
     .sort((left, right) => left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id));
 }
 
@@ -57,12 +58,13 @@ export function buildChapterInstruction(input: {
   readonly evidence: readonly OutlineEvidence[];
 }): OutlineChapterContext {
   const chosen = chosenChapterLeaves(input.snapshot, input.chapterId, input.selection);
-  const hard = hardConstraints(input.snapshot, chosen);
+  const hard = hardConstraints(input.snapshot, input.chapterId, chosen);
   if (outlineTextLength(hard) > OUTLINE_INSTRUCTION_MAX_CHARS) {
     throw new OutlineContextTooLarge();
   }
   const sections: Section[] = [
     { id: "hard", text: hard },
+    { id: "global-outcome", text: globalOutcomeSection(chosen) },
     { id: "ancestors", text: ancestorSection(input.snapshot, chosen) },
     { id: "neighbors", text: neighborSection(input.snapshot, chosen) },
     { id: "selected-relations", text: selectedRelationSection(input.snapshot, chosen) },
@@ -101,7 +103,7 @@ function render(sections: readonly Section[]): string {
     .join("\n\n");
 }
 
-function hardConstraints(snapshot: OutlineSnapshot, chosen: readonly OutlineNode[]): string {
+function hardConstraints(snapshot: OutlineSnapshot, chapterId: string, chosen: readonly OutlineNode[]): string {
   const lines = [
     "硬约束",
     `主题：${snapshot.outline.theme}`,
@@ -109,13 +111,16 @@ function hardConstraints(snapshot: OutlineSnapshot, chosen: readonly OutlineNode
     `结局意图：${snapshot.outline.endingIntent}`,
   ];
   for (const node of chosen) {
+    const mapping = snapshot.mappings.find((item) => item.nodeId === node.id && item.chapterId === chapterId);
+    if (!mapping) throw new Error("选中事件缺少本章映射");
     const participants = snapshot.participants.filter((participant) => participant.nodeId === node.id);
     lines.push(
       [
         `事件：${node.title}`,
+        `本章片段：${mapping.segmentIntent}`,
+        `本章结束时变化：${mapping.expectedLocalChange}`,
         `目标：${node.goal}`,
         `冲突：${node.conflict}`,
-        `结果：${node.outcome}`,
         `地点：${node.locationText}`,
         `时间：${node.timeText}`,
         `参与者：${participants
@@ -128,6 +133,12 @@ function hardConstraints(snapshot: OutlineSnapshot, chosen: readonly OutlineNode
     );
   }
   return lines.join("\n");
+}
+
+function globalOutcomeSection(chosen: readonly OutlineNode[]): string {
+  const lines = chosen.filter((node) => node.outcome.trim() !== "")
+    .map((node) => `${node.title} 的最终结果：${node.outcome}。本章只推进已指定的局部片段，不要提前完成跨章事件。`);
+  return lines.length === 0 ? "" : ["事件全局方向", ...lines].join("\n");
 }
 
 function ancestorSection(snapshot: OutlineSnapshot, chosen: readonly OutlineNode[]): string {
@@ -264,10 +275,12 @@ function promiseSection(
   const lines: string[] = [];
   for (const promise of snapshot.promises) {
     if (promise.status !== "eligible" || promise.triggerNodeId === null) continue;
-    const mapping = snapshot.mappings.find((item) => item.nodeId === promise.triggerNodeId);
-    if (!mapping) continue;
-    const triggerChapter = chapters.find((chapter) => chapter.id === mapping.chapterId);
-    if (!triggerChapter || triggerChapter.index > current.index) continue;
+    const triggerReady = snapshot.mappings.some((mapping) => {
+      if (mapping.nodeId !== promise.triggerNodeId) return false;
+      const triggerChapter = chapters.find((chapter) => chapter.id === mapping.chapterId);
+      return triggerChapter !== undefined && triggerChapter.index <= current.index;
+    });
+    if (!triggerReady) continue;
     lines.push(`${promise.title}：${promise.payoffRequirement}`);
   }
   return lines.length === 0 ? "" : ["可兑现承诺", ...lines].join("\n");

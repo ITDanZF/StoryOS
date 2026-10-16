@@ -18,11 +18,14 @@ describe("chapter generation tools", () => {
       createdAt: new Date(0),
       updatedAt: new Date(0),
     };
+    const savedRunIds: (string | undefined)[] = [];
+    let currentRevisionId: string | null = null;
     const persistence = {
-      getChapter: () => chapter,
-      getRevision: () => null,
-      saveRevision: (input: { id: string; chapterId: string; content: string; contentHash: string; characterCount: number; changeSummary: string; origin: "agent" }) => {
-        chapter.currentRevisionId = input.id;
+      getChapter: () => ({ ...chapter, currentRevisionId }),
+      getRevision: (): null => null,
+      saveRevision: (input: { id: string; chapterId: string; content: string; contentHash: string; characterCount: number; changeSummary: string; origin: "agent"; sourceRunId?: string }) => {
+        savedRunIds.push(input.sourceRunId);
+        currentRevisionId = input.id;
         return {
           id: input.id,
           chapterId: input.chapterId,
@@ -35,7 +38,7 @@ describe("chapter generation tools", () => {
           origin: input.origin,
         };
       },
-    } as NovelPersistence;
+    } as unknown as NovelPersistence;
     const calls: { tools: unknown; maxTurns: number; prompt: string }[] = [];
     const model: ModelGateway = {
       async *stream(input) {
@@ -52,12 +55,15 @@ describe("chapter generation tools", () => {
       new NovelApplication(persistence),
       async () => undefined,
     );
-    await generation.generate({
+    const result = await generation.generate({
       projectId: "project-1",
       chapterId: chapter.id,
       mode: "rewrite",
       instruction: "按交接写本章",
+      sourceRunId: "graph-step-1",
     });
+    expect(savedRunIds).toEqual(["graph-step-1"]);
+    expect(result.revisionId).toBe(currentRevisionId);
     expect(calls).toEqual([
       expect.objectContaining({
         tools: [],

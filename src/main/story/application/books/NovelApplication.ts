@@ -315,7 +315,8 @@ export default class NovelApplication {
       if (
         current.contentHash === contentHash &&
         input.expectedDraftVersion === undefined &&
-        input.restoredFromRevisionId === undefined
+        input.restoredFromRevisionId === undefined &&
+        input.sourceRunId === undefined
       ) {
         return this.toRevisionDto(current);
       }

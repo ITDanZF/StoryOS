@@ -3,6 +3,7 @@ import type { SqliteMigration } from "../common/SqliteDatabase.ts";
 import SqliteDatabase from "../common/SqliteDatabase.ts";
 import { BOOK_CHANGE_TRIGGERS, BOOK_SCHEMA } from "./bookSchema.ts";
 import { OUTLINE_SCHEMA } from "./outlineSchema.ts";
+import { OUTLINE_WORKFLOW_SCHEMA } from "./outlineWorkflowSchema.ts";
 
 export const BOOK_DATABASE_APPLICATION_ID = 0x53544f42;
 
@@ -14,9 +15,15 @@ const migrations: readonly SqliteMigration[] = [
     },
   },
   {
-    version: 101,
+    version: 102,
     up(database) {
       database.exec(OUTLINE_SCHEMA);
+    },
+  },
+  {
+    version: 103,
+    up(database) {
+      database.exec(OUTLINE_WORKFLOW_SCHEMA);
     },
   },
 ];

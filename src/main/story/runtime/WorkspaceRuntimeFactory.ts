@@ -156,15 +156,6 @@ export default class WorkspaceRuntimeFactory {
           content: hit.content,
         }));
       };
-      const openOutline = () => {
-        const database = bookStore.getDatabase();
-        if (!database) throw new Error("The current project does not contain a book.");
-        return new OutlineApplication(new SqliteOutlineStore(database), {
-          model,
-          chapterGeneration: chapterGeneration ?? null,
-          retrieveEvidence: retrieveOutlineEvidence,
-        });
-      };
       const skills = await SkillApplication.create({
         loader: new SkillLoader({ projectSkillRoot: layout.skillsRoot }),
         scaffold: new SkillScaffoldService({
@@ -172,6 +163,18 @@ export default class WorkspaceRuntimeFactory {
         }),
         draft: new SkillDraftService(model),
       });
+      const openOutline = () => {
+        const database = bookStore.getDatabase();
+        if (!database) throw new Error("The current project does not contain a book.");
+        const eventGraphSkill = skills.getSkill("event-graph")?.body;
+        if (!eventGraphSkill) throw new Error("Event graph Skill is unavailable.");
+        return new OutlineApplication(new SqliteOutlineStore(database), {
+          model,
+          eventGraphSkill,
+          chapterGeneration: chapterGeneration ?? null,
+          retrieveEvidence: retrieveOutlineEvidence,
+        });
+      };
       const skillInstaller = new SkillInstallService(skills);
       const skillContextProvider = new SkillContextProviderService(skills, {
         threadSkillStateProvider: threads,

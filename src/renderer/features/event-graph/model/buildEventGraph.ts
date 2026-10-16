@@ -24,12 +24,10 @@ export type GraphVertex = {
   readonly narrative?: number;
   readonly chapter?: string;
   readonly chapterId: string | null;
-  readonly timeText: string;
-  readonly locationText: string;
-  readonly people: string;
-  readonly goal: string;
-  readonly conflict: string;
-  readonly outcome: string;
+  readonly document: string;
+  readonly changeBefore: string;
+  readonly changeAfter: string;
+  readonly summary: string;
   readonly w: number;
   readonly h: number;
   readonly x: number;
@@ -219,7 +217,6 @@ function toVertex(
   chapterLabels: ReadonlyMap<string, string>,
   pending: ReadonlySet<string>,
 ): GraphVertex {
-  const names = node.participants.map((participant) => participant.name).filter((name) => name.trim() !== "");
   return {
     id: node.id,
     name: node.title,
@@ -229,12 +226,10 @@ function toVertex(
     narrative: node.narrativeOrder,
     chapter: node.chapterId ? chapterLabels.get(node.chapterId) ?? "" : "",
     chapterId: node.chapterId,
-    timeText: node.timeText,
-    locationText: node.locationText,
-    people: names.length > 0 ? names.join("、") : "无",
-    goal: node.goal,
-    conflict: node.conflict,
-    outcome: node.outcome,
+    document: node.document,
+    changeBefore: node.changeBefore,
+    changeAfter: node.changeAfter,
+    summary: node.summary,
     w: VERTEX,
     h: VERTEX,
     x: home.x,
@@ -360,19 +355,36 @@ function labelFor(view: GraphView, edge: GraphEdge, emphasis: Emphasis): string 
   return null;
 }
 
+function clearOfVertices(x: number, y: number, vertices: ReadonlyMap<string, GraphVertex>) {
+  let nearest = { distance: Infinity, x, y };
+  for (const vertex of vertices.values()) {
+    const point = center(vertex);
+    const distance = Math.hypot(x - point.x, y - point.y);
+    if (distance < nearest.distance) nearest = { distance, x: point.x, y: point.y };
+  }
+  if (nearest.distance >= 58) return { x, y };
+  const length = nearest.distance || 1;
+  const push = 64 - nearest.distance;
+  return {
+    x: x + ((x - nearest.x) / length) * push,
+    y: y + ((y - nearest.y) / length) * push,
+  };
+}
+
 export function drawEdges(graph: EventGraph, view: GraphView, selection: GraphSelection): DrawEdge[] {
   const vertices = new Map(graph.vertices.map((vertex) => [vertex.id, vertex]));
   return graph.edges.flatMap((edge) => {
     const path = geometry(edge, vertices);
     if (!path) return [];
     const emphasis = edgeEmphasis(graph, view, selection, edge);
+    const labelAt = clearOfVertices(path.lx, path.ly, vertices);
     const color = edge.label === "倒叙" ? "#a96620" : (EDGE_COLOR[edge.type] ?? "#7d8b99");
     return [{
       id: edge.id,
       d: path.d,
       label: labelFor(view, edge, emphasis),
-      labelX: path.lx,
-      labelY: path.ly,
+      labelX: labelAt.x,
+      labelY: labelAt.y,
       color,
       dashed: edge.type === "foreshadows",
       opacity: emphasis === "ghost" ? 0.08 : 1,

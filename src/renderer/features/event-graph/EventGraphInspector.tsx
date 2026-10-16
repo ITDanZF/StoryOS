@@ -1,9 +1,7 @@
 import { useState } from "react";
-import type { OutlineNarrativeFunction, OutlineNodeStatus, OutlineParticipantRole, OutlineRelationType } from "../../../shared/contracts/outline/outlineContracts.ts";
+import type { OutlineNodeStatus } from "../../../shared/contracts/outline/outlineContracts.ts";
 import {
-  NARRATIVE_FUNCTION_LABEL,
   NODE_STATUS_LABEL,
-  PARTICIPANT_ROLE_LABEL,
   RELATION_LABEL,
   descendantIds,
   isLeaf,
@@ -142,17 +140,10 @@ function NodeEditor({
   onClear: () => void;
 }) {
   const [title, setTitle] = useState(node.title);
-  const [summary, setSummary] = useState(node.summary);
-  const [goal, setGoal] = useState(node.goal);
-  const [conflict, setConflict] = useState(node.conflict);
-  const [outcome, setOutcome] = useState(node.outcome);
-  const [timeText, setTimeText] = useState(node.timeText);
-  const [locationText, setLocationText] = useState(node.locationText);
-  const [notes, setNotes] = useState(node.notes);
+  const [documentText, setDocumentText] = useState(node.document);
   const [storyOrder, setStoryOrder] = useState(String(node.storyOrder));
   const [narrativeOrder, setNarrativeOrder] = useState(String(node.narrativeOrder));
   const [status, setStatus] = useState<OutlineNodeStatus>(node.status);
-  const [narrativeFunction, setNarrativeFunction] = useState<OutlineNarrativeFunction>(node.narrativeFunction);
   const [parentId, setParentId] = useState(node.parentId ?? "");
   const [chapterId, setChapterId] = useState(node.chapterId ?? "");
   const [participants, setParticipants] = useState<GraphParticipant[]>([...node.participants]);
@@ -181,17 +172,10 @@ function NodeEditor({
     onSave({
       ...node,
       title: title.trim(),
-      summary,
-      goal,
-      conflict,
-      outcome,
-      timeText,
-      locationText,
-      notes,
+      document: documentText,
       storyOrder: story,
       narrativeOrder: narrative,
       status,
-      narrativeFunction,
       parentId: parentId === "" ? null : parentId,
       chapterId: chapterId === "" ? null : chapterId,
       participants: participants.filter((person) => person.name.trim() !== ""),
@@ -205,17 +189,7 @@ function NodeEditor({
       {blocked && <p className="m-0 text-xs leading-5 text-text-secondary">这是候选节点。接受这版候选后才能修改。</p>}
       {pending && <p className="m-0 text-xs leading-5 text-warning-text">候选会修改这个节点。</p>}
       <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">标题<input className={fieldClass} value={title} disabled={blocked} onChange={(event) => setTitle(event.target.value)} /></label>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">摘要<textarea className={areaClass} value={summary} disabled={blocked} onChange={(event) => setSummary(event.target.value)} /></label>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">目标<textarea className={areaClass} value={goal} disabled={blocked} onChange={(event) => setGoal(event.target.value)} /></label>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">冲突<textarea className={areaClass} value={conflict} disabled={blocked} onChange={(event) => setConflict(event.target.value)} /></label>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">结果<textarea className={areaClass} value={outcome} disabled={blocked} onChange={(event) => setOutcome(event.target.value)} /></label>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">时间<input className={fieldClass} value={timeText} disabled={blocked} onChange={(event) => setTimeText(event.target.value)} /></label>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">地点<input className={fieldClass} value={locationText} disabled={blocked} onChange={(event) => setLocationText(event.target.value)} /></label>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">叙事功能
-        <select className={fieldClass} value={narrativeFunction} disabled={blocked} onChange={(event) => setNarrativeFunction(event.target.value as OutlineNarrativeFunction)}>
-          {Object.entries(NARRATIVE_FUNCTION_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </select>
-      </label>
+      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">文档<textarea className={areaClass} value={documentText} disabled={blocked} onChange={(event) => setDocumentText(event.target.value)} /></label>
       <div className="grid grid-cols-2 gap-2">
         <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">故事序<input className={fieldClass} inputMode="numeric" value={storyOrder} disabled={blocked} onChange={(event) => setStoryOrder(event.target.value)} /></label>
         <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">叙事序<input className={fieldClass} inputMode="numeric" value={narrativeOrder} disabled={blocked} onChange={(event) => setNarrativeOrder(event.target.value)} /></label>
@@ -245,17 +219,15 @@ function NodeEditor({
         {participants.map((person, index) => (
           <div key={`${node.id}-${index}`} className="mt-1 grid gap-1">
             <input className={fieldClass} value={person.name} placeholder="名字" disabled={blocked} onChange={(event) => setParticipants(replacePerson(participants, index, { ...person, name: event.target.value }))} />
-            <select className={fieldClass} value={person.role} disabled={blocked} onChange={(event) => setParticipants(replacePerson(participants, index, { ...person, role: event.target.value as OutlineParticipantRole }))}>
-              {Object.entries(PARTICIPANT_ROLE_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-            </select>
+            <input className={fieldClass} value={person.role} placeholder="角色" disabled={blocked} onChange={(event) => setParticipants(replacePerson(participants, index, { ...person, role: event.target.value }))} />
+            <input className={fieldClass} value={person.kind} placeholder="种类" disabled={blocked} onChange={(event) => setParticipants(replacePerson(participants, index, { ...person, kind: event.target.value }))} />
             <input className={fieldClass} value={person.stateBefore} placeholder="事件前" disabled={blocked} onChange={(event) => setParticipants(replacePerson(participants, index, { ...person, stateBefore: event.target.value }))} />
             <input className={fieldClass} value={person.stateAfter} placeholder="事件后" disabled={blocked} onChange={(event) => setParticipants(replacePerson(participants, index, { ...person, stateAfter: event.target.value }))} />
             <button className="justify-self-start border-0 bg-transparent p-0 text-xs text-text-subtle" type="button" disabled={blocked} onClick={() => setParticipants(participants.filter((_, item) => item !== index))}>移除</button>
           </div>
         ))}
-        <button className="mt-1 border-0 bg-transparent p-0 text-xs text-accent-foreground" type="button" disabled={blocked} onClick={() => setParticipants([...participants, { name: "", role: "active", stateBefore: "", stateAfter: "" }])}>添加人物</button>
+        <button className="mt-1 border-0 bg-transparent p-0 text-xs text-accent-foreground" type="button" disabled={blocked} onClick={() => setParticipants([...participants, { name: "", role: "", kind: "", stateBefore: "", stateAfter: "" }])}>添加参与者</button>
       </div>
-      <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">备注<textarea className={areaClass} value={notes} disabled={blocked} onChange={(event) => setNotes(event.target.value)} /></label>
       {error && <p className="m-0 text-xs text-danger-text" role="alert">{error}</p>}
       <button className="h-8 rounded-lg border border-border bg-background text-xs disabled:opacity-40" type="button" disabled={blocked || busy} onClick={save}>保存节点</button>
       {!blocked && (
@@ -270,13 +242,8 @@ function NodeEditor({
 function NextNodeForm({ busy, onCreate }: { busy: boolean; onCreate: (input: NextNodeInput) => void }) {
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [goal, setGoal] = useState("");
-  const [conflict, setConflict] = useState("");
-  const [outcome, setOutcome] = useState("");
-  const [timeText, setTimeText] = useState("");
-  const [locationText, setLocationText] = useState("");
   const [link, setLink] = useState<NextNodeInput["link"]>("sibling");
-  const [relationType, setRelationType] = useState<OutlineRelationType | "">("");
+  const [relationType, setRelationType] = useState("");
   const [direction, setDirection] = useState<"out" | "in">("out");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -285,17 +252,12 @@ function NextNodeForm({ busy, onCreate }: { busy: boolean; onCreate: (input: Nex
     <div className="grid gap-2 rounded-lg border border-border p-2">
       <p className="m-0 text-[11px] font-semibold text-text-subtle">新节点</p>
       <input className={fieldClass} value={title} placeholder="标题" onChange={(event) => setTitle(event.target.value)} />
-      <textarea className={areaClass} value={summary} placeholder="摘要" onChange={(event) => setSummary(event.target.value)} />
-      <textarea className={areaClass} value={goal} placeholder="目标" onChange={(event) => setGoal(event.target.value)} />
-      <textarea className={areaClass} value={conflict} placeholder="冲突" onChange={(event) => setConflict(event.target.value)} />
-      <textarea className={areaClass} value={outcome} placeholder="结果" onChange={(event) => setOutcome(event.target.value)} />
-      <input className={fieldClass} value={timeText} placeholder="时间" onChange={(event) => setTimeText(event.target.value)} />
-      <input className={fieldClass} value={locationText} placeholder="地点" onChange={(event) => setLocationText(event.target.value)} />
+      <textarea className={areaClass} value={summary} placeholder="开头" onChange={(event) => setSummary(event.target.value)} />
       <select className={fieldClass} value={link} onChange={(event) => setLink(event.target.value as NextNodeInput["link"])}>
         <option value="sibling">同级下一拍</option>
         <option value="child">包含为子事件</option>
       </select>
-      <select className={fieldClass} value={relationType} onChange={(event) => setRelationType(event.target.value as OutlineRelationType | "")}>
+      <select className={fieldClass} value={relationType} onChange={(event) => setRelationType(event.target.value)}>
         <option value="">不连语义边</option>
         {Object.entries(RELATION_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
       </select>
@@ -322,11 +284,6 @@ function NextNodeForm({ busy, onCreate }: { busy: boolean; onCreate: (input: Nex
           onCreate({
             title,
             summary,
-            goal,
-            conflict,
-            outcome,
-            timeText,
-            locationText,
             participants: [],
             link,
             relation: relationType === "" ? null : { type: relationType, description, direction },
@@ -355,7 +312,7 @@ function EdgeEditor({
   onClear: () => void;
 }) {
   const derived = edge.type === "contains" || edge.type === "story" || edge.type === "narrative";
-  const [type, setType] = useState<OutlineRelationType>(relation?.type ?? "causes");
+  const [type, setType] = useState(relation?.type ?? "causes");
   const [description, setDescription] = useState(relation?.description ?? edge.detail ?? "");
   const [orderException, setOrderException] = useState(relation?.orderException ?? false);
   return (
@@ -367,7 +324,7 @@ function EdgeEditor({
       {relation && !relation.proposal && !derived && (
         <>
           <label className="grid gap-1 text-[11px] font-semibold text-text-subtle">类型
-            <select className={fieldClass} value={type} onChange={(event) => setType(event.target.value as OutlineRelationType)}>
+            <select className={fieldClass} value={type} onChange={(event) => setType(event.target.value)}>
               {Object.entries(RELATION_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
           </label>

@@ -1,5 +1,7 @@
 # StoryOS 大纲模块详细设计分析
 
+> 历史稿（2026-08-25）。这是大纲模块最初的产品与字段建议，部分视图和实现路径已变化。现行字段以 [共享契约](../../src/shared/contracts/outline/outlineContracts.ts) 为准；当前事件图交互见 [事件图设计](../architecture/event-graph-long-novel-design.md)。
+
 > 文档状态：方案建议稿  
 > 生成日期：2026-08-25  
 > 任务分类：新功能的产品与技术设计文档；本文不包含代码实施  

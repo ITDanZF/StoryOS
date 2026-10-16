@@ -10,15 +10,21 @@ import ProjectNavigationReader from "../story/application/projects/ProjectNaviga
 import type { DesktopControllerDependencies } from "./DesktopControllerDependencies.ts";
 import type {
   ApplyOutlinePatchRequest,
+  AcceptBackfillRequest,
+  CancelGraphWritingRequest,
+  CancelBackfillRequest,
   BuildChapterContextRequest,
   CreateOutlineRequest,
   LoadHandoffRequest,
   MapOutlineNodesRequest,
   MarkNodesPendingRequest,
   ProposeOutlineRequest,
+  PreviewGraphWritingRequest,
   ReviewCoverageRequest,
   RunOutlineChecksRequest,
+  ScanBackfillRequest,
   StartChapterWritingRequest,
+  StartGraphWritingRequest,
   UnmapOutlineNodeRequest,
   UpdateOutlineNodeRequest,
   UpdateOutlineProfileRequest,
@@ -362,6 +368,46 @@ export default class DesktopController {
     return this.outlineApplication(request.projectId).then((outline) => outline.proposeOutline(request));
   }
 
+  getLatestBackfillScan(projectId: string) {
+    return this.outlineApplication(projectId).then((outline) => outline.getLatestBackfillScan(projectId));
+  }
+
+  scanBackfill(request: ScanBackfillRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.scanBackfill(request));
+  }
+
+  previewBackfillAcceptance(request: AcceptBackfillRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.previewBackfillAcceptance(request));
+  }
+
+  acceptBackfill(request: AcceptBackfillRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.acceptBackfill(request));
+  }
+
+  getNodeBackfillEvidence(projectId: string, nodeId: string) {
+    return this.outlineApplication(projectId).then((outline) => outline.getNodeBackfillEvidence(projectId, nodeId));
+  }
+
+  cancelBackfillScan(request: CancelBackfillRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.cancelBackfillScan(request));
+  }
+
+  getLatestGraphWritingPlan(projectId: string) {
+    return this.outlineApplication(projectId).then((outline) => outline.getLatestGraphWritingPlan(projectId));
+  }
+
+  previewGraphWritingPlan(request: PreviewGraphWritingRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.previewGraphWritingPlan(request));
+  }
+
+  startGraphWritingPlan(request: StartGraphWritingRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.startGraphWritingPlan(request));
+  }
+
+  cancelGraphWritingPlan(request: CancelGraphWritingRequest) {
+    return this.outlineApplication(request.projectId).then((outline) => outline.cancelGraphWritingPlan(request));
+  }
+
   runOutlineChecks(request: RunOutlineChecksRequest) {
     return this.outlineApplication(request.projectId).then((outline) => outline.runOutlineChecks(request));
   }
@@ -396,8 +442,11 @@ export default class DesktopController {
     const runtime = await this.dependencies.runtime.resolve({ kind: "project", projectId });
     const database = runtime.openBookDatabase();
     if (!database) throw new Error("The current project does not contain a book.");
+    const eventGraphSkill = runtime.skills.getSkill("event-graph")?.body;
+    if (!eventGraphSkill) throw new Error("Event graph Skill is unavailable.");
     return new OutlineApplication(new SqliteOutlineStore(database), {
       model: runtime.model,
+      eventGraphSkill,
       chapterGeneration: runtime.chapterGeneration,
       retrieveEvidence: (bookId, chapterId, query) =>
         runtime.retrieveOutlineEvidence(bookId, chapterId, query),

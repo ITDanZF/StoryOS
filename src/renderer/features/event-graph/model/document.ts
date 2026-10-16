@@ -1,16 +1,24 @@
-import type {
-  CreateNodeInput,
-  OutlineNarrativeFunction,
-  OutlineNodeKind,
-  OutlineNodeStatus,
-  OutlineParticipantRole,
-  OutlinePatchOperation,
-  OutlineProposal,
-  OutlineRelationType,
-  OutlineSnapshot,
-  OutlineStructuralRole,
-  UpdateNodeInput,
+import {
+  OUTLINE_NARRATIVE_FUNCTIONS,
+  OUTLINE_PARTICIPANT_ROLES,
+  OUTLINE_RELATION_TYPES,
+  OUTLINE_STRUCTURAL_ROLES,
+  type CreateNodeInput,
+  type OutlineNodeKind,
+  type OutlineNodeStatus,
+  type OutlinePatchOperation,
+  type OutlineProposal,
+  type OutlineSnapshot,
+  type UpdateNodeInput,
 } from "../../../../shared/contracts/outline/outlineContracts.ts";
+import {
+  parseStoryDocument,
+  relationLabel,
+  renderStoryDocument,
+  replaceRelationSection,
+  type StoryDocumentIssue,
+  type StoryRelationRef,
+} from "./storyDocument.ts";
 import { STORY_ARCS, STORY_LEAVES, STORY_RELATIONS } from "./sampleStory.ts";
 
 export const SAMPLE_CHAPTERS = [
@@ -21,31 +29,19 @@ export const SAMPLE_CHAPTERS = [
 
 const ARC_ORDER = ["E5", "E2", "E1", "E3", "E4"] as const;
 
-export const RELATION_LABEL: Readonly<Record<OutlineRelationType, string>> = {
+export const RELATION_LABEL: Readonly<Record<string, string>> = {
   causes: "因果",
   requires: "前置",
+  enables: "使可能",
+  prevents: "阻止",
   reveals: "揭示",
+  conceals: "隐瞒",
   foreshadows: "伏笔",
   contrasts: "对照",
+  accompanies: "伴随",
 };
 
-export const NARRATIVE_FUNCTION_LABEL: Readonly<Record<OutlineNarrativeFunction, string>> = {
-  action: "动作",
-  dialogue: "对话",
-  exposition: "说明",
-  worldbuilding: "世界构建",
-  relationship: "关系",
-  mystery: "悬念",
-  transition: "过渡",
-  mixed: "混合",
-};
-
-export const PARTICIPANT_ROLE_LABEL: Readonly<Record<OutlineParticipantRole, string>> = {
-  focus: "焦点",
-  active: "主动",
-  supporting: "配角",
-  mentioned: "被提及",
-};
+export { relationLabel };
 
 export const NODE_STATUS_LABEL: Readonly<Record<OutlineNodeStatus, string>> = {
   draft: "草稿",
@@ -58,11 +54,13 @@ export const NODE_STATUS_LABEL: Readonly<Record<OutlineNodeStatus, string>> = {
 export type ChapterOption = {
   readonly id: string;
   readonly label: string;
+  readonly currentRevisionId?: string | null;
 };
 
 export type GraphParticipant = {
   readonly name: string;
-  readonly role: OutlineParticipantRole;
+  readonly role: string;
+  readonly kind: string;
   readonly stateBefore: string;
   readonly stateAfter: string;
 };
@@ -71,19 +69,16 @@ export type GraphNode = {
   readonly id: string;
   readonly title: string;
   readonly summary: string;
+  readonly document: string;
+  readonly changeBefore: string;
+  readonly changeAfter: string;
   readonly kind: OutlineNodeKind;
   readonly parentId: string | null;
-  readonly structuralRole: OutlineStructuralRole;
-  readonly narrativeFunction: OutlineNarrativeFunction;
-  readonly goal: string;
-  readonly conflict: string;
-  readonly outcome: string;
-  readonly locationText: string;
-  readonly timeText: string;
+  readonly structuralRole: string;
+  readonly narrativeFunction: string;
   readonly storyOrder: number;
   readonly narrativeOrder: number;
   readonly status: OutlineNodeStatus;
-  readonly notes: string;
   readonly participants: readonly GraphParticipant[];
   readonly chapterId: string | null;
   readonly proposal: boolean;
@@ -93,7 +88,7 @@ export type GraphRelation = {
   readonly id: string;
   readonly from: string;
   readonly to: string;
-  readonly type: OutlineRelationType;
+  readonly type: string;
   readonly description: string;
   readonly orderException: boolean;
   readonly proposal: boolean;
@@ -111,15 +106,10 @@ export type GraphDocument = {
 export type NextNodeInput = {
   readonly title: string;
   readonly summary: string;
-  readonly goal: string;
-  readonly conflict: string;
-  readonly outcome: string;
-  readonly timeText: string;
-  readonly locationText: string;
   readonly participants: readonly GraphParticipant[];
   readonly link: "child" | "sibling";
   readonly relation: {
-    readonly type: OutlineRelationType;
+    readonly type: string;
     readonly description: string;
     readonly direction: "out" | "in";
   } | null;
@@ -137,70 +127,64 @@ export type ProseBrief = {
   readonly blockers: readonly string[];
   readonly chapterId: string | null;
   readonly chapterLabel: string | null;
-  readonly nodes: readonly { readonly id: string; readonly title: string; readonly goal: string; readonly conflict: string; readonly outcome: string }[];
+  readonly nodes: readonly { readonly id: string; readonly title: string; readonly changeBefore: string; readonly changeAfter: string }[];
   readonly internalEdges: readonly { readonly fromTitle: string; readonly toTitle: string; readonly type: string; readonly description: string }[];
   readonly externalEdges: readonly { readonly fromTitle: string; readonly toTitle: string; readonly type: string; readonly description: string }[];
   readonly orderNote: string;
 };
 
+export function emptyDocument(title = ""): GraphDocument {
+  return {
+    source: "outline",
+    outlineId: null,
+    revision: 0,
+    title,
+    nodes: [],
+    relations: [],
+  };
+}
+
 export function sampleDocument(): GraphDocument {
-  const arcs: GraphNode[] = STORY_ARCS.map((arc): GraphNode => ({
-    id: arc.id,
-    title: arc.name,
-    summary: arc.outcome,
-    kind: "arc",
-    parentId: null,
-    structuralRole: "custom",
-    narrativeFunction: "mixed",
-    goal: arc.goal,
-    conflict: arc.conflict,
-    outcome: arc.outcome,
-    locationText: arc.locationText,
-    timeText: arc.timeText,
-    storyOrder: ARC_ORDER.indexOf(arc.id as (typeof ARC_ORDER)[number]),
-    narrativeOrder: ARC_ORDER.indexOf(arc.id as (typeof ARC_ORDER)[number]),
-    status: "draft",
-    notes: "",
-    participants: people(arc.people),
-    chapterId: null,
+  const relations: GraphRelation[] = STORY_RELATIONS.map((relation) => ({
+    id: `${relation.type}:${relation.from}:${relation.to}`,
+    from: relation.from,
+    to: relation.to,
+    type: relation.type,
+    description: relation.detail,
+    orderException: false,
     proposal: false,
   }));
-  const leaves: GraphNode[] = STORY_LEAVES.map((leaf): GraphNode => ({
+  const arcs: GraphNode[] = STORY_ARCS.map((arc): GraphNode => sampleNode({
+    id: arc.id,
+    title: arc.name,
+    kind: "arc",
+    parentId: null,
+    lead: sampleLead(arc.goal, arc.conflict, arc.timeText),
+    changeAfter: arc.outcome,
+    participants: sampleParticipants(arc.people, arc.locationText),
+    storyOrder: ARC_ORDER.indexOf(arc.id as (typeof ARC_ORDER)[number]),
+    narrativeOrder: ARC_ORDER.indexOf(arc.id as (typeof ARC_ORDER)[number]),
+    chapterId: null,
+  }));
+  const leaves: GraphNode[] = STORY_LEAVES.map((leaf): GraphNode => sampleNode({
     id: leaf.id,
     title: leaf.name,
-    summary: leaf.outcome,
     kind: "event",
     parentId: leaf.parent,
-    structuralRole: "custom",
-    narrativeFunction: "mixed",
-    goal: leaf.goal,
-    conflict: leaf.conflict,
-    outcome: leaf.outcome,
-    locationText: leaf.locationText,
-    timeText: leaf.timeText,
+    lead: sampleLead(leaf.goal, leaf.conflict, leaf.timeText),
+    changeAfter: leaf.outcome,
+    participants: sampleParticipants(leaf.people, leaf.locationText),
     storyOrder: leaf.story,
     narrativeOrder: leaf.narrative,
-    status: "draft",
-    notes: "",
-    participants: people(leaf.people),
     chapterId: sampleChapterId(leaf.chapter),
-    proposal: false,
   }));
   return {
     source: "sample",
     outlineId: null,
     revision: 0,
     title: "沈衡与梁秋",
-    nodes: [...arcs, ...leaves],
-    relations: STORY_RELATIONS.map((relation) => ({
-      id: `${relation.type}:${relation.from}:${relation.to}`,
-      from: relation.from,
-      to: relation.to,
-      type: relation.type,
-      description: relation.detail,
-      orderException: false,
-      proposal: false,
-    })),
+    nodes: projectRelationSections([...arcs, ...leaves], relations),
+    relations,
   };
 }
 
@@ -215,6 +199,7 @@ export function documentFromSnapshot(snapshot: OutlineSnapshot): GraphDocument {
     list.push({
       name: participant.participantName,
       role: participant.role,
+      kind: "人",
       stateBefore: participant.stateBefore,
       stateAfter: participant.stateAfter,
     });
@@ -225,27 +210,32 @@ export function documentFromSnapshot(snapshot: OutlineSnapshot): GraphDocument {
     outlineId: snapshot.outline.id,
     revision: snapshot.outline.revision,
     title: snapshot.outline.title,
-    nodes: snapshot.nodes.map((node) => ({
+    nodes: projectRelationSections(snapshot.nodes.map((node) => ({
       id: node.id,
       title: node.title,
       summary: node.summary,
+      document: "",
+      changeBefore: "",
+      changeAfter: node.outcome,
       kind: node.kind,
       parentId: node.parentId,
       structuralRole: node.structuralRole,
       narrativeFunction: node.narrativeFunction,
-      goal: node.goal,
-      conflict: node.conflict,
-      outcome: node.outcome,
-      locationText: node.locationText,
-      timeText: node.timeText,
       storyOrder: node.storyOrder,
       narrativeOrder: node.narrativeOrder,
       status: node.status,
-      notes: node.notes,
-      participants: grouped.get(node.id) ?? [],
+      participants: placeParticipant(grouped.get(node.id) ?? [], node.locationText),
       chapterId: chapterOf.get(node.id) ?? null,
       proposal: false,
-    })),
+    })), snapshot.relations.map((relation) => ({
+      id: relation.id,
+      from: relation.sourceNodeId,
+      to: relation.targetNodeId,
+      type: relation.type,
+      description: relation.description,
+      orderException: relation.orderException,
+      proposal: false,
+    }))),
     relations: snapshot.relations.map((relation) => ({
       id: relation.id,
       from: relation.sourceNodeId,
@@ -312,33 +302,43 @@ export function removeRelation(document: GraphDocument, id: string): GraphDocume
 }
 
 export function toCreateInput(node: GraphNode): CreateNodeInput {
+  const place = node.participants.find((participant) => participant.role === "场所" || participant.kind === "地点");
   return {
     parentId: node.parentId,
     kind: node.kind,
     title: node.title,
     summary: node.summary,
-    structuralRole: node.structuralRole,
-    narrativeFunction: node.narrativeFunction,
-    goal: node.goal,
-    conflict: node.conflict,
-    outcome: node.outcome,
-    locationText: node.locationText,
-    timeText: node.timeText,
+    structuralRole: knownValue(OUTLINE_STRUCTURAL_ROLES, node.structuralRole, "custom"),
+    narrativeFunction: knownValue(OUTLINE_NARRATIVE_FUNCTIONS, node.narrativeFunction, "mixed"),
+    goal: "",
+    conflict: "",
+    outcome: node.changeAfter,
+    locationText: place?.name ?? "",
+    timeText: "",
     storyOrder: node.storyOrder,
     narrativeOrder: node.narrativeOrder,
     status: node.status,
-    notes: node.notes,
-    participants: node.participants.map((participant) => ({
-      participantName: participant.name,
-      role: participant.role,
-      stateBefore: participant.stateBefore,
-      stateAfter: participant.stateAfter,
-    })),
+    notes: "",
+    participants: node.participants
+      .filter((participant) => participant !== place)
+      .map((participant) => ({
+        participantName: participant.name,
+        role: knownValue(OUTLINE_PARTICIPANT_ROLES, participant.role, "active"),
+        stateBefore: participant.stateBefore,
+        stateAfter: participant.stateAfter,
+      })),
   };
 }
 
 export function toUpdateInput(node: GraphNode): UpdateNodeInput {
-  return toCreateInput(node);
+  const input = toCreateInput(node);
+  return {
+    title: input.title,
+    summary: input.summary,
+    outcome: input.outcome,
+    locationText: input.locationText,
+    participants: input.participants,
+  };
 }
 
 export function planNextNode(
@@ -352,24 +352,22 @@ export function planNextNode(
   const kind: OutlineNodeKind = input.link === "child" || from.kind !== "arc" ? "event" : "arc";
   const parentId = input.link === "child" ? from.id : from.parentId;
   const placement = nextOrders(document, from, kind, input.link);
+  const participants = input.participants.filter((participant) => participant.name.trim() !== "");
   const created: GraphNode = {
     id: tempId,
     title: input.title.trim(),
     summary: input.summary,
+    document: renderStoryDocument({ title: input.title.trim(), lead: input.summary, participants }),
+    changeBefore: "",
+    changeAfter: "",
     kind,
     parentId,
-    structuralRole: "custom",
-    narrativeFunction: "mixed",
-    goal: input.goal,
-    conflict: input.conflict,
-    outcome: input.outcome,
-    locationText: input.locationText,
-    timeText: input.timeText,
+    structuralRole: "",
+    narrativeFunction: "",
     storyOrder: placement.storyOrder,
     narrativeOrder: placement.narrativeOrder,
     status: "draft",
-    notes: "",
-    participants: input.participants.filter((participant) => participant.name.trim() !== ""),
+    participants,
     chapterId: input.link === "sibling" ? from.chapterId : null,
     proposal: false,
   };
@@ -388,29 +386,29 @@ export function planNextNode(
         proposal: false,
       }
     : null;
+  const nextRelations = relation ? [...document.relations, relation] : document.relations;
+  const nextNodes = projectRelationSections([...nodes, created], nextRelations);
+  const createdNode = nextNodes.find((node) => node.id === tempId) ?? created;
   const operations: OutlinePatchOperation[] = [];
   for (const [nodeId, orders] of placement.shifts) {
     operations.push({ type: "update_node", nodeId, changes: orders });
   }
-  operations.push({ type: "create_node", tempId, value: toCreateInput(created) });
-  if (relation) {
+  operations.push({ type: "create_node", tempId, value: toCreateInput(createdNode) });
+  const relationType = relation ? knownValueOrNull(OUTLINE_RELATION_TYPES, relation.type) : null;
+  if (relation && relationType) {
     operations.push({
       type: "upsert_relation",
       value: {
         sourceNodeId: relation.from,
         targetNodeId: relation.to,
-        type: relation.type,
+        type: relationType,
         description: relation.description,
         orderException: false,
       },
     });
   }
   return {
-    document: {
-      ...document,
-      nodes: [...nodes, created],
-      relations: relation ? [...document.relations, relation] : document.relations,
-    },
+    document: { ...document, nodes: nextNodes, relations: nextRelations },
     operations,
   };
 }
@@ -480,7 +478,7 @@ export function buildProseBrief(
     const row = {
       fromTitle: document.nodes.find((node) => node.id === relation.from)?.title ?? relation.from,
       toTitle: document.nodes.find((node) => node.id === relation.to)?.title ?? relation.to,
-      type: RELATION_LABEL[relation.type],
+      type: relationLabel(relation.type),
       description: relation.description,
     };
     if (fromIn && toIn) internalEdges.push(row);
@@ -496,9 +494,8 @@ export function buildProseBrief(
     nodes: ordered.map((node) => ({
       id: node.id,
       title: node.title,
-      goal: node.goal,
-      conflict: node.conflict,
-      outcome: node.outcome,
+      changeBefore: node.changeBefore,
+      changeAfter: node.changeAfter,
     })),
     internalEdges,
     externalEdges,
@@ -535,41 +532,196 @@ function nextOrders(
   return { storyOrder, narrativeOrder, shifts };
 }
 
+export function applyNodeDocument(
+  document: GraphDocument,
+  nodeId: string,
+  markdown: string,
+): { readonly document: GraphDocument; readonly issues: readonly StoryDocumentIssue[] } {
+  const node = document.nodes.find((item) => item.id === nodeId);
+  if (!node) return { document, issues: [{ message: "引用不存在", blocking: true }] };
+  const parsed = parseStoryDocument(markdown);
+  if (parsed.issues.some((issue) => issue.blocking)) return { document, issues: parsed.issues };
+  const title = parsed.title ?? node.title;
+  const issues = [...parsed.issues];
+  if (parsed.title === null) issues.push({ message: "文档缺少标题，标题保持不变", blocking: false });
+  if (document.nodes.some((item) => item.id !== nodeId && item.title === title)) {
+    return { document, issues: [...issues, { message: "标题与另一个节点重复", blocking: true }] };
+  }
+  const resolved: GraphRelation[] = [];
+  for (const relation of parsed.relations) {
+    if (relation.otherTitle === title) {
+      issues.push({ message: "关系不能指向自己", blocking: false });
+      continue;
+    }
+    const matches = document.nodes.filter((item) => item.id !== nodeId && item.title === relation.otherTitle);
+    const other = matches[0];
+    if (!other || matches.length !== 1) {
+      issues.push({
+        message: matches.length > 1 ? `「${relation.otherTitle}」对应多个节点` : `找不到「${relation.otherTitle}」`,
+        blocking: false,
+      });
+      continue;
+    }
+    const from = relation.direction === "out" ? nodeId : other.id;
+    const to = relation.direction === "out" ? other.id : nodeId;
+    const key = `${relation.type}\u001f${from}\u001f${to}`;
+    if (resolved.some((item) => `${item.type}\u001f${item.from}\u001f${item.to}` === key)) continue;
+    const existing = document.relations.find((item) => item.type === relation.type && item.from === from && item.to === to);
+    resolved.push({
+      id: existing?.id ?? `rel:${relation.type}:${from}:${to}`,
+      from,
+      to,
+      type: relation.type,
+      description: relation.description,
+      orderException: existing?.orderException ?? false,
+      proposal: false,
+    });
+  }
+  const relations = [...document.relations.filter((relation) => relation.from !== nodeId && relation.to !== nodeId), ...resolved];
+  let nodes = document.nodes.map((item) => item.id === nodeId
+    ? {
+        ...item,
+        title,
+        summary: parsed.lead,
+        document: markdown,
+        changeBefore: parsed.changeBefore,
+        changeAfter: parsed.changeAfter,
+        participants: parsed.participants.map((participant) => ({ ...participant })),
+      }
+    : item.document.includes(`[[${node.title}]]`) && title !== node.title
+      ? { ...item, document: item.document.split(`[[${node.title}]]`).join(`[[${title}]]`) }
+      : item);
+  nodes = projectRelationSections(nodes, relations, new Set([nodeId]));
+  return { document: { ...document, nodes, relations }, issues };
+}
+
 function nodeFromInput(id: string, value: CreateNodeInput): GraphNode {
+  const participants = placeParticipant(value.participants.map((participant) => ({
+    name: participant.participantName,
+    kind: "人",
+    role: participant.role,
+    stateBefore: participant.stateBefore,
+    stateAfter: participant.stateAfter,
+  })), value.locationText);
+  const lead = value.summary;
   return {
     id,
     title: value.title,
-    summary: value.summary,
+    summary: lead,
+    document: renderStoryDocument({
+      title: value.title,
+      lead,
+      changeAfter: value.outcome,
+      participants,
+    }),
+    changeBefore: "",
+    changeAfter: value.outcome,
     kind: value.kind,
     parentId: value.parentId,
     structuralRole: value.structuralRole,
     narrativeFunction: value.narrativeFunction,
-    goal: value.goal,
-    conflict: value.conflict,
-    outcome: value.outcome,
-    locationText: value.locationText,
-    timeText: value.timeText,
     storyOrder: value.storyOrder,
     narrativeOrder: value.narrativeOrder,
     status: value.status,
-    notes: value.notes,
-    participants: value.participants.map((participant) => ({
-      name: participant.participantName,
-      role: participant.role,
-      stateBefore: participant.stateBefore,
-      stateAfter: participant.stateAfter,
-    })),
+    participants,
     chapterId: null,
     proposal: true,
   };
 }
 
-function people(value: string): GraphParticipant[] {
-  return value
+function placeParticipant(participants: readonly GraphParticipant[], location: string): GraphParticipant[] {
+  const place = location.trim();
+  if (place === "" || participants.some((participant) => participant.name === place)) return [...participants];
+  return [...participants, { name: place, role: "场所", kind: "地点", stateBefore: "", stateAfter: "" }];
+}
+
+function knownValue<T extends string>(allowed: readonly T[], value: string, fallback: T): T {
+  return allowed.find((item) => item === value) ?? fallback;
+}
+
+function knownValueOrNull<T extends string>(allowed: readonly T[], value: string): T | null {
+  return allowed.find((item) => item === value) ?? null;
+}
+
+function sampleNode(input: {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: OutlineNodeKind;
+  readonly parentId: string | null;
+  readonly lead: string;
+  readonly changeAfter: string;
+  readonly participants: readonly GraphParticipant[];
+  readonly storyOrder: number;
+  readonly narrativeOrder: number;
+  readonly chapterId: string | null;
+}): GraphNode {
+  return {
+    id: input.id,
+    title: input.title,
+    summary: input.lead,
+    document: "",
+    changeBefore: "",
+    changeAfter: input.changeAfter,
+    kind: input.kind,
+    parentId: input.parentId,
+    structuralRole: "",
+    narrativeFunction: "",
+    storyOrder: input.storyOrder,
+    narrativeOrder: input.narrativeOrder,
+    status: "draft",
+    participants: input.participants,
+    chapterId: input.chapterId,
+    proposal: false,
+  };
+}
+
+function sampleLead(goal: string, conflict: string, timeText: string): string {
+  return [goal.trim(), conflict.trim(), timeText.trim() === "" ? "" : `时间：${timeText.trim()}`].filter((line) => line !== "").join("\n\n");
+}
+
+function sampleParticipants(people: string, location: string): GraphParticipant[] {
+  const participants = people
     .split("、")
     .map((name) => name.trim())
     .filter((name) => name !== "" && name !== "无主动参与者")
-    .map((name) => ({ name, role: "active" as const, stateBefore: "", stateAfter: "" }));
+    .map((name) => ({ name, role: "施事", kind: "人", stateBefore: "", stateAfter: "" }));
+  const place = location.trim();
+  if (place === "" || participants.some((participant) => participant.name === place)) return participants;
+  return [...participants, { name: place, role: "场所", kind: "地点", stateBefore: "", stateAfter: "" }];
+}
+
+function projectRelationSections(
+  nodes: readonly GraphNode[],
+  relations: readonly GraphRelation[],
+  skip: ReadonlySet<string> = new Set(),
+): GraphNode[] {
+  const titles = new Map(nodes.map((node) => [node.id, node.title]));
+  return nodes.map((node) => {
+    const refs: StoryRelationRef[] = relations.flatMap((relation): StoryRelationRef[] => {
+      if (relation.from === node.id) {
+        return [{ type: relation.type, direction: "out" as const, otherTitle: titles.get(relation.to) ?? relation.to, description: relation.description }];
+      }
+      if (relation.to === node.id) {
+        return [{ type: relation.type, direction: "in" as const, otherTitle: titles.get(relation.from) ?? relation.from, description: relation.description }];
+      }
+      return [];
+    });
+    if (skip.has(node.id)) return node;
+    if (node.document.trim() === "") {
+      return {
+        ...node,
+        document: renderStoryDocument({
+          title: node.title,
+          lead: node.summary,
+          changeBefore: node.changeBefore,
+          changeAfter: node.changeAfter,
+          participants: node.participants,
+          relations: refs,
+        }),
+      };
+    }
+    return { ...node, document: replaceRelationSection(node.document, refs) };
+  });
 }
 
 function sampleChapterId(label: string): string | null {

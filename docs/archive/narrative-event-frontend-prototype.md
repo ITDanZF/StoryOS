@@ -1,5 +1,7 @@
 # 叙事事件图前端原型
 
+> 历史稿（2026-09-23）。其中的多视图、时间线和详情布局已由当前单画布方案取代。当前交互以 [事件图设计](../architecture/event-graph-long-novel-design.md) 与 [节点关系设计](../architecture/event-graph-theory-and-node-design.md) 为准；本文仅保留早期方案脉络。
+
 > v0.2 · 2026-09-23  
 > 依据已经落地的大纲契约和 `OutlineDesktopApi`，替换 v0.1。  
 > v0.1 把大纲做成书籍工作区里的「正文 / 大纲」模式，并假设了多套方案、单独的「待核验」状态和忽略检查的接口。这些和当前后端不一致，不再沿用。

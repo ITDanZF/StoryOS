@@ -1,5 +1,12 @@
 import type {
   ApplyOutlinePatchRequest,
+  AcceptBackfillRequest,
+  BackfillScan,
+  BackfillAcceptancePreview,
+  CancelGraphWritingRequest,
+  CancelBackfillRequest,
+  GraphWritingPlan,
+  NodeBackfillEvidence,
   BuildChapterContextRequest,
   ChapterWritingResult,
   CreateOutlineRequest,
@@ -13,9 +20,12 @@ import type {
   OutlineProposal,
   OutlineSnapshot,
   ProposeOutlineRequest,
+  PreviewGraphWritingRequest,
   ReviewCoverageRequest,
   RunOutlineChecksRequest,
+  ScanBackfillRequest,
   StartChapterWritingRequest,
+  StartGraphWritingRequest,
   UnmapOutlineNodeRequest,
   UpdateOutlineNodeRequest,
   UpdateOutlineProfileRequest,
@@ -39,4 +49,14 @@ export type OutlineDesktopApi = {
   startChapterWriting(request: StartChapterWritingRequest): Promise<ChapterWritingResult>;
   mapOutlineNodes(request: MapOutlineNodesRequest): Promise<OutlineSnapshot>;
   unmapOutlineNode(request: UnmapOutlineNodeRequest): Promise<OutlineSnapshot>;
+  getLatestBackfillScan(projectId: string): Promise<BackfillScan | null>;
+  scanBackfill(request: ScanBackfillRequest): Promise<BackfillScan>;
+  previewBackfillAcceptance(request: AcceptBackfillRequest): Promise<BackfillAcceptancePreview>;
+  acceptBackfill(request: AcceptBackfillRequest): Promise<OutlineSnapshot>;
+  getNodeBackfillEvidence(projectId: string, nodeId: string): Promise<readonly NodeBackfillEvidence[]>;
+  cancelBackfillScan(request: CancelBackfillRequest): Promise<BackfillScan>;
+  getLatestGraphWritingPlan(projectId: string): Promise<GraphWritingPlan | null>;
+  previewGraphWritingPlan(request: PreviewGraphWritingRequest): Promise<GraphWritingPlan>;
+  startGraphWritingPlan(request: StartGraphWritingRequest): Promise<GraphWritingPlan>;
+  cancelGraphWritingPlan(request: CancelGraphWritingRequest): Promise<GraphWritingPlan>;
 };

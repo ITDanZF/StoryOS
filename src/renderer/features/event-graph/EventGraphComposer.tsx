@@ -92,7 +92,7 @@ export default function EventGraphComposer({
             <>
               <p className="my-1 text-text-secondary">{brief.orderNote} 将续写到这一章末尾。</p>
               <ul className="my-1 pl-4">
-                {brief.nodes.map((node) => <li key={node.id}>{node.title}：{node.goal}</li>)}
+                {brief.nodes.map((node) => <li key={node.id}>{node.title}：{node.changeAfter}</li>)}
               </ul>
               {brief.internalEdges.length > 0 && <p className="m-0 text-text-secondary">必须写进正文：{brief.internalEdges.map((edge) => `${edge.fromTitle}${edge.type}${edge.toTitle}`).join("、")}</p>}
               {brief.externalEdges.length > 0 && <p className="m-0 text-text-secondary">只作上下文：{brief.externalEdges.map((edge) => `${edge.fromTitle}${edge.type}${edge.toTitle}`).join("、")}</p>}

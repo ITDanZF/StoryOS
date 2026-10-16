@@ -124,7 +124,7 @@ describe("outline checks", () => {
       severity: "warning" as const,
       source: "rule" as const,
       message: "覆盖所依据的章节修订已不是当前修订",
-      fingerprint: ["coverage.revision_drift", "earlier", "4", "1", "old-revision"].join("\u001f"),
+      fingerprint: ["coverage.revision_drift", "earlier", "4", "chapter-1", "1", "old-revision"].join("\u001f"),
       status: "open" as const,
       checkedRevision: 4,
       stale: false,
@@ -134,7 +134,7 @@ describe("outline checks", () => {
     ).toBe(true);
     const fresh = {
       ...issue,
-      fingerprint: ["coverage.revision_drift", "earlier", "4", "2", "new-revision"].join("\u001f"),
+      fingerprint: ["coverage.revision_drift", "earlier", "4", "chapter-1", "2", "new-revision"].join("\u001f"),
     };
     const mapped: OutlineSnapshot = {
       ...current,
@@ -143,6 +143,8 @@ describe("outline checks", () => {
           chapterId: "chapter-1",
           nodeId: "earlier",
           sortOrder: 1000,
+          segmentIntent: "本章事件",
+          expectedLocalChange: "状态变化",
           coverageStatus: "planned",
           coverageNote: "",
           verificationOutlineRevision: 2,

@@ -1,10 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
-import BookDatabase, { BOOK_DATABASE_APPLICATION_ID } from "./BookDatabase.ts";
-import { BOOK_CHANGE_TRIGGERS, BOOK_SCHEMA } from "./bookSchema.ts";
+import BookDatabase from "./BookDatabase.ts";
 import SqliteNovelStore from "./SqliteNovelStore.ts";
 import SqliteOutlineStore from "./SqliteOutlineStore.ts";
 import OutlineApplication from "../../application/outline/OutlineApplication.ts";
@@ -17,61 +15,76 @@ afterEach(() => {
 });
 
 describe("outline storage", () => {
-  it("migrates version 101 without changing existing volume or chapter rows", () => {
-    const directory = mkdtempSync(path.join(tmpdir(), "storyos-outline-migrate-"));
+  it("creates the cross-chapter mapping schema in a fresh book", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "storyos-outline-schema-"));
     directories.push(directory);
     const file = path.join(directory, "book.sqlite");
-    const raw = new Database(file);
-    raw.pragma(`application_id = ${BOOK_DATABASE_APPLICATION_ID}`);
-    raw.exec(BOOK_SCHEMA + BOOK_CHANGE_TRIGGERS);
-    raw.pragma("user_version = 100");
-    const now = Date.now();
-    raw
-      .prepare(
-        "INSERT INTO books(id, title, synopsis, status, created_at, updated_at) VALUES ('book-1', '旧书', '简介', 'writing', ?, ?)",
-      )
-      .run(now, now);
-    raw
-      .prepare(
-        "INSERT INTO volumes(id, book_id, title, summary, position, created_at, updated_at) VALUES ('volume-1', 'book-1', '卷一', '卷摘要', 1, ?, ?)",
-      )
-      .run(now, now);
-    raw
-      .prepare(
-        "INSERT INTO chapters(id, book_id, volume_id, title, status, position, created_at, updated_at) VALUES ('chapter-1', 'book-1', 'volume-1', '旧章', 'draft', 1, ?, ?)",
-      )
-      .run(now, now);
-    raw.close();
-
-    const migrated = new BookDatabase(file);
+    const database = new BookDatabase(file);
     try {
-      expect(migrated.handle.pragma("user_version", { simple: true })).toBe(101);
-      expect(migrated.handle.prepare("SELECT title, summary FROM volumes").all()).toEqual([
-        { title: "卷一", summary: "卷摘要" },
-      ]);
-      expect(migrated.handle.prepare("SELECT title, status FROM chapters").all()).toEqual([
-        { title: "旧章", status: "draft" },
-      ]);
-      expect(
-        (migrated.handle.prepare("PRAGMA table_info(chapters)").all() as { name: string }[]).map(
-          (column) => column.name,
-        ),
-      ).toEqual([
-        "id",
-        "book_id",
-        "volume_id",
-        "title",
-        "status",
-        "position",
-        "current_revision_id",
-        "row_version",
-        "created_at",
-        "updated_at",
-        "deleted_at",
-      ]);
-      expect(migrated.handle.prepare("SELECT COUNT(*) AS count FROM outlines").get()).toEqual({ count: 0 });
+      expect(database.handle.pragma("user_version", { simple: true })).toBe(103);
+      const columns = database.handle.prepare("PRAGMA table_info(outline_node_chapters)").all() as { name: string }[];
+      expect(columns.map((column) => column.name)).toContain("segment_intent");
+      expect(columns.map((column) => column.name)).toContain("expected_local_change");
+      expect(database.handle.pragma("foreign_key_check")).toEqual([]);
     } finally {
-      migrated.close();
+      database.close();
+    }
+  });
+
+  it("keeps one event mapped to two chapters and unmaps only the selected chapter", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "storyos-outline-multi-chapter-"));
+    directories.push(directory);
+    const database = new BookDatabase(path.join(directory, "book.sqlite"));
+    try {
+      const now = Date.now();
+      database.handle.prepare(
+        "INSERT INTO books(id, title, synopsis, status, created_at, updated_at) VALUES ('book-1', '书', '', 'writing', ?, ?)",
+      ).run(now, now);
+      for (const [id, position] of [["chapter-1", 1], ["chapter-2", 2]] as const) {
+        database.handle.prepare(
+          "INSERT INTO chapters(id, book_id, title, status, position, created_at, updated_at) VALUES (?, 'book-1', ?, 'draft', ?, ?, ?)",
+        ).run(id, id, position, now, now);
+      }
+      const outline = new OutlineApplication(new SqliteOutlineStore(database.handle), { model: null });
+      const created = outline.createOutline({
+        projectId: "project-1", title: "总纲", premise: "", theme: "", coreConflict: "", climaxSummary: "", endingIntent: "",
+      });
+      const accepted = outline.applyOutlinePatch({
+        projectId: "project-1",
+        patch: {
+          outlineId: created.outline.id,
+          expectedRevision: created.outline.revision,
+          operations: [{ type: "create_node", tempId: "event", value: eventNode() }],
+        },
+      }).snapshot;
+      const nodeId = accepted.nodes[0]?.id;
+      if (!nodeId) throw new Error("node missing");
+      const first = outline.mapOutlineNodes({
+        projectId: "project-1", expectedRevision: accepted.outline.revision, chapterId: "chapter-1",
+        mappings: [{ nodeId, segmentIntent: "产生怀疑", expectedLocalChange: "开始调查" }],
+      });
+      const second = outline.mapOutlineNodes({
+        projectId: "project-1", expectedRevision: first.outline.revision, chapterId: "chapter-2",
+        mappings: [{ nodeId, segmentIntent: "完成对质", expectedLocalChange: "确认真相" }],
+      });
+      expect(second.mappings.map((mapping) => [mapping.chapterId, mapping.expectedLocalChange])).toEqual([
+        ["chapter-1", "开始调查"], ["chapter-2", "确认真相"],
+      ]);
+      const reopened = new BookDatabase(path.join(directory, "book.sqlite"));
+      try {
+        expect(new SqliteOutlineStore(reopened.handle).readActive()?.mappings.map((mapping) => mapping.chapterId))
+          .toEqual(["chapter-1", "chapter-2"]);
+      } finally {
+        reopened.close();
+      }
+      const remaining = outline.unmapOutlineNode({
+        projectId: "project-1", expectedRevision: second.outline.revision, chapterId: "chapter-1", nodeId,
+      });
+      expect(remaining.mappings).toMatchObject([{
+        chapterId: "chapter-2", nodeId, segmentIntent: "完成对质", expectedLocalChange: "确认真相",
+      }]);
+    } finally {
+      database.close();
     }
   });
 
@@ -115,7 +128,7 @@ describe("outline storage", () => {
         projectId: "project-1",
         expectedRevision: applied.snapshot.outline.revision,
         chapterId: "chapter-1",
-        nodeIds: [nodeId],
+        mappings: [{ nodeId, segmentIntent: "本章夜探", expectedLocalChange: "从侧门离开" }],
       });
       new SqliteNovelStore(database.handle).deleteChapter("chapter-1");
       const saved = outline.getOutlineSnapshot("project-1");

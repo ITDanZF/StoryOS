@@ -1,0 +1,128 @@
+{
+  "title": "雾港来信",
+  "premise": "一封匿名信让调查记者林澈重新追查七年前的失踪案，却逐渐发现最信任的同伴参与了掩盖。",
+  "stages": [
+    {
+      "id": "stage-trace",
+      "title": "追查旧案",
+      "entry": "失踪案已经结案，林澈与旧日同伴周闻仍保持信任。",
+      "goal": "找到能推翻结案说法的原始证据。",
+      "obstacle": "证据被封存，线索的提供者不愿暴露身份。",
+      "turn": "档案遭焚毁，周闻的异常举动暴露。",
+      "exit": "书面证据消失，林澈开始怀疑周闻。",
+      "notes": "这一阶段让读者先相信两人的合作，再让证据毁灭改变关系。"
+    },
+    {
+      "id": "stage-witness",
+      "title": "争取证人",
+      "entry": "林澈失去书面证据，只剩匿名信指向的一名旧目击者。",
+      "goal": "让目击者说出当晚看见的人。",
+      "obstacle": "目击者担心牵连家人，周闻也在暗中阻挠。",
+      "turn": "目击者同意作证，但要求林澈先公开周闻的身份。",
+      "exit": "林澈必须在保护朋友与公布真相之间作出选择。",
+      "notes": "阶段出口应自然接入最后的公开抉择。"
+    }
+  ],
+  "events": [
+    {
+      "id": "letter",
+      "stageId": "stage-trace",
+      "title": "收到匿名信",
+      "summary": "匿名信指出旧档案馆仍保存着失踪案的原始记录。",
+      "goal": "林澈想确认失踪者的下落。",
+      "conflict": "寄信人身份不明，信可能是陷阱。",
+      "outcome": "林澈决定重启调查。",
+      "changeBefore": "林澈接受了旧案的结案说法。",
+      "changeAfter": "林澈有了必须去档案馆查证的理由。",
+      "storyOrder": 0,
+      "narrativeOrder": 0,
+      "participants": [
+        { "name": "林澈", "role": "行动者", "stateBefore": "不再追查", "stateAfter": "决定重启调查" }
+      ],
+      "writingBoundary": "信只给出地址和一句暗示，不直接说出真相。",
+      "notes": "匿名信的笔迹可作为后续揭示的线索。"
+    },
+    {
+      "id": "archive",
+      "stageId": "stage-trace",
+      "title": "潜入档案馆",
+      "summary": "林澈与周闻潜入档案馆，找到一页被撕毁的名单。",
+      "goal": "取得完整的原始记录。",
+      "conflict": "馆内封锁，周闻又试图让林澈放弃名单。",
+      "outcome": "林澈拿到名单残页，周闻发现她已接近真相。",
+      "changeBefore": "旧案缺少可验证的证据。",
+      "changeAfter": "名单残页提供了证据，也让周闻感到威胁。",
+      "storyOrder": 1,
+      "narrativeOrder": 1,
+      "participants": [
+        { "name": "林澈", "role": "行动者", "stateBefore": "只有匿名线索", "stateAfter": "握有名单残页" },
+        { "name": "周闻", "role": "阻碍者", "stateBefore": "认为秘密安全", "stateAfter": "意识到秘密可能暴露" }
+      ],
+      "writingBoundary": "让林澈亲手找到残页，周闻的阻挠先保持含糊。",
+      "notes": "档案馆一幕需要留下火灾的空间条件。"
+    },
+    {
+      "id": "fire",
+      "stageId": "stage-trace",
+      "title": "档案遭焚毁",
+      "summary": "周闻纵火销毁剩余档案，林澈未能保住原件。",
+      "goal": "周闻想抹除名单；林澈想保住证据。",
+      "conflict": "双方不能公开真实目的，火势迅速蔓延。",
+      "outcome": "书面证据消失，两人信任破裂。",
+      "changeBefore": "林澈仍相信周闻会协助调查。",
+      "changeAfter": "林澈开始怀疑周闻参与了失踪案。",
+      "storyOrder": 2,
+      "narrativeOrder": 2,
+      "participants": [
+        { "name": "林澈", "role": "受影响者", "stateBefore": "相信周闻", "stateAfter": "怀疑周闻" },
+        { "name": "周闻", "role": "行动者", "stateBefore": "尚可隐藏秘密", "stateAfter": "必须主动阻止林澈" }
+      ],
+      "writingBoundary": "本章必须写出证据毁灭和信任破裂；暂不明说周闻的完整动机。",
+      "notes": "可以让林澈先发现火源，稍后才看到周闻。"
+    },
+    {
+      "id": "witness",
+      "stageId": "stage-witness",
+      "title": "找到唯一目击者",
+      "summary": "林澈转向人证，找到当年在场的码头工人。",
+      "goal": "让目击者复述失踪当晚的经过。",
+      "conflict": "目击者拒绝公开作证，担心家人遭报复。",
+      "outcome": "目击者承认见过失踪者，但要求匿名。",
+      "changeBefore": "林澈没有可公开使用的证据。",
+      "changeAfter": "林澈获得新的证词入口，却还不能公开真相。",
+      "storyOrder": 3,
+      "narrativeOrder": 3,
+      "participants": [
+        { "name": "林澈", "role": "行动者", "stateBefore": "失去书面证据", "stateAfter": "掌握人证线索" },
+        { "name": "目击者", "role": "见证者", "stateBefore": "拒绝接触调查", "stateAfter": "愿意匿名说明" }
+      ],
+      "writingBoundary": "不要让目击者一次讲完全部秘密。",
+      "notes": "码头环境可呼应开篇匿名信的纸张气味。"
+    },
+    {
+      "id": "choice",
+      "stageId": "stage-witness",
+      "title": "公开周闻身份",
+      "summary": "目击者要求先公开周闻的涉案身份，林澈必须决定是否背弃旧友。",
+      "goal": "林澈想让证词可信，同时不伤害无辜者。",
+      "conflict": "公开身份可能毁掉周闻，也会让目击者暴露。",
+      "outcome": "林澈决定以自己的名义公开调查证据。",
+      "changeBefore": "林澈仍想同时保住友情和真相。",
+      "changeAfter": "林澈接受无法两全的代价，主线进入公开对抗。",
+      "storyOrder": 4,
+      "narrativeOrder": 4,
+      "participants": [
+        { "name": "林澈", "role": "决策者", "stateBefore": "回避抉择", "stateAfter": "承担公开的代价" }
+      ],
+      "writingBoundary": "抉择要由林澈主动做出，不由外部事故代替。",
+      "notes": "结尾保留周闻回应的悬念。"
+    }
+  ],
+  "relations": [
+    { "id": "rel-letter-archive", "from": "letter", "to": "archive", "type": "causes", "description": "信中的地址促使林澈去档案馆。" },
+    { "id": "rel-archive-fire", "from": "archive", "to": "fire", "type": "causes", "description": "周闻发现林澈接近名单，决定销毁证据。" },
+    { "id": "rel-fire-witness", "from": "fire", "to": "witness", "type": "causes", "description": "档案毁灭后，林澈只能寻找人证。" },
+    { "id": "rel-letter-witness", "from": "letter", "to": "witness", "type": "foreshadows", "description": "匿名信中的码头线索在找到目击者时获得新意义。" },
+    { "id": "rel-witness-choice", "from": "witness", "to": "choice", "type": "requires", "description": "目击者同意提供证词，林澈才面临公开身份的抉择。" }
+  ]
+}

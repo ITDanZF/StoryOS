@@ -27,7 +27,7 @@ export type StoryArc = {
 export type StoryRelation = {
   readonly from: string;
   readonly to: string;
-  readonly type: "causes" | "requires" | "reveals" | "foreshadows" | "contrasts";
+  readonly type: "causes" | "enables" | "reveals" | "foreshadows" | "contrasts";
   readonly detail: string;
 };
 
@@ -59,7 +59,7 @@ export const STORY_RELATIONS: readonly StoryRelation[] = [
   { from: "2.2", to: "1.1", type: "causes", detail: "交出的口令导致西侧枪声" },
   { from: "2.1", to: "1.3", type: "causes", detail: "撕页导致知道西侧会开枪" },
   { from: "5.1", to: "4.1", type: "causes", detail: "挡刀仍是拖人的原因" },
-  { from: "2.2", to: "3.2", type: "requires", detail: "对口令之前铜哨必须已经交出" },
+  { from: "2.2", to: "3.2", type: "enables", detail: "对口令之前铜哨必须已经交出" },
   { from: "2.1", to: "3.1", type: "reveals", detail: "缺页对上被撕下的西坡" },
   { from: "3.0", to: "3.2", type: "foreshadows", detail: "空弹夹在对口令时兑现" },
   { from: "1.2", to: "4.2", type: "contrasts", detail: "当时仍当战友，此刻只叫名字" },

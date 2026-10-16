@@ -1,10 +1,17 @@
-import { useEffect, useRef } from "react";
+// 暂时不挂到事件图页面。故事弧、故事序、叙事序、情节关系恢复时再由 EventGraphPage 接入。
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { VIEW_LEGEND, type DrawEdge, type Emphasis, type GraphVertex, type GraphView } from "./model/buildEventGraph.ts";
 import { cn } from "../../../lib/utils.ts";
+import EventGraphVertex from "./EventGraphVertex.tsx";
 
 type Pan = { readonly x: number; readonly y: number; readonly scale: number };
 
+export type EventGraphCanvasHandle = {
+  fit: () => void;
+};
+
 type EventGraphCanvasProps = {
+  readonly ref?: Ref<EventGraphCanvasHandle>;
   readonly view: GraphView;
   readonly vertices: readonly (GraphVertex & { readonly emphasis: Emphasis; readonly chosen: boolean })[];
   readonly edges: readonly DrawEdge[];
@@ -15,11 +22,13 @@ type EventGraphCanvasProps = {
   readonly onPan: (pan: Pan) => void;
   readonly onSelectVertex: (id: string, shiftKey: boolean) => void;
   readonly onMoveVertex: (id: string, point: { x: number; y: number }) => void;
+  readonly onExtendVertex: (id: string, angle: number) => void;
   readonly onSelectEdge: (id: string) => void;
   readonly onClear: () => void;
 };
 
 export default function EventGraphCanvas({
+  ref,
   view,
   vertices,
   edges,
@@ -30,6 +39,7 @@ export default function EventGraphCanvas({
   onPan,
   onSelectVertex,
   onMoveVertex,
+  onExtendVertex,
   onSelectEdge,
   onClear,
 }: EventGraphCanvasProps) {
@@ -37,6 +47,8 @@ export default function EventGraphCanvas({
   const movedRef = useRef(false);
   const panRef = useRef(pan);
   panRef.current = pan;
+  const scaleRef = useRef(pan.scale);
+  scaleRef.current = pan.scale;
 
   const sizeRef = useRef({ width, height });
   sizeRef.current = { width, height };
@@ -54,6 +66,13 @@ export default function EventGraphCanvas({
       y: (rect.height - size.height * next) / 2,
     });
   };
+
+  useImperativeHandle(ref, () => ({
+    fit: () => {
+      movedRef.current = true;
+      fit();
+    },
+  }));
 
   useEffect(() => {
     movedRef.current = false;
@@ -91,7 +110,8 @@ export default function EventGraphCanvas({
   return (
     <div
       ref={viewportRef}
-      className="relative min-h-0 flex-1 cursor-grab overflow-hidden bg-muted active:cursor-grabbing"
+      className="relative min-h-0 flex-1 cursor-grab select-none overflow-hidden bg-surface-canvas active:cursor-grabbing"
+      style={{ backgroundImage: "radial-gradient(#dddbd6 1px, transparent 1px)", backgroundSize: "22px 22px" }}
       tabIndex={0}
       aria-label="事件图"
       onPointerDown={(event) => {
@@ -135,7 +155,7 @@ export default function EventGraphCanvas({
               <path d={edge.d} fill="none" stroke={edge.color} strokeWidth={edge.width} strokeDasharray={edge.dashed ? "5 4" : undefined} markerEnd="url(#event-graph-arrow)" />
               {edge.label && (
                 <g>
-                  <rect x={edge.labelX - (edge.label.length * 6 + 7)} y={edge.labelY - 9} width={edge.label.length * 12 + 14} height="18" rx="9" fill="#fbfbfa" stroke={edge.color} />
+                  <rect x={edge.labelX - ([...edge.label].length * 12 + 14) / 2} y={edge.labelY - 9} width={[...edge.label].length * 12 + 14} height="18" rx="9" fill="var(--app-card)" stroke={edge.color} />
                   <text x={edge.labelX} y={edge.labelY + 4} textAnchor="middle" fill={edge.color} fontSize="11">{edge.label}</text>
                 </g>
               )}
@@ -143,50 +163,14 @@ export default function EventGraphCanvas({
           ))}
         </svg>
         {vertices.map((vertex) => (
-          <button
+          <EventGraphVertex
             key={vertex.id}
-            type="button"
-            data-vertex={vertex.id}
-            title={vertex.goal}
-            className={cn(
-              "absolute grid size-20 place-items-center rounded-full border bg-card px-1.5 text-center leading-tight",
-              vertex.kind === "arc" ? "border-4 border-double" : "border-[1.5px]",
-              vertex.emphasis === "ghost" ? "border-border text-text-secondary opacity-30" : "border-border-strong text-foreground opacity-100",
-              vertex.emphasis === "focus" && "z-[2] border-accent text-accent-foreground",
-              vertex.chosen && "ring-2 ring-accent",
-              vertex.proposal && "border-dashed bg-accent/40",
-              vertex.pending && "border-warning-border",
-              vertex.transition && "border-warning-border text-warning-text",
-            )}
-            style={{ left: vertex.x, top: vertex.y, zIndex: vertex.emphasis === "ghost" ? 0 : 2 }}
-            aria-pressed={vertex.chosen}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-              onSelectVertex(vertex.id, event.shiftKey);
-              if (event.shiftKey) return;
-              const origin = { x: vertex.x, y: vertex.y, clientX: event.clientX, clientY: event.clientY };
-              event.currentTarget.setPointerCapture(event.pointerId);
-              const target = event.currentTarget;
-              const move = (next: PointerEvent) => {
-                const scale = panRef.current.scale || 1;
-                onMoveVertex(vertex.id, {
-                  x: origin.x + (next.clientX - origin.clientX) / scale,
-                  y: origin.y + (next.clientY - origin.clientY) / scale,
-                });
-              };
-              const up = () => {
-                target.removeEventListener("pointermove", move);
-                target.removeEventListener("pointerup", up);
-              };
-              target.addEventListener("pointermove", move);
-              target.addEventListener("pointerup", up);
-            }}
-          >
-            <span className="grid gap-0.5">
-              <small className="text-[10px] text-text-subtle">{vertex.proposal ? "候选" : vertex.transition ? "过渡" : vertex.kind === "arc" ? "弧" : vertex.chapter || "事件"}</small>
-              <b className="text-xs font-semibold">{vertex.name}</b>
-            </span>
-          </button>
+            vertex={vertex}
+            scaleRef={scaleRef}
+            onSelect={onSelectVertex}
+            onMove={onMoveVertex}
+            onExtend={onExtendVertex}
+          />
         ))}
       </div>
       <div className="pointer-events-none absolute bottom-3 left-3.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -197,7 +181,7 @@ export default function EventGraphCanvas({
           </span>
         ))}
       </div>
-      <p className="pointer-events-none absolute bottom-3 right-3.5 m-0 text-[11px] text-text-subtle">Shift 加选 · 拖动顶点 · 双击复位</p>
+      <p className="pointer-events-none absolute bottom-3 right-3.5 m-0 hidden text-[11px] text-text-subtle min-[900px]:block">悬停节点，加号沿圆周滑动 · 点顶点聚焦相关点和边</p>
     </div>
   );
 }

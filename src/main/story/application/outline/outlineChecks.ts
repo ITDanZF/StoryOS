@@ -124,7 +124,19 @@ export function collectOutlineIssues(
     }
   }
 
+  const mappingKeys = new Set<string>();
   for (const mapping of snapshot.mappings) {
+    const key = `${mapping.chapterId}\u001f${mapping.nodeId}`;
+    if (mappingKeys.has(key)) {
+      push("mapping.duplicate", "error", mapping.nodeId, "同一事件在同一章重复映射", revisionOf(snapshot, mapping.nodeId), [mapping.chapterId]);
+    }
+    mappingKeys.add(key);
+    if (mapping.segmentIntent.trim() === "" || mapping.expectedLocalChange.trim() === "") {
+      push("mapping.incomplete", "error", mapping.nodeId, "章节片段和本章变化不能为空", revisionOf(snapshot, mapping.nodeId), [mapping.chapterId]);
+    }
+    if (!nodeIds.has(mapping.nodeId) || !isLeaf(snapshot, mapping.nodeId)) {
+      push("mapping.invalid_leaf", "error", mapping.nodeId, "映射只能引用叶子事件", revisionOf(snapshot, mapping.nodeId), [mapping.chapterId]);
+    }
     if (mapping.verificationChapterRevisionId === null) continue;
     const currentRevision = chapterRevisionIds.get(mapping.chapterId) ?? null;
     if (currentRevision === mapping.verificationChapterRevisionId) continue;
@@ -135,7 +147,7 @@ export function collectOutlineIssues(
       mapping.nodeId,
       "覆盖所依据的章节修订已不是当前修订",
       node?.revision ?? snapshot.outline.revision,
-      [String(snapshot.outline.revision), currentRevision ?? ""],
+      [mapping.chapterId, String(snapshot.outline.revision), currentRevision ?? ""],
     );
   }
 
@@ -155,12 +167,13 @@ export function issueIsStale(
   }
   if (!issue.ruleCode.startsWith("coverage.")) return false;
   const parts = issue.fingerprint.split("\u001f");
-  if (parts.length < 5) return false;
-  const outlineRevision = Number(parts[3]);
-  const chapterRevisionId = parts[4] ?? "";
+  if (parts.length < 6) return true;
+  const chapterId = parts[3] ?? "";
+  const outlineRevision = Number(parts[4]);
+  const chapterRevisionId = parts[5] ?? "";
   if (!Number.isInteger(outlineRevision) || outlineRevision !== snapshot.outline.revision) return true;
-  const mapping = snapshot.mappings.find((item) => item.nodeId === issue.nodeId);
-  const current = mapping ? (chapterRevisionIds.get(mapping.chapterId) ?? "") : "";
+  const mapping = snapshot.mappings.find((item) => item.nodeId === issue.nodeId && item.chapterId === chapterId);
+  const current = mapping ? (chapterRevisionIds.get(chapterId) ?? "") : "";
   return current !== chapterRevisionId;
 }
 

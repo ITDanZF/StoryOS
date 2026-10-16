@@ -196,6 +196,26 @@ const agentApi: AgentDesktopApi & OutlineDesktopApi = {
     ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.mapNodes, request),
   unmapOutlineNode: (request) =>
     ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.unmapNode, request),
+  getLatestBackfillScan: (projectId) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.latestBackfill, projectId),
+  scanBackfill: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.scanBackfill, request),
+  previewBackfillAcceptance: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.previewBackfillAcceptance, request),
+  acceptBackfill: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.acceptBackfill, request),
+  getNodeBackfillEvidence: (projectId, nodeId) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.nodeBackfillEvidence, projectId, nodeId),
+  cancelBackfillScan: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.cancelBackfill, request),
+  getLatestGraphWritingPlan: (projectId) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.latestGraphWriting, projectId),
+  previewGraphWritingPlan: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.previewGraphWriting, request),
+  startGraphWritingPlan: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.startGraphWriting, request),
+  cancelGraphWritingPlan: (request) =>
+    ipcRenderer.invoke(OUTLINE_IPC_CHANNELS.cancelGraphWriting, request),
   onEvent: (handler: (event: ConversationApplicationEvent) => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

@@ -72,6 +72,16 @@ describe("outline ipc", () => {
       unmapOutlineNode: () => {
         throw new Error("unused");
       },
+      getLatestBackfillScan: () => null,
+      scanBackfill: () => { throw new Error("unused"); },
+      previewBackfillAcceptance: () => { throw new Error("unused"); },
+      acceptBackfill: () => { throw new Error("unused"); },
+      getNodeBackfillEvidence: async () => [],
+      cancelBackfillScan: () => { throw new Error("unused"); },
+      getLatestGraphWritingPlan: () => null,
+      previewGraphWritingPlan: () => { throw new Error("unused"); },
+      startGraphWritingPlan: () => { throw new Error("unused"); },
+      cancelGraphWritingPlan: () => { throw new Error("unused"); },
     }));
     const check = handlers.get(OUTLINE_IPC_CHANNELS.check);
     expect(() => check?.({}, { projectId: "project-1" })).toThrow();

@@ -10,7 +10,7 @@
 > - **当前执行决策：`docs/todo/performance/book-workspace-performance-execution-plan.md`**（覆盖本文关于 token/delta 流式呈现的早期建议）
 > - 存储边界：`docs/architecture/database-vnext/README.md`
 > - 阅读器剩余画质验收：`docs/todo/open-items.md`
-> - 大纲（独立模块，不可与目录混用）：`docs/todo/outline-module-design-analysis.md`
+> - 大纲（独立模块，不可与目录混用）：现行字段见 `src/shared/contracts/outline/outlineContracts.ts`；最初的设计讨论见 `docs/archive/outline-module-design-analysis.md`
 
 ## 1. 结论先行
 

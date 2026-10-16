@@ -44,10 +44,12 @@ export type GenerateChapterInput = {
   readonly mode: ChapterGenerationMode;
   readonly instruction: string;
   readonly signal?: AbortSignal;
+  readonly sourceRunId?: string;
 };
 
 export type GenerateChapterResult = {
   readonly generationId: string;
+  readonly revisionId: string;
   readonly chapterId: string;
   readonly revisionNumber: number;
   readonly characterCount: number;
@@ -167,6 +169,7 @@ function combineText(
 }
 
 export default class ChapterGenerationService {
+  private static readonly activeChapters = new Set<string>();
   constructor(
     private readonly model: ModelGateway,
     private readonly novels: NovelApplication,
@@ -174,8 +177,15 @@ export default class ChapterGenerationService {
   ) {}
 
   async generate(input: GenerateChapterInput): Promise<GenerateChapterResult> {
-    const generate = () => this.generateWithSnapshot(input);
-    return this.model.withSnapshot ? this.model.withSnapshot(generate) : generate();
+    const key = `${input.projectId}:${input.chapterId}`;
+    if (ChapterGenerationService.activeChapters.has(key)) throw new Error("The target chapter already has an active generation.");
+    ChapterGenerationService.activeChapters.add(key);
+    try {
+      const generate = () => this.generateWithSnapshot(input);
+      return await (this.model.withSnapshot ? this.model.withSnapshot(generate) : generate());
+    } finally {
+      ChapterGenerationService.activeChapters.delete(key);
+    }
   }
 
   private async generateWithSnapshot(input: GenerateChapterInput): Promise<GenerateChapterResult> {
@@ -344,6 +354,7 @@ export default class ChapterGenerationService {
           expectedCurrentRevisionId: revision?.id ?? null,
           expectedRowVersion: chapter.rowVersion,
           origin: "agent",
+          sourceRunId: input.sourceRunId,
         });
         await this.onEvent({
           ...eventBase,
@@ -355,6 +366,7 @@ export default class ChapterGenerationService {
         });
         return Object.freeze({
           generationId,
+          revisionId: saved.id,
           chapterId: chapter.id,
           revisionNumber: saved.revisionNumber,
           characterCount: saved.characterCount,

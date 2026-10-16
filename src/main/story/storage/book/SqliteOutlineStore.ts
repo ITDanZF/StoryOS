@@ -1,6 +1,10 @@
 import type { Database as BetterSqliteDatabase } from "better-sqlite3";
 import type {
   ChapterOutlineMapping,
+  BackfillCandidate,
+  BackfillEvidence,
+  BackfillScan,
+  GraphWritingPlan,
   NarrativePromise,
   Outline,
   OutlineIssue,
@@ -17,6 +21,7 @@ export type StoredChapter = {
   readonly title: string;
   readonly index: number;
   readonly currentRevisionId: string | null;
+  readonly rowVersion: number;
   readonly plainText: string;
 };
 
@@ -37,6 +42,114 @@ type OutlineRow = {
 
 export default class SqliteOutlineStore {
   constructor(private readonly database: BetterSqliteDatabase) {}
+
+  transaction<T>(work: () => T): T {
+    return this.database.transaction(work)();
+  }
+
+  saveBackfillScan(scan: BackfillScan): void {
+    this.database.transaction(() => {
+      this.database.prepare(
+        `INSERT INTO outline_backfill_scans(id,book_id,outline_id,outline_revision,extractor_version,chapter_inputs_json,completed_chapter_ids_json,status,created_at)
+         VALUES(?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET chapter_inputs_json=excluded.chapter_inputs_json,
+         completed_chapter_ids_json=excluded.completed_chapter_ids_json,status=excluded.status`,
+      ).run(scan.scanId, this.requireBookId(), this.readActive()?.outline.id, scan.outlineRevision,
+        scan.extractorVersion, JSON.stringify(scan.chapterInputs), JSON.stringify(scan.completedChapterIds), scan.status, Date.now());
+      this.database.prepare("DELETE FROM outline_backfill_candidates WHERE scan_id=? AND accepted_node_id IS NULL").run(scan.scanId);
+      const insert = this.database.prepare(
+        "INSERT INTO outline_backfill_candidates(scan_id,candidate_id,payload_json,accepted_node_id) VALUES(?,?,?,NULL)",
+      );
+      for (const candidate of scan.candidates) insert.run(scan.scanId, candidate.candidateId, JSON.stringify(candidate));
+    })();
+  }
+
+  readBackfillScan(scanId: string): BackfillScan | null {
+    const row = this.database.prepare(
+      "SELECT * FROM outline_backfill_scans WHERE id=? AND book_id=?",
+    ).get(scanId, this.requireBookId()) as Record<string, string | number> | undefined;
+    if (!row) return null;
+    const candidates = this.database.prepare(
+      "SELECT payload_json,accepted_node_id FROM outline_backfill_candidates WHERE scan_id=? ORDER BY rowid",
+    ).all(scanId) as { payload_json: string; accepted_node_id: string | null }[];
+    return {
+      scanId: String(row.id),
+      projectId: "",
+      outlineRevision: Number(row.outline_revision),
+      extractorVersion: String(row.extractor_version),
+      chapterInputs: JSON.parse(String(row.chapter_inputs_json)) as BackfillScan["chapterInputs"],
+      completedChapterIds: JSON.parse(String(row.completed_chapter_ids_json)) as BackfillScan["completedChapterIds"],
+      candidates: candidates.map((candidate) => ({
+        ...(JSON.parse(candidate.payload_json) as BackfillCandidate),
+        ...(candidate.accepted_node_id ? { acceptedNodeId: candidate.accepted_node_id } : {}),
+      })),
+      status: row.status as BackfillScan["status"],
+    };
+  }
+
+  latestBackfillScan(): BackfillScan | null {
+    const row = this.database.prepare(
+      "SELECT id FROM outline_backfill_scans WHERE book_id=? ORDER BY created_at DESC,id DESC LIMIT 1",
+    ).get(this.requireBookId()) as { id: string } | undefined;
+    return row ? this.readBackfillScan(row.id) : null;
+  }
+
+  recordBackfillAcceptance(scanId: string, accepted: readonly { readonly candidateId: string; readonly nodeId: string; readonly evidence: readonly BackfillEvidence[] }[], outlineId: string): void {
+    const update = this.database.prepare(
+      "UPDATE outline_backfill_candidates SET accepted_node_id=? WHERE scan_id=? AND candidate_id=? AND accepted_node_id IS NULL",
+    );
+    const insert = this.database.prepare(
+      `INSERT INTO outline_backfill_evidence(id,outline_id,node_id,chapter_id,revision_id,start_offset,end_offset,excerpt)
+       VALUES(?,?,?,?,?,?,?,?)`,
+    );
+    for (const candidate of accepted) {
+      if (update.run(candidate.nodeId, scanId, candidate.candidateId).changes !== 1) {
+        throw new OutlineValidationError("候选已接受或不存在");
+      }
+      for (const evidence of candidate.evidence) {
+        insert.run(`evidence_${crypto.randomUUID()}`, outlineId, candidate.nodeId, evidence.chapterId,
+          evidence.revisionId, evidence.startOffset, evidence.endOffset, evidence.excerpt);
+      }
+    }
+  }
+
+  listBackfillEvidence(outlineId: string, nodeId: string): readonly BackfillEvidence[] {
+    const rows = this.database.prepare(
+      `SELECT chapter_id AS chapterId,revision_id AS revisionId,start_offset AS startOffset,
+       end_offset AS endOffset,excerpt FROM outline_backfill_evidence
+       WHERE outline_id=? AND node_id=? ORDER BY chapter_id,start_offset`,
+    ).all(outlineId, nodeId) as BackfillEvidence[];
+    return rows;
+  }
+
+  saveGraphWritingPlan(plan: GraphWritingPlan): void {
+    this.database.prepare(
+      `INSERT INTO graph_writing_plans(id,book_id,outline_id,payload_json,updated_at)
+       VALUES(?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=excluded.updated_at`,
+    ).run(plan.planId, this.requireBookId(), this.readActive()?.outline.id, JSON.stringify(plan), Date.now());
+  }
+
+  readGraphWritingPlan(planId: string): GraphWritingPlan | null {
+    const row = this.database.prepare(
+      "SELECT payload_json FROM graph_writing_plans WHERE id=? AND book_id=?",
+    ).get(planId, this.requireBookId()) as { payload_json: string } | undefined;
+    return row ? JSON.parse(row.payload_json) as GraphWritingPlan : null;
+  }
+
+  latestGraphWritingPlan(): GraphWritingPlan | null {
+    const row = this.database.prepare(
+      "SELECT id FROM graph_writing_plans WHERE book_id=? ORDER BY updated_at DESC,id DESC LIMIT 1",
+    ).get(this.requireBookId()) as { id: string } | undefined;
+    return row ? this.readGraphWritingPlan(row.id) : null;
+  }
+
+  revisionBySourceRunId(sourceRunId: string): { readonly id: string; readonly chapterId: string } | null {
+    const row = this.database.prepare(
+      "SELECT id,chapter_id AS chapterId FROM chapter_revisions WHERE source_run_id=?",
+    ).get(sourceRunId) as { id: string; chapterId: string } | undefined;
+    return row ?? null;
+  }
 
   requireBookId(): string {
     const rows = this.database.prepare("SELECT id FROM books").all() as { id: string }[];
@@ -122,6 +235,9 @@ export default class SqliteOutlineStore {
         throw new OutlineRevisionConflict(this.revisionOf(snapshot.outline.id) ?? current);
       }
       this.replaceChildren(snapshot);
+      this.database.prepare(
+        "DELETE FROM outline_backfill_evidence WHERE outline_id=? AND node_id NOT IN (SELECT id FROM outline_nodes WHERE outline_id=?)",
+      ).run(snapshot.outline.id, snapshot.outline.id);
     })();
     const saved = this.readActive();
     if (!saved) throw new OutlineNotFound();
@@ -159,7 +275,7 @@ export default class SqliteOutlineStore {
   listReadingChapters(bookId: string): StoredChapter[] {
     const rows = this.database
       .prepare(
-        `SELECT c.id AS id, c.title AS title, c.current_revision_id AS revisionId, d.plain_text AS plainText
+        `SELECT c.id AS id, c.title AS title, c.current_revision_id AS revisionId, c.row_version AS rowVersion, d.plain_text AS plainText
          FROM chapters c
          LEFT JOIN volumes v ON v.id = c.volume_id
          LEFT JOIN revision_documents d ON d.revision_id = c.current_revision_id
@@ -170,6 +286,7 @@ export default class SqliteOutlineStore {
       id: string;
       title: string;
       revisionId: string | null;
+      rowVersion: number;
       plainText: string | null;
     }[];
     return rows.map((row, index) => ({
@@ -177,8 +294,28 @@ export default class SqliteOutlineStore {
       title: row.title,
       index,
       currentRevisionId: row.revisionId,
+      rowVersion: row.rowVersion,
       plainText: row.plainText ?? "",
     }));
+  }
+
+  listBackfillChapterInputs(bookId: string): readonly { readonly id: string; readonly title: string; readonly volumeId: string | null; readonly revisionId: string | null }[] {
+    return this.database.prepare(
+      `SELECT c.id,c.title,c.volume_id AS volumeId,c.current_revision_id AS revisionId
+       FROM chapters c LEFT JOIN volumes v ON v.id=c.volume_id
+       WHERE c.book_id=? AND c.deleted_at IS NULL
+       ORDER BY CASE WHEN c.volume_id IS NULL THEN 0 ELSE 1 END,COALESCE(v.position,0),c.position,c.id`,
+    ).all(bookId) as { id: string; title: string; volumeId: string | null; revisionId: string | null }[];
+  }
+
+  readBackfillChapter(bookId: string, chapterId: string): StoredChapter {
+    const row = this.database.prepare(
+      `SELECT c.id,c.title,c.current_revision_id AS revisionId,c.row_version AS rowVersion,d.plain_text AS plainText
+       FROM chapters c LEFT JOIN revision_documents d ON d.revision_id=c.current_revision_id
+       WHERE c.book_id=? AND c.id=? AND c.deleted_at IS NULL`,
+    ).get(bookId, chapterId) as { id: string; title: string; revisionId: string | null; rowVersion: number; plainText: string | null } | undefined;
+    if (!row) throw new OutlineValidationError("扫描章节不属于当前书");
+    return { id: row.id, title: row.title, index: 0, currentRevisionId: row.revisionId, rowVersion: row.rowVersion, plainText: row.plainText ?? "" };
   }
 
   requireOpenChapter(bookId: string, chapterId: string): StoredChapter {
@@ -190,7 +327,7 @@ export default class SqliteOutlineStore {
   }
 
   chapterRevisionIds(bookId: string): Map<string, string | null> {
-    return new Map(this.listReadingChapters(bookId).map((chapter) => [chapter.id, chapter.currentRevisionId]));
+    return new Map(this.listBackfillChapterInputs(bookId).map((chapter) => [chapter.id, chapter.revisionId]));
   }
 
   private readSnapshot(row: OutlineRow): OutlineSnapshot {
@@ -337,14 +474,16 @@ export default class SqliteOutlineStore {
     this.database
       .prepare(
         `INSERT INTO outline_node_chapters(
-          chapter_id, node_id, sort_order, coverage_status, coverage_note,
+          chapter_id, node_id, sort_order, segment_intent, expected_local_change, coverage_status, coverage_note,
           verification_outline_revision, verification_chapter_revision_id
-        ) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         mapping.chapterId,
         mapping.nodeId,
         mapping.sortOrder,
+        mapping.segmentIntent,
+        mapping.expectedLocalChange,
         mapping.coverageStatus,
         mapping.coverageNote,
         mapping.verificationOutlineRevision,
@@ -484,6 +623,8 @@ export default class SqliteOutlineStore {
       chapterId: String(row.chapter_id),
       nodeId: String(row.node_id),
       sortOrder: Number(row.sort_order),
+      segmentIntent: String(row.segment_intent),
+      expectedLocalChange: String(row.expected_local_change),
       coverageStatus: row.coverage_status as ChapterOutlineMapping["coverageStatus"],
       coverageNote: String(row.coverage_note),
       verificationOutlineRevision:

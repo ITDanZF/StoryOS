@@ -4,8 +4,8 @@ import useBookNavigation from "./useBookNavigation.ts";
 import useBookWorkspaceLayout from "./useBookWorkspaceLayout.ts";
 import BookWorkspaceHeader from "./components/BookWorkspaceHeader.tsx";
 import { PageSurface } from "../../components/layout/PageSurface.tsx";
-import { useMemo, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { cn } from "../../../lib/utils.ts";
 import "../../components/motion/motion.css";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
@@ -32,9 +32,13 @@ import useBookGenerationEvents from "./ai/useBookGenerationEvents.ts";
 import useBookMutationSync from "./ai/useBookMutationSync.ts";
 import useChapterReadingSession from "./useChapterReadingSession.ts";
 import useFlushEditorOnLeave from "./useFlushEditorOnLeave.ts";
+import ChapterMainlineBar from "./mainline/ChapterMainlineBar.tsx";
 
 export default function BookWorkspacePage() {
   const { projectId } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedChapter = searchParams.get("chapter");
+  const requestedNodes = searchParams.getAll("nodes");
   const { state, activeRun, openSidebar, loadProjectNavigation, cancelRun } =
     useWorkspaceOutlet();
   const {
@@ -89,6 +93,15 @@ export default function BookWorkspacePage() {
   const editorBridgeRef = useRef<ChapterEditorBridge | null>(null);
   useFlushEditorOnLeave(editorBridgeRef);
   const readyWorkspace = workspace?.state === "ready" ? workspace : null;
+  const selectChapterRef = useRef(selectChapter);
+  selectChapterRef.current = selectChapter;
+  const appliedChapterQuery = useRef<string | null>(null);
+  useEffect(() => {
+    if (appliedChapterQuery.current === requestedChapter || !requestedChapter || !readyWorkspace) return;
+    if (!readyWorkspace.chapters.some((chapter) => chapter.id === requestedChapter)) return;
+    appliedChapterQuery.current = requestedChapter;
+    selectChapterRef.current(requestedChapter);
+  }, [readyWorkspace, requestedChapter]);
   const chapterGroups = useMemo(
     () =>
       createBookChapterGroups(
@@ -355,6 +368,15 @@ export default function BookWorkspacePage() {
               onEditorBridgeChange={(bridge) => {
                 editorBridgeRef.current = bridge;
               }}
+              mainline={projectId ? (
+                <ChapterMainlineBar
+                  projectId={projectId}
+                  chapterId={displayedChapter.id}
+                  chapterLabel={displayedChapter.title.trim() || `第 ${editorChapterNumber} 章`}
+                  chapterRevisionId={displayedChapter.currentRevisionId}
+                  initialSelection={requestedChapter === displayedChapter.id && requestedNodes.length > 0 ? requestedNodes : undefined}
+                />
+              ) : null}
             />
           )}
 

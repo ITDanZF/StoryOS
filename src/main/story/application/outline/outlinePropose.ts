@@ -11,6 +11,7 @@ import {
   OUTLINE_STRUCTURAL_ROLES,
   type OutlinePatchOperation,
   type OutlinePlanningMode,
+  type OutlinePlanningScope,
   type OutlineProposalProblem,
   type OutlineSnapshot,
 } from "../../../../shared/contracts/outline/outlineContracts.ts";
@@ -69,6 +70,7 @@ const operationSchema = z.discriminatedUnion("type", [
       orderException: z.boolean(),
     }),
   }),
+  z.object({ type: z.literal("delete_relation"), relationId: z.string().min(1) }),
   z.object({
     type: z.literal("upsert_promise"),
     value: z.object({
@@ -98,6 +100,7 @@ export function renderOutlineProposalPrompt(
   planningMode: OutlinePlanningMode,
   instruction = "",
   focusNodeIds: readonly string[] = [],
+  scope?: OutlinePlanningScope,
 ): string {
   if (!OUTLINE_PLANNING_MODES.includes(planningMode)) {
     throw new OutlineValidationError("规划模式枚举非法");
@@ -118,7 +121,7 @@ export function renderOutlineProposalPrompt(
     outlineProposePrompt,
     order,
     snapshot
-      ? `硬约束：主题 ${snapshot.outline.theme}；核心冲突 ${snapshot.outline.coreConflict}；结局 ${snapshot.outline.endingIntent}`
+      ? `全书设定：标题 ${snapshot.outline.title}；故事构思 ${snapshot.outline.premise}；主题 ${snapshot.outline.theme}；核心冲突 ${snapshot.outline.coreConflict}；高潮 ${snapshot.outline.climaxSummary}；结局 ${snapshot.outline.endingIntent}`
       : "当前没有大纲。只提议第一层事件。",
     ancestors.length > 0 ? `祖先：${ancestors.join(" / ")}` : "",
     `同级标题：${siblings.join("、")}`,
@@ -126,9 +129,21 @@ export function renderOutlineProposalPrompt(
     parent ? `展开节点：${parent.title}` : "展开根层",
     instruction.trim() === "" ? "" : `作者要求：${instruction.trim()}`,
     focusSection(snapshot, focusNodeIds),
+    scopeSection(snapshot, scope),
   ]
     .filter((line) => line !== "")
     .join("\n");
+}
+
+function scopeSection(snapshot: OutlineSnapshot | null, scope?: OutlinePlanningScope): string {
+  if (!scope) return "";
+  if (scope.kind === "book") return "本次范围：全书下一层。只能新增事件、关系或承诺，不要隐式修改已有节点。";
+  if (!snapshot) throw new OutlineValidationError("请先建立事件图");
+  const title = (id: string) => snapshot.nodes.find((node) => node.id === id)?.title ?? id;
+  if (scope.kind === "stage") return `本次范围：阶段「${title(scope.stageId)}」内部。仅规划该阶段后代与内部关系，不要修改其它阶段。`;
+  if (scope.kind === "node") return `本次范围：事件「${title(scope.nodeId)}」。仅修改该节点、添加一层子事件或与该节点直接相关的边。`;
+  if (scope.kind === "relation") return `本次范围：${title(scope.sourceNodeId)} → ${title(scope.targetNodeId)} 的关系。只输出一条此方向的 upsert_relation 或 delete_relation，写明因果或其它关系的依据。`;
+  return `本次范围：事件「${title(scope.nodeId)}」的 ${scope.field} 字段。只输出一条 update_node，changes 中只能有该字段。`;
 }
 
 export function readProposalOperations(
@@ -172,7 +187,8 @@ export function readProposalOperations(
     }
   }
   if (problems.length > 0) return { problems };
-  return { summary: result.data.summary, operations: result.data.operations };
+  // Zod 已要求 nullable 字段存在；当前 TS 配置把 nullable 属性推断成可选。
+  return { summary: result.data.summary, operations: result.data.operations as readonly OutlinePatchOperation[] };
 }
 
 function focusSection(snapshot: OutlineSnapshot | null, focusNodeIds: readonly string[]): string {
