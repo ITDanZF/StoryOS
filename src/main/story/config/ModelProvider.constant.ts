@@ -11,7 +11,8 @@ export type ModelProviderConfig = {
 export const MODEL_PROVIDER_OPTIONS: Record<ModelProvider, ModelProviderConfig> = {
   deepseek: {
     label: "DeepSeek",
-    defaultModel: "deepseek-v4-pro",
+    // deepseek-flash 是官方最新模型名的入口，当前由 DeepSeek-V4.1-Flash-1017 提供服务。
+    defaultModel: "deepseek-flash",
     baseURL: "https://api.deepseek.com",
   },
   openai: {

@@ -113,3 +113,5 @@ Desktop.ini
 *.tmp
 *.bak
 /tests
+/.playwright-mcp
+/.agents

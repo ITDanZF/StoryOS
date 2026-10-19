@@ -20,6 +20,17 @@ StoryOS 是一个面向小说与长篇故事创作的开源桌面应用。它以
 
 > StoryOS 仍在积极开发中，目前更适合开发体验、功能验证和参与共建，暂不建议用于没有备份的重要稿件。
 
+<div align="center">
+  <img src="docs/images/bookshelf.png" width="800" alt="书架" />
+  <p>书架：在「我的书架」里查看和管理作品。</p>
+
+  <img src="docs/images/reader.png" width="800" alt="阅读器" />
+  <p>阅读器：以双页打开作品，预览正文排版。</p>
+
+  <img src="docs/images/book-workspace.png" width="800" alt="书籍工作区" />
+  <p>书籍工作区：在章节正文旁继续写作，并与 AI 对话。</p>
+</div>
+
 ## 功能概览
 
 ### 📚 面向长篇创作的项目结构

@@ -42,8 +42,13 @@ CLAUDE.md
     storyos-issue-analysis/
     storyos-code-review/
     storyos-skill-authoring/
+    storyos-design-research/
+    impeccable/
+    web-design-guidelines/
 skills/
   create-skill/           # StoryOS 应用运行时 Skill，不属于开发工具配置
 ```
 
 新增开发工作流时使用 `storyos-skill-authoring`，并更新根 `AGENTS.md` 的 Skill 清单。只有确有实时外部数据、认证或受控操作需求时，才为工作流增加 MCP 或插件依赖。
+
+`storyos-design-research` 在设计或改版界面之前执行：先搜索仓库里的现有界面，再搜索同类产品的可核对来源，写出调研纪要后才进入实现。`impeccable` 与 `web-design-guidelines` 是装入本目录的第三方设计 Skill，版本记在根目录 `skills-lock.json`。前者在调研之后负责产品界面的设计、打磨和设计系统记录，后者只做界面规范审查。它们不覆盖 `src/renderer/AGENTS.md` 里的主题和动效约定，也不要默认启用 Impeccable 的文件写入钩子。

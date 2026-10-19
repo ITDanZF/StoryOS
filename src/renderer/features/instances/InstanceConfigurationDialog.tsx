@@ -35,7 +35,7 @@ const providers = [
 ] as const;
 
 const deepseekModels = [
-  { value: "deepseek-flash", label: "DeepSeek Flash" },
+  { value: "deepseek-flash", label: "DeepSeek V4.1 Flash" },
   { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
 ] as const;
 

@@ -45,5 +45,8 @@ StoryOS 是 Windows 优先的 Electron + React + TypeScript 本地桌面应用�
 - `.agents/skills/storyos-issue-analysis/SKILL.md`：结合 issue 与仓库做只读问题诊断。
 - `.agents/skills/storyos-code-review/SKILL.md`：审查未提交改动、提交或分支差异。
 - `.agents/skills/storyos-skill-authoring/SKILL.md`：创建或维护本仓库两类 Skill。
+- `.agents/skills/storyos-design-research/SKILL.md`：设计或改版界面前，先搜索仓库和同类产品并写出调研纪要。
+- `.agents/skills/impeccable/SKILL.md`：在调研之后设计、打磨或记录界面。已有产品界面按 Operate 处理，并服从 `src/renderer/AGENTS.md` 的主题、控件和动效；不要默认打开它的写入钩子。
+- `.agents/skills/web-design-guidelines/SKILL.md`：按 Web Interface Guidelines 审查可访问性、焦点和交互，不改变视觉方向。
 
-这些 Skill 是按任务加载的工作流，不是所有任务都要执行的固定步骤。多个 Skill 同时适用时，选择能覆盖请求的最小集合。
+这些 Skill 是按任务加载的工作流，不是所有任务都要执行的固定步骤。多个 Skill 同时适用时，选择能覆盖请求的最小集合。设计、改版或生成界面时，先完成 `storyos-design-research`，再进入 Impeccable 或按视觉稿实现。界面工作与 Impeccable 的通用品味规则冲突时，以 `src/renderer/AGENTS.md`、现有主题和 `components/motion` 为准。
