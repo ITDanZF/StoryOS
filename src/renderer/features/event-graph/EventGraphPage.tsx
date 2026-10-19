@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { ArrowRight, BookOpen, CircleAlert, LoaderCircle, Waypoints } from "lucide-react";
 import type { NodeBackfillEvidence, OutlinePatchOperation, OutlinePlanningField, OutlinePlanningScope } from "../../../shared/contracts/outline/outlineContracts.ts";
 import { AnimatedDialog } from "../../components/motion/index.ts";
 import { PageSurface } from "../../components/layout/PageSurface.tsx";
@@ -226,28 +227,68 @@ function EventGraphWorkspace({ projectId }: { readonly projectId: string }) {
   };
 
   if (session.loading) {
-    return <PageSurface aria-label="事件图"><p className="p-6 text-sm text-text-secondary">正在读取这本书的事件图…</p></PageSurface>;
+    return <PageSurface aria-label="事件图" className="bg-surface-canvas">
+      <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 text-sm font-semibold">
+        <Waypoints size={16} aria-hidden="true" />事件图
+      </header>
+      <div className="flex flex-1 items-center justify-center gap-3 text-sm text-text-secondary" role="status">
+        <LoaderCircle size={17} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+        正在打开事件图…
+      </div>
+    </PageSurface>;
   }
   if (session.loadError) {
     return (
-      <PageSurface aria-label="事件图">
-        <div className="grid gap-3 p-6">
-          <h1 className="m-0 text-sm font-semibold">事件图没有读到</h1>
-          <p className="m-0 text-sm text-danger-text">{session.loadError}</p>
-          <Button size="sm" onClick={() => void session.reload()}>重试</Button>
-          <Button size="sm" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("demo", "1"); return next; })}>查看静态示例</Button>
+      <PageSurface aria-label="事件图" className="overflow-y-auto bg-surface-canvas">
+        <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 text-sm font-semibold">
+          <Waypoints size={16} aria-hidden="true" />事件图
+        </header>
+        <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8">
+          <div className="w-full max-w-xl">
+            <div className="mb-6 grid size-12 place-items-center rounded-xl bg-danger-surface text-danger-text">
+              <CircleAlert size={23} strokeWidth={1.8} aria-hidden="true" />
+            </div>
+            <h1 className="m-0 text-2xl font-semibold tracking-tight">暂时无法打开事件图</h1>
+            <p className="mt-3 text-sm leading-7 text-text-secondary">读取书籍数据时遇到了问题。可以重新加载，或先去书籍工作区查看这本书。</p>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Button variant="primary" onClick={() => void session.reload()}>重新加载</Button>
+              <Link className="rounded-lg px-2 py-2 text-sm text-text-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" to={`/projects/${projectId}/book`}>
+                去书籍工作区
+              </Link>
+            </div>
+            <details className="mt-7 border-t border-border pt-4 text-xs text-text-secondary">
+              <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">查看错误详情</summary>
+              <p className="mt-3 break-words text-danger-text">{session.loadError}</p>
+            </details>
+            <button className="mt-5 rounded text-sm text-accent-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring" type="button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("demo", "1"); return next; })}>查看事件图静态示例</button>
+          </div>
         </div>
       </PageSurface>
     );
   }
   if (!session.bookReady && !session.snapshot) {
     return (
-      <PageSurface aria-label="事件图">
-        <div className="grid max-w-lg gap-3 p-6">
-          <h1 className="m-0 text-lg font-semibold">先建立这本书</h1>
-          <p className="m-0 text-sm leading-6 text-text-secondary">事件图属于当前书籍。请先在书籍工作区写下书名，再回到这里看图。</p>
-          <a className="text-sm text-accent-foreground" href={`#/projects/${projectId}/book`}>前往书籍工作区</a>
-          <button className="w-fit border-0 bg-transparent p-0 text-left text-sm text-accent-foreground" type="button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("demo", "1"); return next; })}>查看事件图静态示例</button>
+      <PageSurface aria-label="事件图" className="overflow-y-auto bg-surface-canvas">
+        <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 text-sm font-semibold">
+          <Waypoints size={16} aria-hidden="true" />
+          事件图
+        </header>
+        <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8">
+          <div className="motion-reveal w-full max-w-xl">
+            <div className="mb-6 grid size-12 place-items-center rounded-xl bg-accent text-accent-foreground ring-1 ring-inset ring-accent-border">
+              <BookOpen size={23} strokeWidth={1.8} aria-hidden="true" />
+            </div>
+            <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">当前项目还没有书籍</h1>
+            <p className="mt-3 max-w-lg text-sm leading-7 text-text-secondary">
+              事件图会保存在书籍中。先到书籍工作区创建书籍，再回来梳理关键事件和故事走向。
+            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <Link className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" to={`/projects/${projectId}/book?from=events`}>
+                去创建书籍 <ArrowRight size={15} aria-hidden="true" />
+              </Link>
+              <button className="rounded-lg px-3 py-2 text-sm text-text-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" type="button" onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("demo", "1"); return next; })}>先看看事件图示例</button>
+            </div>
+          </div>
         </div>
       </PageSurface>
     );

@@ -119,9 +119,20 @@ export default function useEventGraphSession(projectId: string) {
     setLoadError(null);
     try {
       const api = window.storyOSAgent;
-      const [nextSnapshot, workspace, latestScan, latestPlan] = await Promise.all([
+      const workspace = await api.getBookWorkspace(projectId);
+      if (sequence !== loadSequence.current) return;
+      if (workspace.state === "uninitialized") {
+        setSnapshot(null);
+        setBackfillScan(null);
+        setGraphWritingPlan(null);
+        setBookReady(false);
+        setBookTitle("");
+        setChapters([]);
+        setVolumes([]);
+        return;
+      }
+      const [nextSnapshot, latestScan, latestPlan] = await Promise.all([
         api.getOutlineSnapshot(projectId),
-        api.getBookWorkspace(projectId),
         api.getLatestBackfillScan(projectId),
         api.getLatestGraphWritingPlan(projectId),
       ]);
@@ -129,21 +140,14 @@ export default function useEventGraphSession(projectId: string) {
       setSnapshot(nextSnapshot);
       setBackfillScan(latestScan);
       setGraphWritingPlan(latestPlan);
-      if (workspace.state === "ready") {
-        setBookReady(true);
-        setBookTitle(workspace.book.title);
-        setVolumes(workspace.volumes.map((volume) => ({ id: volume.id, title: volume.title })));
-        setChapters(workspace.chapters.map((chapter, index) => ({
-          id: chapter.id,
-          label: chapter.title.trim() || `第${index + 1}章`,
-          currentRevisionId: chapter.currentRevisionId,
-        })));
-      } else {
-        setBookReady(false);
-        setBookTitle("");
-        setChapters([]);
-        setVolumes([]);
-      }
+      setBookReady(true);
+      setBookTitle(workspace.book.title);
+      setVolumes(workspace.volumes.map((volume) => ({ id: volume.id, title: volume.title })));
+      setChapters(workspace.chapters.map((chapter, index) => ({
+        id: chapter.id,
+        label: chapter.title.trim() || `第${index + 1}章`,
+        currentRevisionId: chapter.currentRevisionId,
+      })));
     } catch (cause) {
       if (sequence !== loadSequence.current) return;
       setSnapshot(null);

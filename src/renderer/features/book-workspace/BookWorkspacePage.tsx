@@ -5,7 +5,8 @@ import useBookWorkspaceLayout from "./useBookWorkspaceLayout.ts";
 import BookWorkspaceHeader from "./components/BookWorkspaceHeader.tsx";
 import { PageSurface } from "../../components/layout/PageSurface.tsx";
 import { useEffect, useMemo, useRef } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { cn } from "../../../lib/utils.ts";
 import "../../components/motion/motion.css";
 import { useWorkspaceOutlet } from "../../layouts/workspace/context.ts";
@@ -37,6 +38,7 @@ import ChapterMainlineBar from "./mainline/ChapterMainlineBar.tsx";
 export default function BookWorkspacePage() {
   const { projectId } = useParams();
   const [searchParams] = useSearchParams();
+  const fromEventGraph = searchParams.get("from") === "events";
   const requestedChapter = searchParams.get("chapter");
   const requestedNodes = searchParams.getAll("nodes");
   const { state, activeRun, openSidebar, loadProjectNavigation, cancelRun } =
@@ -279,6 +281,21 @@ export default function BookWorkspacePage() {
         setAssistantVisible={setAssistantVisible}
         setAssistantFocused={setAssistantFocused}
       />
+
+      {fromEventGraph && !assistantFocused && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-accent-border bg-accent px-4 py-3 text-sm sm:px-6" role="status">
+          <p className="m-0 min-w-0 flex-1 leading-6 text-foreground">
+            {readyWorkspace
+              ? `《${readyWorkspace.book.title}》已创建，可以继续规划事件图。`
+              : "先在下方填写书名。书籍保存后，就可以返回事件图。"}
+          </p>
+          {readyWorkspace && (
+            <Link className="inline-flex h-9 items-center gap-2 rounded-lg border border-accent-border bg-card px-3 text-xs font-medium text-accent-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" to={`/projects/${projectId}/events`}>
+              前往事件图 <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+      )}
 
       <div
         ref={containerRef}

@@ -267,6 +267,22 @@ export function useAgentWorkspace() {
     loadProjectNavigation,
   ]);
   const handleEvent = useCallback((event: ConversationApplicationEvent) => {
+    if (event.type === "book_changed") {
+      setBookChangeVersions((current) => ({
+        ...current,
+        [event.projectId]: (current[event.projectId] ?? 0) + 1,
+      }));
+      setLastBookMutations((current) => ({
+        ...current,
+        [event.projectId]: event.mutation,
+      }));
+      if (event.mutation.kind !== "chapter_revision_saved") {
+        void loadProjectNavigation(event.projectId).catch((cause) => {
+          setError(getErrorMessage(cause));
+        });
+      }
+      return;
+    }
     if (!sameScope(event.conversationScope, activeScopeRef.current)) return;
     if (isStructuredConversationEvent(event)) {
       if (event.type === "approval.requested") {
@@ -307,18 +323,6 @@ export function useAgentWorkspace() {
           startedAt: event.timestamp,
         }),
       );
-      return;
-    }
-
-    if (event.type === "book_changed") {
-      setBookChangeVersions((current) => ({
-        ...current,
-        [event.projectId]: (current[event.projectId] ?? 0) + 1,
-      }));
-      setLastBookMutations((current) => ({
-        ...current,
-        [event.projectId]: event.mutation,
-      }));
       return;
     }
 
@@ -369,7 +373,7 @@ export function useAgentWorkspace() {
       );
       if (event.type !== "run_aborted") setError(event.error.message);
     }
-  }, []);
+  }, [loadProjectNavigation]);
 
   useEffect(() => {
     let disposed = false;
